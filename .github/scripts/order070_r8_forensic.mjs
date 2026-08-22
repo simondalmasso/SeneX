@@ -17,12 +17,12 @@ printf '%s\n' '---PROCESSES---'
 uvpid=''
 for d in /proc/[0-9]*; do
   [ -r "$d/status" ] || continue
-  pid="${d#/proc/}"
+  pid="\${d#/proc/}"
   name="$(sed -n 's/^Name:[[:space:]]*//p' "$d/status" 2>/dev/null | head -n1)"
   rss="$(sed -n 's/^VmRSS:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$d/status" 2>/dev/null | head -n1)"
   anon="$(sed -n 's/^RssAnon:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$d/status" 2>/dev/null | head -n1)"
   cmd="$(tr '\000' ' ' < "$d/cmdline" 2>/dev/null | cut -c1-180 || true)"
-  printf 'PROC pid=%s name=%s rss_kb=%s anon_kb=%s cmd=%s\n' "$pid" "$name" "${rss:-0}" "${anon:-0}" "$cmd"
+  printf 'PROC pid=%s name=%s rss_kb=%s anon_kb=%s cmd=%s\n' "$pid" "$name" "\${rss:-0}" "\${anon:-0}" "$cmd"
   case "$cmd" in *uvicorn*) [ -n "$uvpid" ] || uvpid="$pid";; esac
 done
 printf 'UVICORN_PID=%s\n' "$uvpid"
@@ -35,7 +35,7 @@ if [ -n "$uvpid" ]; then
   awk '{print $NF}' "/proc/$uvpid/maps" 2>/dev/null | grep -E '/(site-packages|lib)/.*\.so' | sort -u | tail -n 120 || true
 fi`;
 const samples=[];
-for (let i=0;i<4;i++) {
+for (let i=0;i<1;i++) {
   const started=new Date().toISOString();
   try {
     const r=await apiClient.exec.execServiceCommand(
@@ -45,9 +45,7 @@ for (let i=0;i<4;i++) {
     samples.push({sample:i+1, started, exitCode:r?.commandResult?.exitCode, status:r?.commandResult?.status, stdout:r?.stdOut || '', stderr:r?.stdErr || ''});
   } catch (e) {
     samples.push({sample:i+1, started, error:String(e?.message || e), name:e?.name || null});
-    break;
   }
-  if (i<3) await new Promise(r=>setTimeout(r,15000));
 }
 fs.mkdirSync('order070-r8-forensic-evidence',{recursive:true});
 fs.writeFileSync('order070-r8-forensic-evidence/container_exec_samples.json',JSON.stringify({captured_at:new Date().toISOString(),samples},null,2)+'\n');
