@@ -61,9 +61,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf /tmp/r8nf
           mkdir -p /tmp/r8nf && cd /tmp/r8nf
           npm init -y >/dev/null 2>&1
           npm install --silent @northflank/js-client
+          cp "$GITHUB_WORKSPACE/ops/.github/scripts/order070_r8_forensic.mjs" /tmp/r8nf/forensic.mjs
       - name: Sample production cgroup and process memory read-only
         shell: bash
         run: |
@@ -71,12 +73,17 @@ jobs:
           set -euo pipefail
           test -n "${NORTHFLANK_API_TOKEN:-}"
           echo "::add-mask::${NORTHFLANK_API_TOKEN}"
-          NODE_PATH=/tmp/r8nf/node_modules node ops/.github/scripts/order070_r8_forensic.mjs
+          (cd /tmp/r8nf && node forensic.mjs)
+          if [ -d /tmp/r8nf/order070-r8-forensic-evidence ]; then
+            cp -R /tmp/r8nf/order070-r8-forensic-evidence "$GITHUB_WORKSPACE/"
+          fi
       - name: Correlate Northflank telemetry and runtime phases
+        if: always()
         shell: bash
         run: |
           set +x
           set -euo pipefail
+          test -n "${NORTHFLANK_API_TOKEN:-}"
           echo "::add-mask::${NORTHFLANK_API_TOKEN}"
           python ops/.github/scripts/order070_r8_forensic_collect.py
       - name: Upload R8 forensic evidence
