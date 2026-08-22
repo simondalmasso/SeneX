@@ -1,4 +1,4 @@
-name: ORDER070 R8 Candidate Materialization R2
+name: ORDER070 R8 Candidate Materialization R3
 on:
   push:
     branches: [ops/senex-zero-cost-audit-20260809]
@@ -7,7 +7,7 @@ permissions:
   contents: write
   statuses: write
 concurrency:
-  group: order070-r8-materialize-r2
+  group: order070-r8-materialize-r3
   cancel-in-progress: false
 jobs:
   materialize:
@@ -29,8 +29,8 @@ jobs:
           python - <<'PY'
           import json,os,urllib.request
           u=f"https://api.github.com/repos/{os.environ['REPO']}/statuses/{os.environ['SHA']}"
-          p={'state':'pending','context':'ORDER070/R8-materialize-r2','description':f"run {os.environ['RUN_ID']} tested candidate materialization",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
-          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-materialize-r2/1'}
+          p={'state':'pending','context':'ORDER070/R8-materialize-r3','description':f"run {os.environ['RUN_ID']} tested candidate materialization",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
+          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-materialize-r3/1'}
           with urllib.request.urlopen(urllib.request.Request(u,data=json.dumps(p).encode(),headers=h,method='POST'),timeout=30) as r: print(r.status)
           PY
       - name: Checkout exact candidate branch
@@ -55,31 +55,7 @@ jobs:
           test "$(git -C candidate rev-parse HEAD^{tree})" = "$BASE_TREE"
           test -z "$(git -C candidate status --porcelain)"
           python ops/.github/scripts/order070_r8_materialize.py
-      - name: Repair AUD-060 readiness compatibility narrowly
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('candidate/senecio_polymarket/frontend/app.js')
-          s=p.read_text()
-          old="""      const readiness = payload.readiness && typeof payload.readiness === 'object' ? payload.readiness : {};
-      if (readiness.status === 'ready') domainSuccess('context');
-      else domainFailure('context', new Error(`READINESS_${readiness.status || 'UNKNOWN'}`));
-"""
-          new="""      const readiness = payload.readiness && typeof payload.readiness === 'object' ? payload.readiness : {};
-      if (readiness.status === 'not_ready') {
-        domainFailure('context', new Error('READINESS_NOT_READY'));
-      } else {
-        // Context health is independent from missing legacy readiness metadata.
-        // Explicit NOT_READY still fails closed; absent readiness preserves valid context.
-        domainSuccess('context');
-      }
-"""
-          if s.count(old) != 1:
-              raise SystemExit(f'READINESS_PATCH_DRIFT count={s.count(old)}')
-          p.write_text(s.replace(old,new,1))
-          PY
+          python ops/.github/scripts/order070_r8_readiness_fix.py
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -90,21 +66,25 @@ jobs:
         run: python -m pip install --require-hashes -r senecio_polymarket/requirements.lock
       - name: R8 focused acceptance
         working-directory: candidate
-        env: {PYTHONPATH: senecio_polymarket}
+        env:
+          PYTHONPATH: senecio_polymarket
         run: python -m unittest -v senecio_polymarket.tests.test_order_070_r8
       - name: AUD-060 exact regression
         working-directory: candidate
-        env: {PYTHONPATH: senecio_polymarket}
+        env:
+          PYTHONPATH: senecio_polymarket
         run: python -m unittest -v senecio_polymarket.tests.test_aud_060.DashboardTruthModelTests.test_main_refresh_flow_marks_stale_preserves_values_and_recovers
       - name: ORDER070 and R6 regression
         working-directory: candidate
-        env: {PYTHONPATH: senecio_polymarket}
+        env:
+          PYTHONPATH: senecio_polymarket
         run: |
           python -m unittest -v senecio_polymarket.tests.test_order_070
           python -m unittest -v senecio_polymarket.tests.test_order_070_r6_public_boundary
       - name: Full regression suite
         working-directory: candidate
-        env: {PYTHONPATH: senecio_polymarket}
+        env:
+          PYTHONPATH: senecio_polymarket
         run: python -m unittest discover -s senecio_polymarket/tests -p 'test_*.py'
       - name: Secret scan and import RSS
         working-directory: candidate
@@ -136,8 +116,6 @@ jobs:
           git diff --exit-code "$BASE_SHA" -- senecio_polymarket/oracle_runtime/predict_only.py senecio_polymarket/oracle_runtime/institutional_core_real.py
       - name: Commit and push same PR branch
         working-directory: candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
