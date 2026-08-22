@@ -130,6 +130,34 @@ async def fetch_predictions(limit: int = 50, symbol: Optional[str] = None) -> li
 
 AUTHORITY_HISTORY_PAGE_SIZE_MAX = 500
 AUTHORITY_HISTORY_MAX_PAGES = 10_000
+# Authority history intentionally projects only fields consumed by settlement proof
+# and authoritative scoring. Large diagnostic audit payloads are fetched only for
+# the bounded recent-dashboard cache, never for the complete authority cohort.
+AUTHORITY_HISTORY_SELECT = (
+    "id,ts,symbol,prediction,confidence,price_now,outcome,exchange_used,"
+    "origin_price_v1:audit->origin_price_v1,"
+    "outcomes_dual:audit->outcomes_dual"
+)
+
+
+def _authority_row_from_projection(row: dict[str, Any]) -> dict[str, Any]:
+    projected = dict(row)
+    origin = projected.pop("origin_price_v1", None)
+    dual = projected.pop("outcomes_dual", None)
+    # Unit/compatibility callers may already provide the historical full shape.
+    if origin is None and dual is None and isinstance(projected.get("audit"), dict):
+        audit = projected["audit"]
+        projected["audit"] = {
+            key: audit[key] for key in ("origin_price_v1", "outcomes_dual") if key in audit
+        }
+        return projected
+    audit: dict[str, Any] = {}
+    if isinstance(origin, dict):
+        audit["origin_price_v1"] = origin
+    if isinstance(dual, dict):
+        audit["outcomes_dual"] = dual
+    projected["audit"] = audit
+    return projected
 
 
 class AuthorityHistoryIncompleteError(RuntimeError):
@@ -162,6 +190,7 @@ async def fetch_authority_history(
 
     for _ in range(bounded_max_pages):
         params = {
+            "select": AUTHORITY_HISTORY_SELECT,
             "limit": str(bounded_page_size),
             "order": "ts.asc,id.asc",
         }
@@ -196,7 +225,7 @@ async def fetch_authority_history(
             if key in seen:
                 raise AuthorityHistoryIncompleteError("AUTHORITY_HISTORY_DUPLICATE_CURSOR")
             seen.add(key)
-            collected.append(row)
+            collected.append(_authority_row_from_projection(row))
 
         if len(page) < bounded_page_size:
             return collected

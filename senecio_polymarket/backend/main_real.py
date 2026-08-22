@@ -302,6 +302,32 @@ async def compatibility_health():
     return await healthz()
 
 
+def _readiness_payload(snap, refresh: dict[str, Any]) -> dict[str, Any]:
+    """Canonical observational readiness; performs no network/database I/O."""
+    runner = oracle_runner.get_state()
+    checks = {
+        "authority_history_complete": snap.authority_history_complete,
+        "exact_count_complete": snap.exact_count_complete,
+        "provenance_exact": bool(snap.provenance.get("exact")),
+        "oracle_started": bool(runner.get("started_at")),
+        "paper_lock": snap.live_gate.get("trade_mode") == "PAPER" and bool(snap.live_gate.get("live_capital_locked")),
+        "orders_disabled": snap.live_gate.get("orders_enabled", False) is False,
+        "snapshot_fresh": refresh.get("snapshot_stale") is False,
+        "last_refresh_ok": refresh.get("last_refresh_error") is None,
+    }
+    ready = all(checks.values())
+    return {
+        "status": "ready" if ready else "not_ready",
+        "probe": "readiness",
+        "checks": checks,
+        "authority_snapshot_id": snap.snapshot_id,
+        "generation": snap.generation,
+        "canonical_sha256": snap.canonical_sha256,
+        "provenance": snap.provenance,
+        **refresh,
+    }
+
+
 @app.get("/readyz")
 async def readyz(symbol: str = Query(default="BTCUSDT")):
     """Observational fail-closed readiness over the current shared generation."""
@@ -316,45 +342,24 @@ async def readyz(symbol: str = Query(default="BTCUSDT")):
     if snap is None:
         return JSONResponse(
             {
-                "status": "not_ready",
-                "probe": "readiness",
+                "status": "not_ready", "probe": "readiness",
                 "reason": "NO_VALID_AUTHORITY_GENERATION",
-                "authority_snapshot_id": None,
-                "generation": None,
-                "canonical_sha256": None,
+                "authority_snapshot_id": None, "generation": None, "canonical_sha256": None,
                 **refresh,
             },
             status_code=503,
         )
-    runner = oracle_runner.get_state()
-    checks = {
-        "authority_history_complete": snap.authority_history_complete,
-        "exact_count_complete": snap.exact_count_complete,
-        "provenance_exact": bool(snap.provenance.get("exact")),
-        "oracle_started": bool(runner.get("started_at")),
-        "paper_lock": snap.live_gate.get("trade_mode") == "PAPER" and bool(snap.live_gate.get("live_capital_locked")),
-        "orders_disabled": snap.live_gate.get("orders_enabled", False) is False,
-        "snapshot_fresh": refresh.get("snapshot_stale") is False,
-        "last_refresh_ok": refresh.get("last_refresh_error") is None,
-    }
-    ready = all(checks.values())
-    payload = {
-        "status": "ready" if ready else "not_ready",
-        "probe": "readiness",
-        "checks": checks,
-        "authority_snapshot_id": snap.snapshot_id,
-        "generation": snap.generation,
-        "canonical_sha256": snap.canonical_sha256,
-        "provenance": snap.provenance,
-        **refresh,
-    }
-    return payload if ready else JSONResponse(payload, status_code=503)
+    payload = _readiness_payload(snap, refresh)
+    return payload if payload["status"] == "ready" else JSONResponse(payload, status_code=503)
 
 
 @app.get("/api/market-context")
 async def market_context(symbol: str = Query(default="BTCUSDT")):
     snap = await _snapshot(symbol)
+    refresh = authority_store.refresh_status(snap.symbol)
+    readiness = _readiness_payload(snap, refresh)
     return {
+        "readiness": readiness,
         "mode": "REAL_PLUS_EXPLICIT_DEMO" if synthetic_demo_enabled() else "REAL_ONLY",
         "synthetic_demo_enabled": synthetic_demo_enabled(),
         "polymarket": _poly.snapshot(),

@@ -406,7 +406,14 @@
     try {
       const payload = await getJSON('/api/market-context');
       renderContext(payload);
-      domainSuccess('context');
+      const readiness = payload.readiness && typeof payload.readiness === 'object' ? payload.readiness : {};
+      if (readiness.status === 'not_ready') {
+        domainFailure('context', new Error('READINESS_NOT_READY'));
+      } else {
+        // Context health is independent from missing legacy readiness metadata.
+        // Explicit NOT_READY still fails closed; absent readiness preserves valid context.
+        domainSuccess('context');
+      }
     } catch (error) {
       domainFailure('context', error);
     }

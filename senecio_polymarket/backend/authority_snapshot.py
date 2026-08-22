@@ -29,15 +29,10 @@ def _canonical_json(value: Any) -> bytes:
 
 
 def _canonical_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    normalized = [json.loads(_canonical_json(row).decode()) for row in rows]
-    return sorted(
-        normalized,
-        key=lambda row: (
-            str(row.get("ts") or ""),
-            str(row.get("id") or ""),
-            _canonical_json(row),
-        ),
-    )
+    # fetch_authority_history enforces a unique (ts,id) cursor. Deep-copy once;
+    # canonical JSON sorting is deferred to the single content-hash pass.
+    normalized = [copy.deepcopy(row) for row in rows]
+    return sorted(normalized, key=lambda row: (str(row.get("ts") or ""), str(row.get("id") or "")))
 
 
 def _last_cursor(rows: list[dict[str, Any]]) -> dict[str, str] | None:
@@ -299,9 +294,10 @@ class AuthoritySnapshotStore:
     ) -> _CapturedAuthority:
         captured_at = _utcnow()
         captured_monotonic = time.monotonic()
-        history_result, count_result = await asyncio.gather(
+        history_result, count_result, recent_result = await asyncio.gather(
             supabase_client.fetch_authority_history(symbol=symbol),
             supabase_client.count_predictions_exact(),
+            supabase_client.fetch_predictions(limit=50, symbol=symbol),
             return_exceptions=True,
         )
         failures: list[str] = []
@@ -317,7 +313,12 @@ class AuthoritySnapshotStore:
             raise AuthoritySnapshotRefreshError("EXACT_COUNT:RESPONSE_NOT_INT")
 
         rows = _canonical_rows(history_result)
-        recent_predictions = tuple(copy.deepcopy(list(reversed(rows[-50:]))))
+        # Preserve the rich dashboard decision context with one bounded query; it
+        # is explicitly excluded from authority identity and never expands with DB size.
+        if isinstance(recent_result, list):
+            recent_predictions = tuple(copy.deepcopy(recent_result[:50]))
+        else:
+            recent_predictions = tuple(copy.deepcopy(list(reversed(rows[-50:]))))
         exact_total = int(count_result)
         score = build_authoritative_score(rows, symbol=symbol)
         score["authority_history_complete"] = True
