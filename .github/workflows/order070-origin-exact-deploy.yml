@@ -1,4 +1,4 @@
-name: ORDER070 R8 Readonly Procfs Attribution V2
+name: ORDER070 R8 Readonly Procfs Attribution V3
 on:
   push:
     branches: [ops/senex-zero-cost-audit-20260809]
@@ -54,7 +54,6 @@ jobs:
           test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
           test "$(git -C candidate rev-parse HEAD^{tree})" = "$TARGET_TREE"
           test -z "$(git -C candidate status --porcelain)"
-          python -m py_compile ops/.github/scripts/order070_r8_forensic_collect.py
       - name: Install Northflank JS client in isolated temp dir
         shell: bash
         run: |
@@ -73,20 +72,11 @@ jobs:
           echo "::add-mask::${NORTHFLANK_API_TOKEN}"
           (cd /tmp/r8nf && node forensic.mjs)
           cp -R /tmp/r8nf/order070-r8-forensic-evidence "$GITHUB_WORKSPACE/"
-      - name: Correlate Northflank telemetry
-        if: always()
-        shell: bash
-        run: |
-          set +x
-          set -euo pipefail
-          test -n "${NORTHFLANK_API_TOKEN:-}"
-          echo "::add-mask::${NORTHFLANK_API_TOKEN}"
-          python ops/.github/scripts/order070_r8_forensic_collect.py
-      - name: Upload R8 forensic evidence
+      - name: Upload R8 procfs evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: order070-r8-procfs-v2-4b107bfb
+          name: order070-r8-procfs-v3-4b107bfb
           path: order070-r8-forensic-evidence/
           if-no-files-found: warn
           retention-days: 30
