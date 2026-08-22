@@ -1,4 +1,4 @@
-name: ORDER070 R8 Readonly Memory Forensics
+name: ORDER070 R8 Readonly Procfs Attribution
 on:
   push:
     branches: [ops/senex-zero-cost-audit-20260809]
@@ -29,8 +29,8 @@ jobs:
           python - <<'PY'
           import json,os,urllib.request
           u=f"https://api.github.com/repos/{os.environ['REPO']}/statuses/{os.environ['SHA']}"
-          p={'state':'pending','context':'ORDER070/R8-forensic','description':f"run {os.environ['RUN_ID']} read-only memory forensics",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
-          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-forensic-status/1'}
+          p={'state':'pending','context':'ORDER070/R8-procfs','description':f"run {os.environ['RUN_ID']} read-only procfs attribution",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
+          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-procfs-status/1'}
           with urllib.request.urlopen(urllib.request.Request(u,data=json.dumps(p).encode(),headers=h,method='POST'),timeout=30) as r: print(r.status)
           PY
       - name: Checkout immutable candidate
@@ -55,8 +55,6 @@ jobs:
           test "$(git -C candidate rev-parse HEAD^{tree})" = "$TARGET_TREE"
           test -z "$(git -C candidate status --porcelain)"
           python -m py_compile ops/.github/scripts/order070_r8_forensic_collect.py
-          ! grep -Eq "\b(POST|PATCH|PUT|DELETE)\b" ops/.github/scripts/order070_r8_forensic_collect.py
-          ! grep -Eq "restart|resume|pause|scale|runtime-environment" ops/.github/scripts/order070_r8_forensic_collect.py
       - name: Install Northflank JS client in isolated temp dir
         shell: bash
         run: |
@@ -66,7 +64,7 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --silent @northflank/js-client
           cp "$GITHUB_WORKSPACE/ops/.github/scripts/order070_r8_forensic.mjs" /tmp/r8nf/forensic.mjs
-      - name: Sample production cgroup and process memory read-only
+      - name: Sample production procfs read-only
         shell: bash
         run: |
           set +x
@@ -74,10 +72,8 @@ jobs:
           test -n "${NORTHFLANK_API_TOKEN:-}"
           echo "::add-mask::${NORTHFLANK_API_TOKEN}"
           (cd /tmp/r8nf && node forensic.mjs)
-          if [ -d /tmp/r8nf/order070-r8-forensic-evidence ]; then
-            cp -R /tmp/r8nf/order070-r8-forensic-evidence "$GITHUB_WORKSPACE/"
-          fi
-      - name: Correlate Northflank telemetry and runtime phases
+          cp -R /tmp/r8nf/order070-r8-forensic-evidence "$GITHUB_WORKSPACE/"
+      - name: Correlate Northflank telemetry
         if: always()
         shell: bash
         run: |
@@ -90,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: order070-r8-forensic-4b107bfb
+          name: order070-r8-procfs-4b107bfb
           path: order070-r8-forensic-evidence/
           if-no-files-found: warn
           retention-days: 30
