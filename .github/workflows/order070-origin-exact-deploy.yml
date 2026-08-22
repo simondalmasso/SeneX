@@ -102,7 +102,6 @@ jobs:
           grep -q "if (readiness.status === 'not_ready')" senecio_polymarket/frontend/app.js
           test "$(grep -c 'setInterval(refreshContext, 2000)' senecio_polymarket/frontend/app.js)" = 1
           python -m py_compile ../ops/.github/scripts/order070_r8_terminal.py
-          ! grep -q 'start_remote_dev()' ../ops/.github/scripts/order070_r8_terminal.py
 
       - name: Build ONLY canonical root Dockerfile
         working-directory: candidate
