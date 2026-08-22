@@ -1,22 +1,22 @@
-name: ORDER070 R8 Readonly Procfs Attribution V3
+name: ORDER070 R8 Candidate Materialization
 on:
   push:
     branches: [ops/senex-zero-cost-audit-20260809]
     paths: [.github/workflows/order070-origin-exact-deploy.yml]
 permissions:
-  contents: read
+  contents: write
   statuses: write
 concurrency:
-  group: order070-r8-forensics
-  cancel-in-progress: true
+  group: order070-r8-materialize
+  cancel-in-progress: false
 jobs:
-  forensic:
+  materialize:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
-      TARGET_SHA: 4b107bfb427cb85ea84850ffd9ddd5d7a4231d94
-      TARGET_TREE: 5d1d9ec806b7d0e02031726565f08ef75d5a9340
-      NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+      BASE_SHA: 4b107bfb427cb85ea84850ffd9ddd5d7a4231d94
+      BASE_TREE: 5d1d9ec806b7d0e02031726565f08ef75d5a9340
+      CANDIDATE_DIR: candidate
     steps:
       - name: Publish run identity
         env:
@@ -29,54 +29,94 @@ jobs:
           python - <<'PY'
           import json,os,urllib.request
           u=f"https://api.github.com/repos/{os.environ['REPO']}/statuses/{os.environ['SHA']}"
-          p={'state':'pending','context':'ORDER070/R8-procfs','description':f"run {os.environ['RUN_ID']} read-only procfs attribution",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
-          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-procfs-status/1'}
+          p={'state':'pending','context':'ORDER070/R8-materialize','description':f"run {os.environ['RUN_ID']} tested candidate materialization",'target_url':f"https://github.com/{os.environ['REPO']}/actions/runs/{os.environ['RUN_ID']}"}
+          h={'Authorization':f"Bearer {os.environ['GH_TOKEN']}",'Accept':'application/vnd.github+json','Content-Type':'application/json','User-Agent':'senex-r8-materialize/1'}
           with urllib.request.urlopen(urllib.request.Request(u,data=json.dumps(p).encode(),headers=h,method='POST'),timeout=30) as r: print(r.status)
           PY
-      - name: Checkout immutable candidate
+      - name: Checkout exact candidate branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 4b107bfb427cb85ea84850ffd9ddd5d7a4231d94
+          ref: feat/order-070-runtime-truth-hardening
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
           path: candidate
-      - name: Checkout exact forensic runner
+      - name: Checkout exact ops materializer
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
           path: ops
-      - name: Assert read-only R8 forensic scope
+      - name: Assert immutable R8 base and materialize
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C candidate rev-parse HEAD)" = "$TARGET_SHA"
-          test "$(git -C candidate rev-parse HEAD^{tree})" = "$TARGET_TREE"
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C candidate rev-parse HEAD^{tree})" = "$BASE_TREE"
           test -z "$(git -C candidate status --porcelain)"
-      - name: Install Northflank JS client in isolated temp dir
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/r8nf
-          mkdir -p /tmp/r8nf && cd /tmp/r8nf
-          npm init -y >/dev/null 2>&1
-          npm install --silent @northflank/js-client
-          cp "$GITHUB_WORKSPACE/ops/.github/scripts/order070_r8_forensic.mjs" /tmp/r8nf/forensic.mjs
-      - name: Sample production procfs read-only
-        shell: bash
-        run: |
-          set +x
-          set -euo pipefail
-          test -n "${NORTHFLANK_API_TOKEN:-}"
-          echo "::add-mask::${NORTHFLANK_API_TOKEN}"
-          (cd /tmp/r8nf && node forensic.mjs)
-          cp -R /tmp/r8nf/order070-r8-forensic-evidence "$GITHUB_WORKSPACE/"
-      - name: Upload R8 procfs evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+          python ops/.github/scripts/order070_r8_materialize.py
+      - uses: actions/setup-python@v5
         with:
-          name: order070-r8-procfs-v3-4b107bfb
-          path: order070-r8-forensic-evidence/
-          if-no-files-found: warn
-          retention-days: 30
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: candidate/senecio_polymarket/requirements.lock
+      - name: Install exact locked runtime
+        working-directory: candidate
+        run: python -m pip install --require-hashes -r senecio_polymarket/requirements.lock
+      - name: R8 focused acceptance
+        working-directory: candidate
+        env: {PYTHONPATH: senecio_polymarket}
+        run: python -m unittest -v senecio_polymarket.tests.test_order_070_r8
+      - name: ORDER070 and R6 regression
+        working-directory: candidate
+        env: {PYTHONPATH: senecio_polymarket}
+        run: |
+          python -m unittest -v senecio_polymarket.tests.test_order_070
+          python -m unittest -v senecio_polymarket.tests.test_order_070_r6_public_boundary
+      - name: Full regression suite
+        working-directory: candidate
+        env: {PYTHONPATH: senecio_polymarket}
+        run: python -m unittest discover -s senecio_polymarket/tests -p 'test_*.py'
+      - name: Secret scan and import RSS
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python senecio_polymarket/scripts/order070_secret_scan.py
+          PYTHONPATH=senecio_polymarket /usr/bin/time -v python -c 'import backend.main_real' 2>/tmp/r8time
+          rss=$(awk -F: '/Maximum resident set size/{gsub(/ /,"",$2); print $2}' /tmp/r8time)
+          echo "R8_IMPORT_RSS_KB=$rss"
+          test "$rss" -lt 81920
+      - name: Clean test residue and enforce exact candidate scope
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clean -fd -- data senecio_polymarket/data senecio_polymarket/artifacts
+          mapfile -t paths < <(git status --porcelain | sed 's/^...//' | sort)
+          printf 'R8_CHANGED=%s\n' "${paths[*]}"
+          expected=$(printf '%s\n' \
+            senecio_polymarket/backend/authority_snapshot.py \
+            senecio_polymarket/backend/main_real.py \
+            senecio_polymarket/backend/supabase_client.py \
+            senecio_polymarket/frontend/app.js \
+            senecio_polymarket/tests/test_order_070_r8.py | sort)
+          actual=$(printf '%s\n' "${paths[@]}")
+          test "$actual" = "$expected"
+          git diff --check
+          git diff --exit-code "$BASE_SHA" -- senecio_polymarket/oracle_runtime/predict_only.py senecio_polymarket/oracle_runtime/institutional_core_real.py
+      - name: Commit and push same PR branch
+        working-directory: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'SENEX ARQ R8'
+          git config user.email 'senex-arq-r8@users.noreply.github.com'
+          git add senecio_polymarket/backend/authority_snapshot.py senecio_polymarket/backend/main_real.py senecio_polymarket/backend/supabase_client.py senecio_polymarket/frontend/app.js senecio_polymarket/tests/test_order_070_r8.py
+          git commit -m 'ORDER-070-R8: reduce authority memory and bind readiness truth'
+          newsha=$(git rev-parse HEAD); newtree=$(git rev-parse HEAD^{tree})
+          echo "R8_NEW_HEAD=$newsha"
+          echo "R8_NEW_TREE=$newtree"
+          git push origin HEAD:refs/heads/feat/order-070-runtime-truth-hardening
