@@ -445,13 +445,60 @@
     await Promise.allSettled([refreshScore(), refreshPredictions()]);
   }
 
+  // ---------- B8.1 PAPER execution + model quality (truthful, UNKNOWN-safe) ----------
+
+  const paperView = (payload) => truth.paperView(payload);
+
+  function renderPaper(payload) {
+    const view = paperView(payload);
+    $('#paper-bankroll').textContent = view.bankroll;
+    $('#paper-cash').textContent = view.cash;
+    $('#paper-equity').textContent = view.equity;
+    $('#paper-open').textContent = view.open;
+    $('#paper-orders').textContent = view.orders;
+    $('#paper-fees').textContent = view.fees;
+    $('#paper-pnl').textContent = view.pnl;
+    $('#paper-lock').textContent = view.lock;
+    setValueClass('#paper-pnl', String(view.pnl).startsWith('-') ? 'neg' : (view.pnl !== 'UNKNOWN' ? 'pos' : ''));
+    $('#paper-exec-meta').textContent = `[API_DERIVED] ${view.status} · HYPOTHETICAL bankroll · taker ${view.takerFeeBps === 'UNKNOWN' ? 'UNKNOWN' : view.takerFeeBps + 'bps'}`;
+    $('#paper-exec-detail').textContent = `drawdown ${view.drawdown} · paper pipeline ACT-XXV · fills modeled with depth, slippage, latency, fees · NO real orders possible (hard lock)`;
+
+    $('#mq-observations').textContent = view.observations;
+    $('#mq-abstentions').textContent = view.abstentions;
+    $('#mq-resolved').textContent = view.resolved;
+    $('#mq-brier').textContent = view.brier;
+    $('#edge-p-market').textContent = view.pMarket;
+    $('#edge-p-senex').textContent = view.pSenex;
+    $('#edge-incremental').textContent = view.incremental;
+    $('#edge-status').textContent = view.edgeStatus;
+    $('#model-quality-meta').textContent = `[API_DERIVED] ${view.pMarketSource} · smoke sample · never EDGE proof`;
+    $('#model-quality-detail').textContent = `p_market ${view.pMarket} (${view.pMarketSource}) vs p_senex ${view.pSenex} · incremental ${view.incremental} · ${view.note || 'EDGE=UNPROVEN'}`;
+  }
+
+  async function refreshPaper() {
+    try {
+      const payload = await getJSON('/api/paper/state');
+      renderPaper(payload);
+    } catch (error) {
+      ['#paper-bankroll', '#paper-cash', '#paper-equity', '#paper-open', '#paper-orders',
+       '#paper-fees', '#paper-pnl', '#paper-lock'].forEach((sel) => { $(sel).textContent = 'UNKNOWN'; });
+      ['#mq-observations', '#mq-abstentions', '#mq-resolved', '#mq-brier',
+       '#edge-p-market', '#edge-p-senex', '#edge-incremental'].forEach((sel) => { $(sel).textContent = 'UNKNOWN'; });
+      $('#paper-exec-meta').textContent = `[UNKNOWN/STALE] PAPER STATE ERROR · ${error.message || error}`;
+      $('#model-quality-meta').textContent = `[UNKNOWN/STALE] MODEL QUALITY ERROR · ${error.message || error}`;
+    }
+  }
+
   window.__SENEX_DASHBOARD__ = Object.freeze({
     refreshContext,
     refreshScore,
     refreshPredictions,
+    refreshPaper,
     renderScore,
     renderContext,
     renderPredictions,
+    renderPaper,
+    paperView,
     state,
   });
 
@@ -459,8 +506,10 @@
   refreshContext();
   refreshScore();
   refreshPredictions();
+  refreshPaper();
   setInterval(refreshContext, 2000);
   setInterval(refreshScore, 10000);
   setInterval(refreshPredictions, 60000);
+  setInterval(refreshPaper, 5000);
   setInterval(renderDomainHealth, 1000);
 })();

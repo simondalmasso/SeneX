@@ -52,6 +52,8 @@ from typing import Any, Optional
 
 log = logging.getLogger("senecio.execution_engine")
 
+from ..paper_lock import assert_paper_locked, hard_paper_lock_active
+
 
 # -------------------- config --------------------
 
@@ -263,6 +265,12 @@ class ExecutionEngine:
         if self.cfg["allow_live"]:
             raise RuntimeError(
                 "allow_live=True requires explicit LIVE_GATE unlock + adapter wiring"
+            )
+        # B8.1 candidate HARD PAPER LOCK: even a smuggled cfg mutation cannot
+        # route live here — no broker adapter exists and the lock is structural.
+        if hard_paper_lock_active() and self.cfg["trade_mode"] == "LIVE":
+            raise RuntimeError(
+                "HARD_PAPER_LOCK: refusing paper engine with LIVE trade_mode"
             )
 
         p = proposal.to_dict() if hasattr(proposal, "to_dict") else dict(proposal)
@@ -819,6 +827,23 @@ class ExecutionEngine:
         }
 
     def update_config(self, **overrides: Any) -> None:
+        # B8.1 candidate HARD PAPER LOCK: refuse any config-level attempt to
+        # flip the capital mode. Safety keys are not configurable here.
+        if hard_paper_lock_active():
+            forbidden = {
+                key: value for key, value in overrides.items()
+                if key in {"allow_live", "trade_mode", "live_capital_locked"}
+                and not (
+                    key == "trade_mode" and value == "PAPER"
+                )
+            }
+            if forbidden.get("allow_live") or (
+                forbidden.get("trade_mode") not in (None, "PAPER")
+            ) or forbidden.get("live_capital_locked") is False:
+                raise RuntimeError(
+                    "HARD_PAPER_LOCK: refusing config override(s): "
+                    + ",".join(sorted(forbidden))
+                )
         self.cfg.update(overrides)
         log.info("ExecutionEngine config updated: %s", overrides)
 
@@ -830,15 +855,11 @@ class ExecutionEngine:
         Per ACT-XXV LIVE_GATE: only callable when all 6 unlock conditions
         are met. The LIVE_GATE evaluator (in main.py wiring layer) is the
         only caller; it sets this after verifying the gate.
+
+        B8.1 candidate: structurally refused by the HARD PAPER LOCK.
         """
+        assert_paper_locked(f"enable_live_mode(unlocked_by={unlocked_by!r})")
         self.cfg["allow_live"] = True
-        self.cfg["trade_mode"] = "LIVE"
-        log.warning("LIVE MODE ENABLED by %s — real orders will be placed", unlocked_by)
-        self._emit_audit({
-            "event": "LIVE_MODE_ENABLED",
-            "unlocked_by": unlocked_by,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
 
     # -------- helpers --------
 

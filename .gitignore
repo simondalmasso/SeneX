@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.senex-provenance/
+senecio_polymarket/oracle/senecio_output/
+data/

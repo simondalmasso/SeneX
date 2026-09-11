@@ -12,7 +12,13 @@ from typing import Any
 
 CONTRACT = "senex-internal-artifact-identity-v1"
 DIGEST_FORMAT = "sha256:path-len+path+byte-len+bytes:v1"
-RUNTIME_ROOT = Path("/app")
+# Runtime root defaults to the container layout (/app). A non-container local
+# run may point SENEX_RUNTIME_ROOT at the directory that contains
+# backend/ frontend/ oracle/ oracle_runtime/ requirements.lock
+# start_single_authority.sh (the /app layout). This selector CANNOT create
+# exact=true: exactness still requires the manifest digest to match the
+# recomputed digest over canonical inputs at that root (fail-closed).
+RUNTIME_ROOT = Path(os.environ.get("SENEX_RUNTIME_ROOT") or "/app")
 PROVENANCE_DIRNAME = ".senex-provenance"
 IDENTITY_FILENAME = "artifact-identity.json"
 CANONICAL_DIRS = ("backend", "frontend", "oracle", "oracle_runtime")
