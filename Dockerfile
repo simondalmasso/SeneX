@@ -8,9 +8,10 @@
 # That ARG is consumed here and discarded; it is not persisted as ENV.
 
 FROM python:3.11-slim AS source
+ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /source
 COPY . /source
-RUN PYTHONPATH=/source python -c "from pathlib import Path; from senecio_polymarket.backend.artifact_identity import git_tree_sha; print(git_tree_sha(Path('/source')))" > /source-tree.txt
+RUN PYTHONPATH=/source python -B -c "from pathlib import Path; from senecio_polymarket.backend.artifact_identity import git_tree_sha; print(git_tree_sha(Path('/source')))" > /source-tree.txt
 
 FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl \

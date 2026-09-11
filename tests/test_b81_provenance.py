@@ -334,5 +334,34 @@ class B81ProvenanceTests(unittest.TestCase):
         self.assertTrue(payload["safety"]["live_capital_locked"])
 
 
+    def test_source_stage_import_cannot_mutate_measured_git_tree(self) -> None:
+        import shutil
+        import subprocess
+        import sys
+        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+        source_stage, _ = dockerfile.split("\nFROM python:3.11-slim\n", 1)
+        self.assertIn("ENV PYTHONDONTWRITEBYTECODE=1", source_stage)
+        self.assertIn("PYTHONPATH=/source python -B -c", source_stage)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            pkg = root / "senecio_polymarket" / "backend"
+            pkg.mkdir(parents=True)
+            (root / "senecio_polymarket" / "__init__.py").write_text("", encoding="utf-8")
+            (pkg / "__init__.py").write_text("", encoding="utf-8")
+            shutil.copy2(Path("senecio_polymarket/backend/artifact_identity.py"), pkg / "artifact_identity.py")
+            (root / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "core.autocrlf", "false"], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+            expected = subprocess.check_output(["git", "-C", str(root), "write-tree"], text=True).strip()
+            env = os.environ.copy()
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
+            env["PYTHONPATH"] = str(root)
+            code = "from pathlib import Path; from senecio_polymarket.backend.artifact_identity import git_tree_sha; print(git_tree_sha(Path(r'{}')))".format(root)
+            actual = subprocess.check_output([sys.executable, "-B", "-c", code], text=True, env=env).strip()
+            self.assertEqual(actual, expected)
+            self.assertFalse(any(root.rglob("*.pyc")))
+
+
 if __name__ == "__main__":
     unittest.main()
