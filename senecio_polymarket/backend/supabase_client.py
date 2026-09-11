@@ -18,6 +18,7 @@ from typing import Any, Optional
 import httpx
 
 from . import authority_seal as durable_seal
+from .artifact_identity import ArtifactIdentityError, internal_identity_projection
 
 log = logging.getLogger("senecio.supabase")
 
@@ -249,17 +250,12 @@ def _canonical_json(value: Any) -> bytes:
 
 
 def _runtime_identity() -> dict[str, str]:
-    identity = {
-        "source_commit": (os.environ.get("SENEX_SOURCE_COMMIT") or "").strip(),
-        "source_tree": (os.environ.get("SENEX_SOURCE_TREE") or "").strip(),
-        "image_digest": (os.environ.get("SENEX_IMAGE_DIGEST") or "").strip(),
-    }
-    if len(identity["source_commit"]) != 40 or len(identity["source_tree"]) != 40:
-        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_PROVENANCE_INCOMPLETE")
-    image = identity["image_digest"].removeprefix("sha256:")
-    if len(image) != 64:
-        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_IMAGE_DIGEST_INCOMPLETE")
-    return identity
+    """Return the one fail-closed internal artifact identity used by authority state."""
+    try:
+        identity = internal_identity_projection()
+    except ArtifactIdentityError as exc:
+        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_PROVENANCE_INCOMPLETE") from exc
+    return {str(key): str(value) for key, value in identity.items()}
 
 
 def _cursor_tuple(value: Any) -> tuple[str, str] | None:

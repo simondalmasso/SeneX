@@ -130,10 +130,11 @@ def _cursor_for_rows(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _identity_fields(identity: dict[str, Any]) -> dict[str, str]:
+    """Durable seals bind only to the canonical internal artifact identity."""
     return {
         "source_commit": str(identity.get("source_commit") or ""),
         "source_tree": str(identity.get("source_tree") or ""),
-        "image_digest": str(identity.get("image_digest") or ""),
+        "build_digest": str(identity.get("build_digest") or ""),
     }
 
 
