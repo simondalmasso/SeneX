@@ -344,7 +344,7 @@ class TradeJournal:
             "win_rate_pct": round(len(wins) / len(rows) * 100, 2) if rows else 0.0,
             "total_pnl_usd": round(total_pnl, 2),
             "total_fees_usd": round(total_fees, 2),
-            "net_pnl_usd": round(total_pnl - total_fees, 2),
+            "net_pnl_usd": round(total_pnl, 2),  # realized_pnl_usd is already net of entry+exit fees
             "avg_holding_time_s": round(
                 sum(r.get("holding_time_s", 0) for r in rows) / len(rows), 1
             ) if rows else 0,

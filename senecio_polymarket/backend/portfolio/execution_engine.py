@@ -124,6 +124,7 @@ class Order:
     last_update_at: str = ""
     proposal_id: Optional[str | int] = None
     audit_trail: list[dict] = field(default_factory=list)
+    total_fees: float = 0.0
 
     def remaining_qty(self) -> float:
         return max(0.0, self.ordered_qty - self.filled_qty)
@@ -376,6 +377,8 @@ class ExecutionEngine:
 
             fee_bps = self.cfg["taker_fee_bps"] if self.cfg["use_taker_by_default"] else self.cfg["maker_fee_bps"]
             fee_usd = fill_qty * fill_price * fee_bps / 10_000
+            order.total_fees += fee_usd
+            self.cash -= fee_usd
 
             # Update order's VWAP
             old_qty = order.filled_qty
@@ -492,6 +495,8 @@ class ExecutionEngine:
 
         # Apply the simulated fill
         fill_qty = estimate.expected_qty
+        order.total_fees += estimate.expected_fee_usd
+        self.cash -= estimate.expected_fee_usd
         old_qty = order.filled_qty
         new_qty = old_qty + fill_qty
         order.avg_fill_price = (
@@ -649,13 +654,16 @@ class ExecutionEngine:
             stop_price=0.0,                # populated by caller via set_stop_target
             target_price=0.0,
             time_stop_minutes=self.cfg["default_time_stop_minutes"],
-            fees_paid=0.0,
+            fees_paid=order.total_fees,
             proposal_id=order.proposal_id,
             order_ids=[order.order_id],
             audit_trail=list(order.audit_trail),
         )
         self.positions[order.symbol] = pos
-        self.cash -= pos.qty * pos.avg_entry_price
+        if pos.direction == "SHORT":
+            self.cash += pos.qty * pos.avg_entry_price
+        else:
+            self.cash -= pos.qty * pos.avg_entry_price
         self._emit_audit({
             "event": "POSITION_OPEN",
             "position": pos.to_dict(),
@@ -761,14 +769,13 @@ class ExecutionEngine:
         pos.realized_pnl = round(realized_pnl, 2)
         pos.fees_paid = round(pos.fees_paid + exit_fee, 4)
 
-        # Cash adjustment: position returned to cash
+        # Cash adjustment: close at exit price and pay the exit fee.
         if pos.direction == "LONG":
             self.cash += pos.qty * exit_price
         else:
-            # SHORT: we sold at entry, bought back at exit
-            # entry: cash += qty * entry ; exit: cash -= qty * exit
-            # Net effect on cash = qty * (entry - exit) - fees
-            self.cash += pos.qty * (pos.avg_entry_price - exit_price)
+            # SHORT sale proceeds were credited at open; buy back at exit.
+            self.cash -= pos.qty * exit_price
+        self.cash -= exit_fee
 
         exit_event = {
             "event": "POSITION_EXIT",
@@ -810,7 +817,7 @@ class ExecutionEngine:
             if pos.direction == "LONG":
                 eq += pos.qty * last
             else:
-                eq += pos.qty * (2 * pos.avg_entry_price - last)  # SHORT MTM
+                eq -= pos.qty * last  # SHORT liability marked at current price
         return round(eq, 2)
 
     def stats(self) -> dict[str, Any]:
