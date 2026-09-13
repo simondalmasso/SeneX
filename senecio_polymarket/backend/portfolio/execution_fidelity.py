@@ -81,6 +81,8 @@ DEFAULTS: dict[str, Any] = {
     "maker_fee_bps":             2.0,
     # Book walk
     "max_levels_to_walk":        8,       # don't eat past level 8 (slippage cap)
+    # Linear mid-price impact transform is invalid at/above 100% slippage.
+    "max_effective_slippage_bps": 10_000.0,
     # Fallback model (when no book snapshot)
     "fallback_base_slippage_bps": 2.0,
     "fallback_rng_slippage_bps":  4.0,
@@ -303,7 +305,7 @@ class FillSimulator:
         """Estimate the realistic fill for an order.
 
         Strategy:
-          1. If book is None → fall back to stochastic model (legacy compat).
+          1. If book is unavailable or unusable → fail closed with no fill.
           2. If marketable (taker) → walk the L2 book + add market impact.
           3. If passive (maker) → use queue-position model.
           4. Apply adverse-selection multiplier if toxic_flow_score high.
@@ -319,13 +321,13 @@ class FillSimulator:
         )
         adverse_mult = self._adverse_selection_multiplier(toxic)
 
-        # Branch: no book → fallback
+        # Missing market evidence must never fabricate an executable price.
         if book is None or (not book.bids and not book.asks):
-            return self._fallback_stochastic(side, notional_usd, adverse_mult)
+            return self._no_fill_estimate(side, "missing_book", book_present=False)
 
         mid = book.mid()
         if mid <= 0:
-            return self._fallback_stochastic(side, notional_usd, adverse_mult)
+            return self._no_fill_estimate(side, "invalid_mid", book_present=True)
 
         adv = adv_usd or self.cfg["adv_assumed_usd"]
 
@@ -343,8 +345,8 @@ class FillSimulator:
                 max_levels=self.cfg["max_levels_to_walk"],
             )
             if qty <= 0:
-                # Book was empty / notional too small — fall back
-                return self._fallback_stochastic(side, notional_usd, adverse_mult)
+                # A present book with no executable liquidity is a real no-fill.
+                return self._no_fill_estimate(side, "no_executable_liquidity", book_present=True)
 
             # Slippage vs mid
             raw_slip_bps = abs(vwap - mid) / mid * 10_000
@@ -355,13 +357,17 @@ class FillSimulator:
                 impact_coeff=self.cfg["impact_coeff"],
             )
             slippage_bps = (raw_slip_bps + impact_bps) * adverse_mult
-            # Apply fee
+            effective_vwap = mid * (1 + slippage_bps / 10_000) if side == "BUY" else mid * (1 - slippage_bps / 10_000)
+            if effective_vwap <= 0:
+                return self._no_fill_estimate(side, "non_positive_effective_price", book_present=True)
+            if slippage_bps >= float(self.cfg["max_effective_slippage_bps"]):
+                return self._no_fill_estimate(side, "excessive_effective_slippage", book_present=True)
             fee_bps = self.cfg["taker_fee_bps"]
-            fee_usd = qty * vwap * fee_bps / 10_000
+            fee_usd = qty * effective_vwap * fee_bps / 10_000
             is_partial = qty * vwap < notional_usd * 0.999
             return FillEstimate(
                 expected_qty=round(qty, 8),
-                expected_vwap_price=round(vwap, 6),
+                expected_vwap_price=round(effective_vwap, 6),
                 expected_slippage_bps=round(slippage_bps, 2),
                 expected_market_impact_bps=round(impact_bps, 2),
                 expected_fee_usd=round(fee_usd, 4),
@@ -376,9 +382,10 @@ class FillSimulator:
                 model="l2_walk",
                 detail={
                     "mid": mid,
+                    "raw_vwap_price": round(vwap, 6),
                     "raw_slip_bps": round(raw_slip_bps, 2),
                     "notional_requested": notional_usd,
-                    "notional_filled": round(qty * vwap, 2),
+                    "notional_filled": round(qty * effective_vwap, 2),
                 },
             )
 
@@ -453,6 +460,16 @@ class FillSimulator:
         )
 
     # -------- helpers --------
+
+    @staticmethod
+    def _no_fill_estimate(side: str, reason: str, book_present: bool) -> FillEstimate:
+        return FillEstimate(
+            expected_qty=0.0, expected_vwap_price=0.0, expected_slippage_bps=0.0,
+            expected_market_impact_bps=0.0, expected_fee_usd=0.0, expected_fee_bps=0.0,
+            expected_latency_ms=0, is_partial=False, queue_position=0, queue_fill_prob=0.0,
+            levels_consumed=0, adverse_selection_mult=1.0, book_present=book_present,
+            model="fail_closed_no_fill", detail={"side": side, "reason": reason},
+        )
 
     def _adverse_selection_multiplier(self, toxic_flow_score: float) -> float:
         """Linearly interpolate between normal (1.0) and toxic (2.5×) slippage."""

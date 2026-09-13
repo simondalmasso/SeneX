@@ -784,6 +784,21 @@ async def _route_to_portfolio(prediction: dict, market_data: dict) -> None:
         allow_live=not _state.get("live_capital_locked", True),
     )
 
+    # Drive exits for already-open institutional PAPER positions from the
+    # same fresh observed price used by this oracle cycle. The production
+    # synthetic/demo scheduler is intentionally disabled and is a separate
+    # execution subsystem, so it cannot safely own these exits.
+    if last_price > 0:
+        try:
+            coord.on_tick(
+                symbol=symbol,
+                price=last_price,
+                ts=prediction.get("ts") or prediction.get("timestamp"),
+            )
+        except Exception as exc:
+            log.error("portfolio tick/exit check failed; blocking new portfolio ingest: %s", exc)
+            return
+
     # ACT-XXVI: extract ohlcv + funding + OI from market_data and pass to
     # coordinator. The coordinator feeds these to MicrostructureIntelligence
     # (VPIN + OFI + liquidation + funding/OI) and HMMRegimeOverlay BEFORE
@@ -835,13 +850,13 @@ async def _route_to_portfolio(prediction: dict, market_data: dict) -> None:
             bid_levels = []
             for i, frac in enumerate([0.60, 0.25, 0.15]):
                 offset_bps = [0, 2, 5][i]
-                px = mid * (1 - offset_bps / 10_000)
-                bid_levels.append([px, (bid_depth / mid) * frac])
+                px = bid_px * (1 - offset_bps / 10_000)
+                bid_levels.append([px, (bid_depth / bid_px) * frac])
             ask_levels = []
             for i, frac in enumerate([0.60, 0.25, 0.15]):
                 offset_bps = [0, 2, 5][i]
-                px = mid * (1 + offset_bps / 10_000)
-                ask_levels.append([px, (ask_depth / mid) * frac])
+                px = ask_px * (1 + offset_bps / 10_000)
+                ask_levels.append([px, (ask_depth / ask_px) * frac])
             orderbook_snap = {
                 "bids": bid_levels,
                 "asks": ask_levels,

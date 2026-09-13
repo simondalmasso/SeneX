@@ -193,6 +193,8 @@ class RiskKernel:
         market_context: Optional[dict[str, Any]] = None,
     ) -> RiskDecision:
         """Run all risk checks against a proposal. Returns a RiskDecision."""
+        # Day boundaries must be resolved before any state-dependent rejection.
+        self._maybe_rollover_day()
         self.state.proposals_evaluated += 1
         snap = self.state.to_dict()
 
@@ -301,9 +303,6 @@ class RiskKernel:
                     )
             except Exception as e:
                 log.warning("microstructure evaluate failed (non-fatal): %s", e)
-
-        # 8) Day rollover check (best-effort)
-        self._maybe_rollover_day()
 
         # All checks passed
         self.state.proposals_approved += 1

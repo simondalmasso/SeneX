@@ -125,6 +125,7 @@ class Order:
     proposal_id: Optional[str | int] = None
     audit_trail: list[dict] = field(default_factory=list)
     total_fees: float = 0.0
+    risk_usd: float = 0.0
 
     def remaining_qty(self) -> float:
         return max(0.0, self.ordered_qty - self.filled_qty)
@@ -170,6 +171,7 @@ class Position:
     exit_reason: str = ""
     realized_pnl: float = 0.0
     fees_paid: float = 0.0
+    risk_usd: float = 0.0
     # MAE/MFE (Maximum Adverse/Favorable Excursion)
     mae_price: float = 0.0             # worst price against the position while open
     mfe_price: float = 0.0             # best price for the position while open
@@ -307,6 +309,7 @@ class ExecutionEngine:
             created_at=datetime.now(timezone.utc).isoformat(),
             last_update_at=datetime.now(timezone.utc).isoformat(),
             proposal_id=p.get("prediction_id"),
+            risk_usd=float(p.get("risk_usd", 0.0)) * size_scale,
             audit_trail=[{
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "event": "NEW",
@@ -655,6 +658,7 @@ class ExecutionEngine:
             target_price=0.0,
             time_stop_minutes=self.cfg["default_time_stop_minutes"],
             fees_paid=order.total_fees,
+            risk_usd=(order.risk_usd * order.filled_qty / order.ordered_qty) if order.ordered_qty > 0 else 0.0,
             proposal_id=order.proposal_id,
             order_ids=[order.order_id],
             audit_trail=list(order.audit_trail),

@@ -341,6 +341,13 @@ class MetaLabeler:
 
         # Rule 4: Spread feasibility
         rules_checked += 1
+        if expected_ev_bps <= 0:
+            return MetaLabel(
+                take_trade=False, confidence_mult=0.0,
+                barrier_hit_prediction="NONE", reward_risk=0.0,
+                reason=f"REJECT non_positive_ev: {expected_ev_bps:.2f}bps",
+                rules_checked=rules_checked, rules_passed=rules_passed, ts=ts,
+            )
         if expected_ev_bps > 0:
             spread_ratio = spread_bps / expected_ev_bps
             if spread_ratio > self.cfg["max_spread_to_gain_ratio"]:
