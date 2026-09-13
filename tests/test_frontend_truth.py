@@ -57,6 +57,7 @@ def _run_node() -> dict:
         ["node", "-e", NODE_SCRIPT, str(TRUTH_JS)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
     if result.returncode != 0:
