@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import random
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -283,6 +284,13 @@ class ExecutionEngine:
         ordered_qty = float(p.get("size_qty", 0)) * size_scale
         if ordered_qty <= 0:
             return self._make_rejected_order(p, "size_qty=0 after scale")
+        try:
+            reference_price = float(last_price)
+        except Exception:
+            return self._make_rejected_order(p, "invalid_reference_price")
+        if not math.isfinite(reference_price) or reference_price <= 0:
+            return self._make_rejected_order(p, "invalid_reference_price")
+        last_price = reference_price
 
         side = "BUY" if p.get("direction") == "LONG" else "SELL"
         # Marketable limit: limit at last_price ± 5 bps (aggressive)
@@ -358,9 +366,13 @@ class ExecutionEngine:
             if remaining <= 0:
                 break
             notional = remaining * last_price
-            depth = book_depth_usd or self.cfg["book_depth_assumed_usd"]
-            fill_pct = min(1.0, depth / notional) if notional > 0 else 0
-            fill_pct = max(self.cfg["min_fill_pct"], fill_pct)
+            try:
+                depth = float(book_depth_usd) if book_depth_usd is not None else 0.0
+            except Exception:
+                depth = 0.0
+            if not math.isfinite(depth) or depth <= 0.0:
+                depth = 0.0
+            fill_pct = min(1.0, depth / notional) if notional > 0 else 0.0
             # Add stochastic noise so retries actually help
             fill_pct *= self._rng.uniform(0.85, 1.0)
             fill_pct = min(1.0, fill_pct)
