@@ -294,9 +294,10 @@ class AuthoritySnapshotStore:
     ) -> _CapturedAuthority:
         captured_at = _utcnow()
         captured_monotonic = time.monotonic()
-        history_result, count_result, recent_result = await asyncio.gather(
+        history_result, count_result, scoped_count_result, recent_result = await asyncio.gather(
             supabase_client.fetch_authority_history(symbol=symbol),
             supabase_client.count_predictions_exact(),
+            supabase_client.count_predictions_exact(symbol=symbol),
             supabase_client.fetch_predictions(limit=50, symbol=symbol),
             return_exceptions=True,
         )
@@ -305,12 +306,16 @@ class AuthoritySnapshotStore:
             failures.append(f"AUTHORITY_HISTORY:{type(history_result).__name__}")
         if isinstance(count_result, BaseException):
             failures.append(f"EXACT_COUNT:{type(count_result).__name__}")
+        if isinstance(scoped_count_result, BaseException):
+            failures.append(f"SCOPED_EXACT_COUNT:{type(scoped_count_result).__name__}")
         if failures:
             raise AuthoritySnapshotRefreshError(";".join(failures))
         if not isinstance(history_result, list):
             raise AuthoritySnapshotRefreshError("AUTHORITY_HISTORY:RESPONSE_NOT_LIST")
         if isinstance(count_result, bool) or not isinstance(count_result, int):
             raise AuthoritySnapshotRefreshError("EXACT_COUNT:RESPONSE_NOT_INT")
+        if isinstance(scoped_count_result, bool) or not isinstance(scoped_count_result, int):
+            raise AuthoritySnapshotRefreshError("SCOPED_EXACT_COUNT:RESPONSE_NOT_INT")
 
         rows = _canonical_rows(history_result)
         # Preserve the rich dashboard decision context with one bounded query; it
@@ -320,10 +325,20 @@ class AuthoritySnapshotStore:
         else:
             recent_predictions = tuple(copy.deepcopy(list(reversed(rows[-50:]))))
         exact_total = int(count_result)
+        scoped_exact = int(scoped_count_result)
+        reconciled = scoped_exact == len(rows)
+        enforce_reconciliation = str(os.environ.get("SENEX_AUTHORITY_RECONCILIATION_ENFORCE") or "0").strip() == "1"
+        if not reconciled and enforce_reconciliation:
+            raise AuthoritySnapshotRefreshError(
+                f"AUTHORITY_RECONCILIATION_MISMATCH:scope={symbol}:history={len(rows)}:exact={scoped_exact}"
+            )
         score = build_authoritative_score(rows, symbol=symbol)
         score["authority_history_complete"] = True
         score["authority_history_rows"] = len(rows)
         score["exact_total_predictions"] = exact_total
+        score["authority_scope_exact_count"] = scoped_exact
+        score["authority_reconciled"] = reconciled
+        score["authority_reconciliation_enforced"] = enforce_reconciliation
         score["exact_count_complete"] = True
 
         try:
@@ -337,6 +352,9 @@ class AuthoritySnapshotStore:
         live_gate = copy.deepcopy(live_gate)
         live_gate["authority_history_complete"] = True
         live_gate["authority_history_rows"] = len(rows)
+        live_gate["authority_scope_exact_count"] = scoped_exact
+        live_gate["authority_reconciled"] = reconciled
+        live_gate["authority_reconciliation_enforced"] = enforce_reconciliation
 
         provenance = runtime_provenance()
         last_cursor = _last_cursor(rows)
@@ -347,6 +365,9 @@ class AuthoritySnapshotStore:
             "authority_history_rows": len(rows),
             "last_cursor_or_equivalent": last_cursor,
             "exact_total_predictions": exact_total,
+            "authority_scope_exact_count": scoped_exact,
+            "authority_reconciled": reconciled,
+            "authority_reconciliation_enforced": enforce_reconciliation,
             "score": score,
             "live_gate": live_gate,
             "provenance": provenance,

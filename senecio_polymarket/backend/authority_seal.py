@@ -154,8 +154,11 @@ def authority_path(scope: str) -> Path:
     return _root() / f"authority-{_safe_scope(scope)}.json"
 
 
-def count_path() -> Path:
-    return _root() / "count-global.json"
+def count_path(scope: str = "GLOBAL_EXACT_COUNT") -> Path:
+    normalized = _safe_scope(scope)
+    if normalized == "GLOBAL_EXACT_COUNT":
+        return _root() / "count-global.json"
+    return _root() / f"count-{normalized}.json"
 
 
 def guard_path(scope: str) -> Path:
@@ -319,6 +322,7 @@ def save_count_state(
     *,
     identity: dict[str, Any],
     writer_contract: str,
+    scope: str = "GLOBAL_EXACT_COUNT",
     created_at: str | None = None,
     verified_at: str | None = None,
 ) -> dict[str, Any]:
@@ -327,7 +331,7 @@ def save_count_state(
     payload: dict[str, Any] = {
         "contract": COUNT_CONTRACT,
         **producer_identity,
-        "scope": "GLOBAL_EXACT_COUNT",
+        "scope": str(scope),
         "writer_contract": str(writer_contract),
         "cursor": cursor,
         "row_count": int(row_count),
@@ -337,7 +341,7 @@ def save_count_state(
     if payload["row_count"] < 0:
         raise AuthoritySealCorruptError("AUTHORITY_COUNT_NEGATIVE")
     payload["seal_hash"] = _keyed_sha(payload)
-    _atomic_write(count_path(), payload)
+    _atomic_write(count_path(scope), payload)
     return payload
 
 
@@ -345,10 +349,11 @@ def load_count_state(
     *,
     identity: dict[str, Any],
     writer_contract: str,
+    scope: str = "GLOBAL_EXACT_COUNT",
     now: datetime | None = None,
     max_age_s: int | None = None,
 ) -> dict[str, Any]:
-    path = count_path()
+    path = count_path(scope)
     if not path.exists():
         raise AuthoritySealMissingError("AUTHORITY_DURABLE_COUNT_MISSING")
     try:
@@ -359,6 +364,8 @@ def load_count_state(
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_CONTRACT_INVALID")
     _validate_identity_fields(identity, prefix="AUTHORITY_DURABLE_CONSUMER")
     _validate_identity_fields(payload, prefix="AUTHORITY_DURABLE_COUNT_PRODUCER")
+    if payload.get("scope") != str(scope):
+        raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_SCOPE_MISMATCH")
     if payload.get("writer_contract") != str(writer_contract):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_WRITER_CONTRACT_MISMATCH")
     try:

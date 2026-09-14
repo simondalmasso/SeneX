@@ -245,6 +245,25 @@ def _normalize_symbol(value: Any) -> str:
     return str(value or "").upper().replace("/", "").replace("-", "").strip()
 
 
+def _new_exact_count_state() -> dict[str, Any]:
+    return {"bootstrapped": False, "count": None, "cursor": None, "bootstrap_count_calls": 0}
+
+
+_scoped_exact_count_state: dict[str, dict[str, Any]] = {}
+
+
+def _count_scope(symbol: Any = None) -> str:
+    normalized = _normalize_symbol(symbol)
+    return "GLOBAL_EXACT_COUNT" if not normalized else f"{normalized}_EXACT_COUNT"
+
+
+def _count_state_for(symbol: Any = None) -> dict[str, Any]:
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return _exact_count_state
+    return _scoped_exact_count_state.setdefault(normalized, _new_exact_count_state())
+
+
 def _canonical_json(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8")
 
@@ -879,6 +898,144 @@ async def _global_id_delta(cursor: tuple[str, str] | None) -> list[tuple[str, st
     raise ExactCountUnavailableError(f"EXACT_COUNT_DELTA_PAGE_CAP_HIT:{AUTHORITY_DELTA_MAX_PAGES}")
 
 
+async def _scoped_exact_count_tail_id_cursor(symbol: str) -> tuple[str, str] | None:
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return await _exact_count_tail_id_cursor()
+    c = _get_client()
+    params = {"select": "id,ts", "id": "gt.0", "symbol": f"eq.{normalized}", "order": "id.desc", "limit": "1"}
+    try:
+        response = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
+    except D1QuotaExceededError as exc:
+        raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_TAIL:D1_QUOTA_EXCEEDED:{exc}") from exc
+    except Exception as exc:
+        raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_TAIL_REQUEST_ERROR:{type(exc).__name__}") from exc
+    if response.status_code != 200:
+        raise ExactCountUnavailableError(_d1_failure("SCOPED_EXACT_COUNT_TAIL", response))
+    data = response.json()
+    if not isinstance(data, list):
+        raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_TAIL_RESPONSE_NOT_LIST")
+    if not data:
+        return None
+    if not isinstance(data[0], dict):
+        raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_TAIL_ROW_NOT_OBJECT")
+    key = _row_cursor(data[0])
+    try:
+        if int(key[1]) <= 0:
+            raise ValueError("nonpositive")
+    except Exception as exc:
+        raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_TAIL_ID_INVALID") from exc
+    return key
+
+
+async def _scoped_id_delta(symbol: str, cursor: tuple[str, str] | None) -> list[tuple[str, str]]:
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return await _global_id_delta(cursor)
+    try:
+        floor_id = int(cursor[1]) if cursor is not None else 0
+    except Exception as exc:
+        raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_ID_CURSOR_INVALID") from exc
+    c = _get_client()
+    collected: list[tuple[str, str]] = []
+    current_id = floor_id
+    for _ in range(AUTHORITY_DELTA_MAX_PAGES):
+        params = {
+            "select": "id,ts",
+            "id": f"gt.{current_id}",
+            "symbol": f"eq.{normalized}",
+            "order": "id.asc",
+            "limit": str(AUTHORITY_DELTA_PAGE_SIZE_MAX),
+        }
+        _r7b_diagnostics["exact_count_delta_requests"] += 1
+        try:
+            response = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
+        except D1QuotaExceededError as exc:
+            raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_DELTA:D1_QUOTA_EXCEEDED:{exc}") from exc
+        except Exception as exc:
+            raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_DELTA_REQUEST_ERROR:{type(exc).__name__}") from exc
+        if response.status_code != 200:
+            raise ExactCountUnavailableError(_d1_failure("SCOPED_EXACT_COUNT_DELTA", response))
+        data = response.json()
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_DELTA_RESPONSE_INVALID")
+        page: list[tuple[str, str]] = []
+        for row in data:
+            key = _row_cursor(row)
+            try:
+                row_id = int(key[1])
+            except Exception as exc:
+                raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_DELTA_ID_NONINTEGER") from exc
+            if row_id <= current_id:
+                raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_DELTA_NON_MONOTONIC_ID")
+            current_id = row_id
+            page.append(key)
+        collected.extend(page)
+        if len(data) < AUTHORITY_DELTA_PAGE_SIZE_MAX:
+            return collected
+        if not page:
+            raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_DELTA_CURSOR_STALLED")
+    raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_DELTA_PAGE_CAP_HIT:{AUTHORITY_DELTA_MAX_PAGES}")
+
+
+async def _bootstrap_scoped_exact_count_from_ids(symbol: str) -> tuple[int, tuple[str, str] | None]:
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return await _bootstrap_exact_count_from_ids()
+    tail_before = await _scoped_exact_count_tail_id_cursor(normalized)
+    total = 0
+    cursor: tuple[str, str] | None = None
+    current_id = 0
+    bounded_page_size = AUTHORITY_HISTORY_PAGE_SIZE_MAX
+    _r7b_diagnostics["exact_count_bootstrap_calls"] += 1
+    state = _count_state_for(normalized)
+    state["bootstrap_count_calls"] += 1
+    c = _get_client()
+    for _ in range(AUTHORITY_HISTORY_MAX_PAGES):
+        params = {
+            "select": "id,ts",
+            "id": f"gt.{current_id}",
+            "symbol": f"eq.{normalized}",
+            "order": "id.asc",
+            "limit": str(bounded_page_size),
+        }
+        _r7b_diagnostics["exact_count_delta_requests"] += 1
+        try:
+            response = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
+        except D1QuotaExceededError as exc:
+            raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_BOOTSTRAP:D1_QUOTA_EXCEEDED:{exc}") from exc
+        except Exception as exc:
+            raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_BOOTSTRAP_REQUEST_ERROR:{type(exc).__name__}") from exc
+        if response.status_code != 200:
+            raise ExactCountUnavailableError(_d1_failure("SCOPED_EXACT_COUNT_BOOTSTRAP", response))
+        data = response.json()
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_BOOTSTRAP_RESPONSE_INVALID")
+        page: list[tuple[str, str]] = []
+        for row in data:
+            key = _row_cursor(row)
+            row_id = int(key[1])
+            if row_id <= current_id:
+                raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_BOOTSTRAP_NON_MONOTONIC_ID")
+            current_id = row_id
+            page.append(key)
+        total += len(page)
+        if page:
+            cursor = page[-1]
+        if len(data) < bounded_page_size:
+            tail_after = await _scoped_exact_count_tail_id_cursor(normalized)
+            if tail_before != tail_after:
+                raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_BOOTSTRAP_RACE")
+            if total == 0:
+                if tail_after is not None:
+                    raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_BOOTSTRAP_EMPTY_TAIL_MISMATCH")
+                return 0, None
+            if cursor != tail_after:
+                raise ExactCountUnavailableError("SCOPED_EXACT_COUNT_BOOTSTRAP_CURSOR_MISMATCH")
+            return total, cursor
+    raise ExactCountUnavailableError(f"SCOPED_EXACT_COUNT_BOOTSTRAP_PAGE_CAP_HIT:{AUTHORITY_HISTORY_MAX_PAGES}")
+
+
 async def _bootstrap_exact_count_from_ids() -> tuple[int, tuple[str, str] | None]:
     """One explicitly authorized INTEGER-PK traversal; never COUNT(*)/global ts sort."""
     tail_before = await _exact_count_tail_id_cursor()
@@ -939,7 +1096,7 @@ async def _bootstrap_exact_count_from_ids() -> tuple[int, tuple[str, str] | None
     raise ExactCountUnavailableError(f"EXACT_COUNT_BOOTSTRAP_PAGE_CAP_HIT:{AUTHORITY_HISTORY_MAX_PAGES}")
 
 
-async def count_predictions_exact() -> int:
+async def _count_predictions_exact_global() -> int:
     """Exact global row count from durable state plus bounded append deltas.
 
     No COUNT(*) or PostgREST count=exact request exists in this candidate. The
@@ -1007,6 +1164,67 @@ async def count_predictions_exact() -> int:
     return int(_exact_count_state["count"])
 
 
+async def _count_predictions_exact_scoped(symbol: str) -> int:
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return await _count_predictions_exact_global()
+    state = _count_state_for(normalized)
+    scope = _count_scope(normalized)
+    identity = _runtime_identity()
+    if not state["bootstrapped"]:
+        try:
+            persisted = durable_seal.load_count_state(
+                identity=identity, writer_contract=AUTHORITY_MUTATION_CONTRACT,
+                scope=scope, max_age_s=AUTHORITY_SEAL_MAX_AGE_S,
+            )
+            state.update({"bootstrapped": True, "count": int(persisted["row_count"]),
+                          "cursor": _cursor_tuple(persisted.get("cursor")),
+                          "created_at": persisted.get("created_at")})
+            _r7b_diagnostics["durable_count_loads"] += 1
+        except durable_seal.AuthoritySealMissingError:
+            try:
+                durable_seal.assert_bootstrap_permitted(scope)
+                durable_seal.record_bootstrap_attempt(scope)
+                _r7b_diagnostics["bootstrap_guard_writes"] += 1
+            except durable_seal.AuthoritySealError as exc:
+                raise ExactCountUnavailableError(str(exc)) from exc
+            total, cursor = await _bootstrap_scoped_exact_count_from_ids(normalized)
+            try:
+                persisted = durable_seal.save_count_state(
+                    total, _cursor_dict(cursor), identity=identity,
+                    writer_contract=AUTHORITY_MUTATION_CONTRACT, scope=scope,
+                )
+            except durable_seal.AuthoritySealError as exc:
+                raise ExactCountUnavailableError(str(exc)) from exc
+            state.update({"bootstrapped": True, "count": total, "cursor": cursor,
+                          "created_at": persisted.get("created_at")})
+            _r7b_diagnostics["durable_count_writes"] += 1
+        except durable_seal.AuthoritySealError as exc:
+            raise ExactCountUnavailableError(str(exc)) from exc
+    delta = await _scoped_id_delta(normalized, state.get("cursor"))
+    if delta:
+        state["count"] = int(state["count"]) + len(delta)
+        state["cursor"] = delta[-1]
+    try:
+        persisted = durable_seal.save_count_state(
+            int(state["count"]), _cursor_dict(state.get("cursor")),
+            identity=identity, writer_contract=AUTHORITY_MUTATION_CONTRACT,
+            scope=scope, created_at=state.get("created_at"),
+        )
+    except durable_seal.AuthoritySealError as exc:
+        raise ExactCountUnavailableError(str(exc)) from exc
+    state["created_at"] = persisted.get("created_at")
+    _r7b_diagnostics["durable_count_writes"] += 1
+    return int(state["count"])
+
+
+async def count_predictions_exact(symbol: Optional[str] = None) -> int:
+    normalized = _normalize_symbol(symbol)
+    if normalized:
+        return await _count_predictions_exact_scoped(normalized)
+    return await _count_predictions_exact_global()
+
+
 async def count_predictions() -> int:
     try:
         return await count_predictions_exact()
@@ -1043,6 +1261,7 @@ def get_r7b_quota_diagnostics() -> dict[str, Any]:
 def reset_r7b_incremental_state_for_tests() -> None:
     """Harness-only deterministic reset; never called by production runtime."""
     _authority_symbol_state.clear()
+    _scoped_exact_count_state.clear()
     _exact_count_state.update({"bootstrapped": False, "count": None, "cursor": None, "bootstrap_count_calls": 0})
     for key in _r7b_diagnostics:
         _r7b_diagnostics[key] = 0
