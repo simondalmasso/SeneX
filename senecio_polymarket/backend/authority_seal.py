@@ -7,6 +7,7 @@ is present and the per-scope cooldown permits it.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -69,6 +70,55 @@ def _canonical_json(value: Any) -> bytes:
 
 def _sha(value: Any) -> str:
     return "sha256:" + hashlib.sha256(_canonical_json(value)).hexdigest()
+
+
+def _seal_key() -> bytes | None:
+    raw = str(os.environ.get("SENEX_AUTHORITY_SEAL_KEY") or "")
+    if not raw:
+        return None
+    if len(raw) < 32:
+        raise AuthoritySealError("AUTHORITY_SEAL_KEY_TOO_SHORT")
+    return raw.encode("utf-8")
+
+
+def _keyed_sha(value: Any) -> str:
+    key = _seal_key()
+    if key is None:
+        return _sha(value)
+    digest = hmac.new(key, _canonical_json(value), hashlib.sha256).hexdigest()
+    return "hmac-sha256:" + digest
+
+
+def _hash_matches(supplied: Any, value: Any) -> bool:
+    supplied_text = str(supplied or "")
+    key = _seal_key()
+    if key is None:
+        if not supplied_text.startswith("sha256:"):
+            return False
+        return hmac.compare_digest(supplied_text, _sha(value))
+    if not supplied_text.startswith("hmac-sha256:"):
+        return False
+    return hmac.compare_digest(supplied_text, _keyed_sha(value))
+
+
+def _guard_hash_matches(supplied: Any, value: Any) -> bool:
+    """Bootstrap guard accepts legacy SHA during one-shot migration only."""
+    supplied_text = str(supplied or "")
+    if supplied_text.startswith("sha256:"):
+        return hmac.compare_digest(supplied_text, _sha(value))
+    key = _seal_key()
+    if key is None or not supplied_text.startswith("hmac-sha256:"):
+        return False
+    return hmac.compare_digest(supplied_text, _keyed_sha(value))
+
+
+def _assert_unique_rows(rows: list[dict[str, Any]], *, error: str) -> None:
+    seen: set[tuple[Any, ...]] = set()
+    for row in rows:
+        key = _row_key(row)
+        if key in seen:
+            raise AuthoritySealCorruptError(error)
+        seen.add(key)
 
 
 def _running_from_app_root() -> bool:
@@ -160,6 +210,12 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp, path)
+        if os.name != "nt":
+            dir_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
     finally:
         if temp.exists():
             temp.unlink(missing_ok=True)
@@ -189,6 +245,7 @@ def save_authority_state(
     verified_at: str | None = None,
 ) -> dict[str, Any]:
     ordered = sorted((dict(row) for row in rows), key=_row_key)
+    _assert_unique_rows(ordered, error="AUTHORITY_SEAL_DUPLICATE_CURSOR")
     expected_cursor = _cursor_for_rows(ordered)
     if cursor != expected_cursor:
         raise AuthoritySealCorruptError("AUTHORITY_SEAL_CURSOR_NOT_LAST_ROW")
@@ -206,7 +263,7 @@ def save_authority_state(
         "verified_at": verified_at or _iso(now),
         "rows": ordered,
     }
-    payload["seal_hash"] = _sha(payload)
+    payload["seal_hash"] = _keyed_sha(payload)
     _atomic_write(authority_path(scope), payload)
     return payload
 
@@ -240,6 +297,7 @@ def load_authority_state(
     ordered = sorted((dict(row) for row in rows), key=_row_key)
     if ordered != rows:
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_ROWS_NOT_CANONICAL")
+    _assert_unique_rows(ordered, error="AUTHORITY_DURABLE_SEAL_DUPLICATE_CURSOR")
     if int(payload.get("row_count", -1)) != len(rows):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_ROW_COUNT_MISMATCH")
     if payload.get("rows_hash") != _sha(rows):
@@ -249,7 +307,7 @@ def load_authority_state(
     supplied = payload.get("seal_hash")
     unsigned = dict(payload)
     unsigned.pop("seal_hash", None)
-    if supplied != _sha(unsigned):
+    if not _hash_matches(supplied, unsigned):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_HASH_MISMATCH")
     _validate_time_window(payload, now=now, max_age_s=max_age_s)
     return payload
@@ -278,7 +336,7 @@ def save_count_state(
     }
     if payload["row_count"] < 0:
         raise AuthoritySealCorruptError("AUTHORITY_COUNT_NEGATIVE")
-    payload["seal_hash"] = _sha(payload)
+    payload["seal_hash"] = _keyed_sha(payload)
     _atomic_write(count_path(), payload)
     return payload
 
@@ -312,7 +370,7 @@ def load_count_state(
     supplied = payload.get("seal_hash")
     unsigned = dict(payload)
     unsigned.pop("seal_hash", None)
-    if supplied != _sha(unsigned):
+    if not _hash_matches(supplied, unsigned):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_HASH_MISMATCH")
     _validate_time_window(payload, now=now, max_age_s=max_age_s)
     return payload
@@ -340,7 +398,7 @@ def assert_bootstrap_permitted(scope: str, *, now: datetime | None = None) -> No
             supplied = prior.get("guard_hash")
             unsigned = dict(prior)
             unsigned.pop("guard_hash", None)
-            if supplied != _sha(unsigned):
+            if not _guard_hash_matches(supplied, unsigned):
                 raise AuthoritySealCorruptError("AUTHORITY_BOOTSTRAP_GUARD_HASH_MISMATCH")
             attempted = _parse_utc(prior.get("attempted_at"))
             if (attempted - current).total_seconds() > FUTURE_SKEW_S:
@@ -361,5 +419,5 @@ def record_bootstrap_attempt(scope: str, *, now: datetime | None = None) -> None
         "scope": str(scope),
         "attempted_at": _iso(current),
     }
-    payload["guard_hash"] = _sha(payload)
+    payload["guard_hash"] = _keyed_sha(payload)
     _atomic_write(guard_path(scope), payload)
