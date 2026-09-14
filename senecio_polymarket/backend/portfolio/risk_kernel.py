@@ -48,6 +48,8 @@ from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Any, Optional
 
+from ..paper_lock import hard_paper_lock_active
+
 log = logging.getLogger("senecio.risk_kernel")
 
 
@@ -420,7 +422,15 @@ class RiskKernel:
         return self.state.to_dict()
 
     def update_config(self, **overrides: Any) -> None:
-        """Hot-patch config."""
+        """Hot-patch non-safety config while HARD_PAPER_LOCK is active."""
+        if hard_paper_lock_active():
+            unsafe = (
+                overrides.get("trade_mode") not in (None, "PAPER")
+                or overrides.get("allow_live") is True
+                or overrides.get("live_capital_locked") is False
+            )
+            if unsafe:
+                raise RuntimeError("HARD_PAPER_LOCK: refusing unsafe RiskKernel config override")
         self.cfg.update(overrides)
         log.info("RiskKernel config updated: %s", overrides)
 

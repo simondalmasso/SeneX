@@ -68,6 +68,8 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..paper_lock import hard_paper_lock_active
+
 log = logging.getLogger("senecio.portfolio_engine")
 
 
@@ -457,6 +459,14 @@ class PortfolioEngine:
         log.info("proposal skipped: %s %s — %s", symbol, direction, reason)
 
     def update_config(self, **overrides: Any) -> None:
-        """Hot-patch config (e.g. enable short_only_paper_mode)."""
+        """Hot-patch non-safety config while HARD_PAPER_LOCK is active."""
+        if hard_paper_lock_active():
+            unsafe = (
+                overrides.get("trade_mode") not in (None, "PAPER")
+                or overrides.get("allow_live") is True
+                or overrides.get("live_capital_locked") is False
+            )
+            if unsafe:
+                raise RuntimeError("HARD_PAPER_LOCK: refusing unsafe PortfolioEngine config override")
         self.cfg.update(overrides)
         log.info("PortfolioEngine config updated: %s", overrides)
