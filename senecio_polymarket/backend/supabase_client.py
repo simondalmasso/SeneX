@@ -1225,12 +1225,13 @@ async def count_predictions_exact(symbol: Optional[str] = None) -> int:
     return await _count_predictions_exact_global()
 
 
-async def count_predictions() -> int:
+async def count_predictions() -> Optional[int]:
+    """Best-effort count for diagnostics; UNKNOWN is None, never fabricated zero."""
     try:
         return await count_predictions_exact()
     except Exception as e:
         log.debug("supabase exact count unavailable: %s", e)
-        return 0
+        return None
 
 
 PENDING_SCAN_PAGE_SIZE_MAX = 100
