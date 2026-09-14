@@ -254,11 +254,19 @@
 
   function renderPolyFeed(events) {
     const feed = $('#poly-feed');
+    const meta = $('#poly-feed-meta');
     if (!events.length) {
       feed.innerHTML = '<div class="placeholder" style="padding:12px">No current public CLOB events in payload</div>';
+      if (meta) meta.textContent = '[RUNTIME_OBSERVED] public WebSocket payload ? metadata-only 0';
       return;
     }
-    feed.innerHTML = events.slice(0, 50).map((event) => {
+    const visibleEvents = events.slice(0, 50);
+    const metadataOnlyCount = visibleEvents.reduce((count, event) => {
+      const hasPriceFields = event.price != null || event.best_bid != null || event.best_ask != null || event.outcome || event.side;
+      return count + (hasPriceFields ? 0 : 1);
+    }, 0);
+    if (meta) meta.textContent = `[RUNTIME_OBSERVED] public WebSocket payload ? metadata-only ${metadataOnlyCount}`;
+    feed.innerHTML = visibleEvents.map((event) => {
       const detail = [
         event.outcome,
         event.side,
@@ -266,7 +274,7 @@
         event.best_bid != null ? `bid=${event.best_bid}` : '',
         event.best_ask != null ? `ask=${event.best_ask}` : '',
       ].filter(Boolean).join(' ');
-      return `<div class="feed-row"><span class="ts">${clock(event.timestamp)}</span><span class="type type-MARKET_TICK">${esc(event.event_type || 'CLOB')}</span><span class="body">${esc(detail || 'event without price fields')}</span></div>`;
+      return `<div class="feed-row"><span class="ts">${clock(event.timestamp)}</span><span class="type type-MARKET_TICK">${esc(event.event_type || 'CLOB')}</span><span class="body">${esc(detail || 'metadata event (no price fields)')}</span></div>`;
     }).join('');
   }
 
