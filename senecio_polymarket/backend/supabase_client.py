@@ -297,6 +297,25 @@ def _row_cursor(row: dict[str, Any]) -> tuple[str, str]:
     return ts, row_id
 
 
+def _authority_id_floor(rows: dict[str, dict[str, Any]]) -> int:
+    floor = 0
+    for row in rows.values():
+        try:
+            row_id = int(_row_cursor(row)[1])
+        except Exception as exc:
+            raise AuthorityHistoryIncompleteError("AUTHORITY_HISTORY_ID_NONINTEGER") from exc
+        if row_id <= 0:
+            raise AuthorityHistoryIncompleteError("AUTHORITY_HISTORY_ID_NONPOSITIVE")
+        floor = max(floor, row_id)
+    return floor
+
+
+def _authority_temporal_cursor(rows: dict[str, dict[str, Any]]) -> tuple[str, str] | None:
+    if not rows:
+        return None
+    return max((_row_cursor(row) for row in rows.values()), key=_cursor_order_key)
+
+
 def _authority_row_from_projection(row: dict[str, Any]) -> dict[str, Any]:
     projected = dict(row)
     origin = projected.pop("origin_price_v1", None)
@@ -513,19 +532,61 @@ async def _fetch_authority_delta_raw(
     *,
     page_size: int,
     max_pages: int,
+    id_floor: int | None = None,
 ) -> list[dict[str, Any]]:
     bounded_page_size = max(1, min(int(page_size), AUTHORITY_DELTA_PAGE_SIZE_MAX))
     bounded_pages = max(1, min(int(max_pages), AUTHORITY_DELTA_MAX_PAGES))
     normalized = _normalize_symbol(symbol)
     collected: list[dict[str, Any]] = []
+
+    if id_floor is not None:
+        try:
+            current_id = int(id_floor)
+        except Exception as exc:
+            raise AuthorityHistoryIncompleteError("AUTHORITY_DELTA_ID_FLOOR_INVALID") from exc
+        if current_id < 0:
+            raise AuthorityHistoryIncompleteError("AUTHORITY_DELTA_ID_FLOOR_NEGATIVE")
+        c = _get_client()
+        for _ in range(bounded_pages):
+            params = {
+                "select": AUTHORITY_HISTORY_SELECT,
+                "id": f"gt.{current_id}",
+                "order": "id.asc",
+                "limit": str(bounded_page_size),
+            }
+            if normalized:
+                params["symbol"] = f"eq.{normalized}"
+            _r7b_diagnostics["authority_delta_requests"] += 1
+            try:
+                response = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
+            except D1QuotaExceededError as exc:
+                raise AuthorityHistoryIncompleteError(f"AUTHORITY_DELTA:D1_QUOTA_EXCEEDED:{exc}") from exc
+            except Exception as exc:
+                raise AuthorityHistoryIncompleteError(f"AUTHORITY_DELTA_REQUEST_ERROR:{type(exc).__name__}") from exc
+            if response.status_code != 200:
+                raise AuthorityHistoryIncompleteError(_d1_failure("AUTHORITY_DELTA", response))
+            data = response.json()
+            if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+                raise AuthorityHistoryIncompleteError("AUTHORITY_DELTA_RESPONSE_INVALID")
+            for raw in data:
+                row = _authority_row_from_projection(raw)
+                try:
+                    row_id = int(_row_cursor(row)[1])
+                except Exception as exc:
+                    raise AuthorityHistoryIncompleteError("AUTHORITY_DELTA_ID_NONINTEGER") from exc
+                if row_id <= current_id:
+                    raise AuthorityHistoryIncompleteError("AUTHORITY_DELTA_NON_MONOTONIC_ID")
+                current_id = row_id
+                collected.append(row)
+            if len(data) < bounded_page_size:
+                return collected
+        raise AuthorityHistoryIncompleteError(f"AUTHORITY_DELTA_PAGE_CAP_HIT:{bounded_pages}")
+
     current = cursor
     for _ in range(bounded_pages):
         page = await _keyset_page(
-            normalized or None,
-            current,
-            select=AUTHORITY_HISTORY_SELECT,
-            limit=bounded_page_size,
-            diagnostics_key="authority_delta_requests",
+            normalized or None, current, select=AUTHORITY_HISTORY_SELECT,
+            limit=bounded_page_size, diagnostics_key="authority_delta_requests",
             error_prefix="AUTHORITY_DELTA",
         )
         for raw in page:
@@ -660,11 +721,13 @@ async def fetch_authority_history(
     else:
         _validate_state_metadata(scope, state)
 
+    id_floor = _authority_id_floor(state["rows"])
     delta = await _fetch_authority_delta_raw(
         symbol,
         state.get("cursor"),
         page_size=page_size,
         max_pages=min(int(max_pages), AUTHORITY_DELTA_MAX_PAGES),
+        id_floor=id_floor,
     )
     changed = False
     for row in delta:
@@ -672,7 +735,7 @@ async def fetch_authority_history(
         state["rows"][key[1]] = row
         changed = True
     if delta:
-        state["cursor"] = _row_cursor(delta[-1])
+        state["cursor"] = _authority_temporal_cursor(state["rows"])
 
     mutable = _mutable_ids(state["rows"])
     refreshed = await _refresh_mutable_rows(symbol, mutable)
