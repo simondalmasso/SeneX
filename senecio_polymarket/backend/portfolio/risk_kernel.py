@@ -320,7 +320,7 @@ class RiskKernel:
             proposal_id=p.get("prediction_id"),
         )
 
-    def record_pnl(self, pnl_usd: float, equity: float) -> None:
+    def record_pnl(self, pnl_usd: float, equity: Optional[float]) -> None:
         """Update internal state after a closed position.
 
         Called by ExecutionEngine (or its caller) after every exit.
@@ -331,15 +331,22 @@ class RiskKernel:
         base = max(self.cfg["starting_equity_usd"], 1.0)
         self.state.daily_pnl_pct = (self.state.daily_pnl_usd / base) * 100
 
-        # Update equity + drawdown
-        self.state.current_equity = equity
-        if equity > self.state.peak_equity:
-            self.state.peak_equity = equity
-        if self.state.peak_equity > 0:
-            self.state.drawdown_pct = max(
-                0.0,
-                (self.state.peak_equity - equity) / self.state.peak_equity * 100,
-            )
+        # Update equity + drawdown only from a real current mark. Unknown
+        # valuation is fail-closed: preserve realized PnL, keep the last known
+        # equity/drawdown, and stop further execution until an operator resets.
+        equity_known = equity is not None
+        if equity_known:
+            current_equity = float(equity)
+            self.state.current_equity = current_equity
+            if current_equity > self.state.peak_equity:
+                self.state.peak_equity = current_equity
+            if self.state.peak_equity > 0:
+                self.state.drawdown_pct = max(
+                    0.0,
+                    (self.state.peak_equity - current_equity) / self.state.peak_equity * 100,
+                )
+        else:
+            self.trip_kill_switch("auto: equity unavailable after realized pnl")
 
         # Update loss streak
         if pnl_usd < 0:
@@ -372,8 +379,8 @@ class RiskKernel:
                 f"reached -{self.cfg['max_daily_loss_pct']*100:.2f}%"
             )
 
-        # Auto-kill on max drawdown breach
-        if self.state.drawdown_pct >= self.cfg["max_drawdown_pct"] * 100:
+        # Auto-kill on max drawdown breach only when a current mark exists.
+        if equity_known and self.state.drawdown_pct >= self.cfg["max_drawdown_pct"] * 100:
             self.trip_kill_switch(
                 f"auto: drawdown={self.state.drawdown_pct:.2f}% "
                 f"reached {self.cfg['max_drawdown_pct']*100:.2f}%"

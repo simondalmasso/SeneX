@@ -133,7 +133,7 @@ class TradeProposal:
 @dataclass
 class PortfolioState:
     """Live portfolio snapshot — updated after every fill/exit."""
-    equity: float                                 # current equity (cash + unrealized MTM)
+    equity: Optional[float]                       # current equity; None when any open mark is unknown
     cash: float                                   # free cash
     open_positions: dict[str, dict] = field(default_factory=dict)  # symbol → position dict
     realized_pnl: float = 0.0
@@ -141,6 +141,8 @@ class PortfolioState:
     net_exposure_usd: float = 0.0
     portfolio_heat_pct: float = 0.0
     open_count: int = 0
+    equity_status: str = "OK"
+    missing_price_symbols: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -232,7 +234,13 @@ class PortfolioEngine:
             self._log_skip(symbol, direction, f"invalid price_now={price_now}")
             return None
 
-        # 3) Concurrency + per-symbol caps
+        # 3) Portfolio valuation must be current before any risk sizing.
+        if state.equity is None or getattr(state, "equity_status", "OK") != "OK":
+            missing = ",".join(getattr(state, "missing_price_symbols", []) or [])
+            self._log_skip(symbol, direction, f"equity UNKNOWN missing_prices={missing}")
+            return None
+
+        # 3.1) Concurrency + per-symbol caps
         if state.open_count >= cfg["max_concurrent"]:
             self._log_skip(symbol, direction, f"max_concurrent={cfg['max_concurrent']} reached")
             return None
@@ -389,6 +397,7 @@ class PortfolioEngine:
         equity = cash
         open_count = 0
         clean_positions: dict[str, dict] = {}
+        missing_price_symbols: list[str] = []
         for sym, p in open_positions.items():
             if p.get("status") != "OPEN":
                 continue
@@ -396,7 +405,16 @@ class PortfolioEngine:
             qty = float(p.get("qty", 0))
             entry = float(p.get("avg_entry_price", p.get("entry_price", 0)))
             direction = p.get("direction", "LONG").upper()
-            last = last_prices.get(sym, entry)
+            raw_last = last_prices.get(sym)
+            try:
+                last = float(raw_last)
+            except (TypeError, ValueError):
+                last = entry
+                missing_price_symbols.append(sym)
+            else:
+                if not math.isfinite(last) or last <= 0:
+                    last = entry
+                    missing_price_symbols.append(sym)
             notional = qty * last
             gross += notional
             net += notional if direction == "LONG" else -notional
@@ -410,8 +428,9 @@ class PortfolioEngine:
                 equity -= last * qty
             clean_positions[sym] = p
 
+        missing_price_symbols = sorted(set(missing_price_symbols))
         return PortfolioState(
-            equity=round(equity, 2),
+            equity=None if missing_price_symbols else round(equity, 2),
             cash=round(cash, 2),
             open_positions=clean_positions,
             realized_pnl=0.0,   # tracked separately by TradeJournal
@@ -419,6 +438,8 @@ class PortfolioEngine:
             net_exposure_usd=round(net, 2),
             portfolio_heat_pct=round(heat, 4),
             open_count=open_count,
+            equity_status="UNKNOWN" if missing_price_symbols else "OK",
+            missing_price_symbols=missing_price_symbols,
         )
 
     # -------- helpers --------

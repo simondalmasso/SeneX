@@ -353,7 +353,14 @@ class PortfolioCoordinator:
         # ACT-XXVI: also feed the outcome into MetaLabeler for streak tracking
         for exit_evt in exits:
             pnl = float(exit_evt.get("realized_pnl") or 0)
-            equity = self.execution_engine.equity(self._last_prices)
+            try:
+                equity = self.execution_engine.equity(self._last_prices)
+            except Exception as exc:
+                # Realized PnL is still authoritative, but risk valuation is
+                # unknown. Pass UNKNOWN to RiskKernel so it fails closed rather
+                # than crashing the tick loop or inventing a stale equity mark.
+                log.error("equity unavailable after exit: %s", exc)
+                equity = None
             self.risk_kernel.record_pnl(pnl_usd=pnl, equity=equity)
             # Record outcome for meta-labeler (uses position's direction)
             try:

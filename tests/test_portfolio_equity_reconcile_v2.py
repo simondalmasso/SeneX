@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from senecio_polymarket.backend.portfolio.execution_engine import ExecutionEngine, Position
 from senecio_polymarket.backend.portfolio.portfolio_engine import PortfolioEngine
 
@@ -20,6 +20,10 @@ def test_portfolio_equity_matches_engine_with_fresh_price(direction,last):
     assert state.equity == pytest.approx(e.equity({"BTCUSDT":last}), abs=0.01)
 
 @pytest.mark.parametrize("direction", ["LONG","SHORT"])
-def test_portfolio_equity_uses_avg_entry_when_price_missing(direction):
+def test_portfolio_equity_is_unknown_when_price_missing(direction):
     e,state=_state_for(direction,{})
-    assert state.equity == pytest.approx(e.equity({}), abs=0.01)
+    assert state.equity is None
+    assert state.equity_status == "UNKNOWN"
+    assert state.missing_price_symbols == ["BTCUSDT"]
+    with pytest.raises(ValueError, match="MISSING_MARKET_PRICE:BTCUSDT"):
+        e.equity({})

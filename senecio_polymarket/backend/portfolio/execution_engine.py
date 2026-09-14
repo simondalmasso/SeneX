@@ -823,18 +823,47 @@ class ExecutionEngine:
     def get_audit_log(self, limit: int = 50) -> list[dict]:
         return list(self.audit_log[-limit:])
 
-    def equity(self, last_prices: dict[str, float]) -> float:
-        """Mark-to-market equity = cash + Σ(qty * last_price * sign)."""
+    def equity_state(self, last_prices: dict[str, float]) -> dict[str, Any]:
+        """Truthful MTM state; never substitutes entry price for a missing mark."""
+        marks: dict[str, float] = {}
+        missing: list[str] = []
+        for sym, pos in self.positions.items():
+            if pos.status != "OPEN":
+                continue
+            raw = last_prices.get(sym)
+            try:
+                mark = float(raw)
+            except Exception:
+                missing.append(sym)
+                continue
+            if not math.isfinite(mark) or mark <= 0:
+                missing.append(sym)
+                continue
+            marks[sym] = mark
+        if missing:
+            return {
+                "status": "UNKNOWN",
+                "equity": None,
+                "missing_price_symbols": sorted(set(missing)),
+            }
         eq = self.cash
         for sym, pos in self.positions.items():
             if pos.status != "OPEN":
                 continue
-            last = last_prices.get(sym, pos.avg_entry_price)
+            mark = marks[sym]
             if pos.direction == "LONG":
-                eq += pos.qty * last
+                eq += pos.qty * mark
             else:
-                eq -= pos.qty * last  # SHORT liability marked at current price
-        return round(eq, 2)
+                eq -= pos.qty * mark
+        return {"status": "OK", "equity": round(eq, 2), "missing_price_symbols": []}
+
+    def equity(self, last_prices: dict[str, float]) -> float:
+        """Strict mark-to-market equity; missing/invalid marks fail closed."""
+        state = self.equity_state(last_prices)
+        if state["status"] != "OK":
+            missing = ",".join(state["missing_price_symbols"])
+            raise ValueError(f"MISSING_MARKET_PRICE:{missing}")
+        return float(state["equity"])
 
     def stats(self) -> dict[str, Any]:
         return {

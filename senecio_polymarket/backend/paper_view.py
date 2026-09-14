@@ -114,11 +114,26 @@ def paper_state(*, last_prices: dict[str, float] | None = None) -> dict[str, Any
         shadow = _unknown("SHADOW_LIVE_ERROR")
 
     equity: float | None = None
+    equity_status: dict[str, Any] = {
+        "status": "UNKNOWN",
+        "reason": "EXECUTION_ENGINE_UNAVAILABLE",
+        "missing_price_symbols": [],
+    }
     try:
-        if engine is not None and hasattr(engine, "equity"):
+        if engine is not None and hasattr(engine, "equity_state"):
+            state_view = engine.equity_state(last_prices)
+            equity = state_view.get("equity")
+            equity_status = {
+                "status": state_view.get("status") or "UNKNOWN",
+                "reason": None if state_view.get("status") == "OK" else "MISSING_MARKET_PRICE",
+                "missing_price_symbols": list(state_view.get("missing_price_symbols") or []),
+            }
+        elif engine is not None and hasattr(engine, "equity"):
             equity = engine.equity(last_prices)
+            equity_status = {"status": "OK", "reason": None, "missing_price_symbols": []}
     except Exception:
         equity = None
+        equity_status = {"status": "UNKNOWN", "reason": "EQUITY_ERROR", "missing_price_symbols": []}
 
     return {
         "status": "OK",
@@ -126,6 +141,7 @@ def paper_state(*, last_prices: dict[str, float] | None = None) -> dict[str, Any
         "execution": engine_stats,
         "state": state,
         "equity": equity,
+        "equity_status": equity_status,
         "positions": {"status": "OK" if positions else "EMPTY", "rows": positions},
         "recent_exits": {"status": "OK" if exits else "EMPTY", "rows": exits},
         "recent_trades": {"status": "OK" if recent_trades else "EMPTY", "rows": recent_trades},
