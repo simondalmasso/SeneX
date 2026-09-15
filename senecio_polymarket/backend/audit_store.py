@@ -9,7 +9,6 @@ Append-only JSONL persistence for every canonical event.
 from __future__ import annotations
 
 import io
-import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path

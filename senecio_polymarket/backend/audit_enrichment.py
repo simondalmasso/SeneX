@@ -41,10 +41,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import subprocess
-import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 log = logging.getLogger("senecio.audit_enrichment")

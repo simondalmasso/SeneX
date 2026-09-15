@@ -29,11 +29,11 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 
 from .models import ExecutionSim, Signal, MarketTick, Action, utc_now_iso, new_id
-from .liquidity import Orderbook, synth_book_from_tick
+from .liquidity import Orderbook
 from .paper_lock import assert_paper_locked, hard_paper_lock_active
 
 

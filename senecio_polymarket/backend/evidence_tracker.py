@@ -19,10 +19,8 @@ NEVER modifies trading logic. NEVER blocks.
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("senecio.evidence_tracker")

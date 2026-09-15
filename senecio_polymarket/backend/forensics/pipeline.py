@@ -31,13 +31,12 @@ import asyncio
 import json
 import logging
 import math
-import os
 import statistics
 import time
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from ..settlement_proof import is_proof_qualified
 

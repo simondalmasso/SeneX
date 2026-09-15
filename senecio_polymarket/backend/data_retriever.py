@@ -23,10 +23,9 @@ import asyncio
 import hashlib
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import AsyncIterator
 
-from .models import MarketTick, WalletAlert, utc_now_iso, new_id
+from .models import MarketTick, WalletAlert, utc_now_iso
 
 
 # ---- static catalog ----
