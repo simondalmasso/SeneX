@@ -8,6 +8,7 @@ sealed authority base plus bounded deltas and mutable-row refreshes.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -274,19 +275,25 @@ async def insert_prediction(prediction: dict) -> Optional[dict]:
         return None
 
 
+async def fetch_predictions_strict(limit: int = 50, symbol: Optional[str] = None) -> list[dict]:
+    """Bounded newest-first query that preserves upstream failure semantics."""
+    c = _get_client()
+    params = {"limit": str(limit), "order": "ts.desc"}
+    if symbol:
+        params["symbol"] = f"eq.{symbol}"
+    r = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
+    if r.status_code != 200:
+        raise RuntimeError(_d1_failure("SUPABASE_FETCH", r))
+    data = r.json()
+    if not isinstance(data, list):
+        raise RuntimeError("SUPABASE_FETCH_RESPONSE_NOT_LIST")
+    return data
+
+
 async def fetch_predictions(limit: int = 50, symbol: Optional[str] = None) -> list[dict]:
-    """Bounded newest-first diagnostic/read-model query; never authority history."""
+    """Bounded diagnostic/read-model query; legacy callers degrade failures to empty."""
     try:
-        c = _get_client()
-        params = {"limit": str(limit), "order": "ts.desc"}
-        if symbol:
-            params["symbol"] = f"eq.{symbol}"
-        r = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
-        if r.status_code == 200:
-            data = r.json()
-            return data if isinstance(data, list) else []
-        log.error("supabase fetch failed: %s %s", r.status_code, r.text[:200])
-        return []
+        return await fetch_predictions_strict(limit=limit, symbol=symbol)
     except Exception as e:
         log.error("supabase fetch error: %s", e)
         return []
@@ -459,6 +466,16 @@ def _state_key(symbol: str | None) -> str:
     return normalized or "*"
 
 
+def _runtime_seal_hash(value: Any) -> str:
+    raw = str(os.environ.get("SENEX_AUTHORITY_SEAL_KEY") or "")
+    if not raw:
+        return "sha256:" + hashlib.sha256(_canonical_json(value)).hexdigest()
+    if len(raw) < 32:
+        raise AuthorityHistoryIncompleteError("AUTHORITY_SEAL_KEY_TOO_SHORT")
+    digest = hmac.new(raw.encode("utf-8"), _canonical_json(value), hashlib.sha256).hexdigest()
+    return "hmac-sha256:" + digest
+
+
 def _seal_state(key: str, rows: dict[str, dict[str, Any]], cursor: tuple[str, str] | None) -> dict[str, Any]:
     identity = _runtime_identity()
     ordered = sorted(rows.values(), key=lambda row: _cursor_order_key(_row_cursor(row)))
@@ -471,7 +488,7 @@ def _seal_state(key: str, rows: dict[str, dict[str, Any]], cursor: tuple[str, st
         "row_count": len(ordered),
         "authority_rows_sha256": "sha256:" + hashlib.sha256(_canonical_json(ordered)).hexdigest(),
     }
-    payload["seal_sha256"] = "sha256:" + hashlib.sha256(_canonical_json(payload)).hexdigest()
+    payload["seal_hash"] = _runtime_seal_hash(payload)
     return payload
 
 
@@ -497,11 +514,11 @@ def _validate_state_metadata(key: str, state: dict[str, Any]) -> None:
     expected_rows_hash = "sha256:" + hashlib.sha256(_canonical_json(ordered)).hexdigest()
     if seal.get("authority_rows_sha256") != expected_rows_hash:
         raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_SEAL_ROWS_HASH_MISMATCH")
-    supplied_hash = str(seal.get("seal_sha256") or "")
+    supplied_hash = str(seal.get("seal_hash") or "")
     seal_payload = dict(seal)
-    seal_payload.pop("seal_sha256", None)
-    expected_seal_hash = "sha256:" + hashlib.sha256(_canonical_json(seal_payload)).hexdigest()
-    if supplied_hash != expected_seal_hash:
+    seal_payload.pop("seal_hash", None)
+    expected_seal_hash = _runtime_seal_hash(seal_payload)
+    if not hmac.compare_digest(supplied_hash, expected_seal_hash):
         raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_SEAL_HASH_MISMATCH")
 
 

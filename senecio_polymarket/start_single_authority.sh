@@ -17,6 +17,15 @@ if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_KEY:-}" ]; then
   exit 78
 fi
 
+if [ -z "${SENEX_AUTHORITY_SEAL_KEY:-}" ]; then
+  echo "[start_single_authority.sh] FATAL: SENEX_AUTHORITY_SEAL_KEY is required" >&2
+  exit 78
+fi
+if [ "${#SENEX_AUTHORITY_SEAL_KEY}" -lt 32 ]; then
+  echo "[start_single_authority.sh] FATAL: SENEX_AUTHORITY_SEAL_KEY must be at least 32 characters" >&2
+  exit 78
+fi
+
 rm -f "$HEARTBEAT_FILE"
 
 echo "[start_single_authority.sh] launching settlement authority + reconciliation guard..."

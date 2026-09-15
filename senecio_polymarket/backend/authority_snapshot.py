@@ -298,7 +298,7 @@ class AuthoritySnapshotStore:
             supabase_client.fetch_authority_history(symbol=symbol),
             supabase_client.count_predictions_exact(),
             supabase_client.count_predictions_exact(symbol=symbol),
-            supabase_client.fetch_predictions(limit=50, symbol=symbol),
+            supabase_client.fetch_predictions_strict(limit=50, symbol=symbol),
             return_exceptions=True,
         )
         failures: list[str] = []
@@ -308,6 +308,8 @@ class AuthoritySnapshotStore:
             failures.append(f"EXACT_COUNT:{type(count_result).__name__}")
         if isinstance(scoped_count_result, BaseException):
             failures.append(f"SCOPED_EXACT_COUNT:{type(scoped_count_result).__name__}")
+        if isinstance(recent_result, BaseException):
+            failures.append(f"RECENT_PREDICTIONS:{type(recent_result).__name__}")
         if failures:
             raise AuthoritySnapshotRefreshError(";".join(failures))
         if not isinstance(history_result, list):

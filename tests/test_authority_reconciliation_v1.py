@@ -75,7 +75,7 @@ class AuthoritySnapshotReconciliationTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"SENEX_AUTHORITY_RECONCILIATION_ENFORCE": "0"}, clear=False), \
              mock.patch.object(sc, "fetch_authority_history", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(sc, "count_predictions_exact", new=fake_count), \
-             mock.patch.object(sc, "fetch_predictions", new=mock.AsyncMock(return_value=rows)), \
+             mock.patch.object(sc, "fetch_predictions_strict", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(snap, "runtime_provenance", return_value={"exact": True}):
             captured = asyncio.run(
                 snap.STORE._capture_complete(
@@ -96,7 +96,7 @@ class AuthoritySnapshotReconciliationTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"SENEX_AUTHORITY_RECONCILIATION_ENFORCE": "1"}, clear=False), \
              mock.patch.object(sc, "fetch_authority_history", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(sc, "count_predictions_exact", new=fake_count), \
-             mock.patch.object(sc, "fetch_predictions", new=mock.AsyncMock(return_value=rows)), \
+             mock.patch.object(sc, "fetch_predictions_strict", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(snap, "runtime_provenance", return_value={"exact": True}):
             with self.assertRaisesRegex(snap.AuthoritySnapshotRefreshError, "AUTHORITY_RECONCILIATION_MISMATCH"):
                 asyncio.run(snap.STORE._capture_complete("BTCUSDT", lambda score: {
@@ -114,7 +114,7 @@ class AuthoritySnapshotReconciliationTests(unittest.TestCase):
 
         with mock.patch.object(sc, "fetch_authority_history", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(sc, "count_predictions_exact", new=fake_count), \
-             mock.patch.object(sc, "fetch_predictions", new=mock.AsyncMock(return_value=rows)), \
+             mock.patch.object(sc, "fetch_predictions_strict", new=mock.AsyncMock(return_value=rows)), \
              mock.patch.object(snap, "runtime_provenance", return_value={"exact": True}):
             captured = asyncio.run(
                 snap.STORE._capture_complete(
