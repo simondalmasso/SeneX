@@ -46,3 +46,12 @@ def test_legacy_app_does_not_publish_antifragility_routes() -> None:
         for route in main_real.legacy.app.routes
     }
     assert not any(path.startswith("/api/antifragility/") for path in mounted_paths)
+
+
+def test_legacy_app_does_not_publish_research_or_final_audit_routes() -> None:
+    mounted_paths = {
+        getattr(route, "path", "")
+        for route in main_real.legacy.app.routes
+    }
+    assert not any(path.startswith("/api/research/") for path in mounted_paths)
+    assert not any(path.startswith("/api/final_audit/") for path in mounted_paths)

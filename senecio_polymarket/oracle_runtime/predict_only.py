@@ -278,7 +278,7 @@ def run_prediction(market_data: dict) -> dict:
                 "error": type(exc).__name__,
             }
         try:
-            from backend.research.aud061_pipeline import classify_flat_reason
+            from backend.flat_reason import classify_flat_reason
             audit["decision_waterfall_v1"] = {
                 "version": "AUD-061-flat-waterfall-v1",
                 "category": classify_flat_reason(result),
