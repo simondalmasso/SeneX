@@ -56,16 +56,6 @@ def _append_alert(alert: dict) -> None:
 # Individual watchdogs
 # ─────────────────────────────────────────────────────────────────────
 
-def _safe_float_list(values: list) -> list:
-    out = []
-    for v in values:
-        try:
-            if v is not None:
-                out.append(float(v))
-        except Exception:
-            pass
-    return out
-
 
 def wd_long_wr_drop(forensics: dict, history: list) -> Optional[dict]:
     """LONG_WR_DROP: rolling w25 WR > 10pp below cumulative WR."""

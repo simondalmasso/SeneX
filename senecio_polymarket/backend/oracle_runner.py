@@ -284,29 +284,6 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         return None
 
 
-async def _fetch_current_price(symbol: str) -> Optional[float]:
-    """Fetch the latest price for a symbol via ccxt (OKX public ticker).
-
-    Lightweight: only fetches ticker (no OHLCV/orderbook), so ~10x faster than
-    full fetch_market_snapshot. Used for live-cycle settlement (predictions
-    whose 15min window just elapsed — close enough to "now").
-
-    Args:
-        symbol: e.g. "ETH/USDT" (ccxt format with slash)
-    Returns:
-        Last price as float, or None on failure.
-    """
-    def _fetch() -> Optional[float]:
-        try:
-            import ccxt
-            ex = ccxt.okx({"enableRateLimit": True})
-            t = ex.fetch_ticker(symbol)
-            return float(t.get("last") or 0) or None
-        except Exception as e:
-            log.warning("ccxt fetch_ticker failed for %s: %s", symbol, e)
-            return None
-    return await asyncio.to_thread(_fetch)
-
 
 async def _fetch_price_evidence_at_time(
     symbol: str,
@@ -324,11 +301,6 @@ async def _fetch_price_evidence_at_time(
         window_seconds,
     )
 
-
-async def _fetch_price_at_time(symbol: str, ts_iso: str, window_seconds: int = WINDOW_15M_S) -> Optional[float]:
-    """Backward-compatible OKX helper; authoritative verifier uses evidence API."""
-    evidence = await _fetch_price_evidence_at_time(symbol, ts_iso, window_seconds, "okx")
-    return float(evidence["price"]) if evidence else None
 
 def _outcome_for_direction(direction: str, price_now: float, price_later: float) -> Optional[str]:
     from .settlement_contract import directional_outcome
