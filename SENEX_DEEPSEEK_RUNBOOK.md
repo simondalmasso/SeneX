@@ -24,7 +24,9 @@ export SENEX_RUNTIME_ROOT="$PWD/senecio_polymarket"
 
 ```bash
 PYTHONPATH=$PWD/senecio_polymarket .venv/bin/python -m pytest tests/ -q
-# expected: 65 passed (includes the Linux symlink case that Windows skips)
+# expected: pytest exits 0 with zero failures.
+# Record the actual collected/passed/skipped totals for the candidate under audit.
+# Do not hard-code a historical test count; explicitly justify any skipped tests.
 ```
 
 ## Compile check
