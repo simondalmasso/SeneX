@@ -38,3 +38,11 @@ def test_main_real_public_guard_denies_legacy_kill_switch_post() -> None:
     response = _post("/api/portfolio/kill_switch")
     assert response.status_code == 405
     assert response.headers.get("X-Senex-Public-Decision") == "DENY_UNSAFE_METHOD"
+
+
+def test_legacy_app_does_not_publish_antifragility_routes() -> None:
+    mounted_paths = {
+        getattr(route, "path", "")
+        for route in main_real.legacy.app.routes
+    }
+    assert not any(path.startswith("/api/antifragility/") for path in mounted_paths)
