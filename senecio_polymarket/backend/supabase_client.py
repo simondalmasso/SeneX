@@ -11,7 +11,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -69,11 +69,29 @@ class D1QuotaExceededError(RuntimeError):
     """Deterministic D1 daily row-read quota exhaustion; retry only after reset."""
 
 
+class D1TransientUnavailableError(RuntimeError):
+    """Temporary D1 unavailability while the short breaker is open."""
+
+
+D1_TRANSIENT_FAILURE_THRESHOLD = 3
+D1_TRANSIENT_BACKOFF_BASE_SEC = 30
+D1_TRANSIENT_BACKOFF_MAX_SEC = 300
+
 _d1_quota_breaker: dict[str, Any] = {
     "opened_at": None,
     "open_until": None,
     "reason": None,
     "network_calls": 0,
+    "suppressed_calls": 0,
+}
+
+_d1_transient_breaker: dict[str, Any] = {
+    "opened_at": None,
+    "open_until": None,
+    "reason": None,
+    "consecutive_failures": 0,
+    "backoff_seconds": D1_TRANSIENT_BACKOFF_BASE_SEC,
+    "open_count": 0,
     "suppressed_calls": 0,
 }
 
@@ -127,6 +145,64 @@ def get_d1_quota_breaker_status() -> dict[str, Any]:
     return _quota_breaker_status()
 
 
+def _transient_breaker_status(now: datetime | None = None) -> dict[str, Any]:
+    current = (now or _now_utc()).astimezone(timezone.utc)
+    raw_until = _d1_transient_breaker.get("open_until")
+    open_until = datetime.fromisoformat(raw_until) if isinstance(raw_until, str) and raw_until else None
+    is_open = bool(open_until is not None and current < open_until)
+    if open_until is not None and not is_open:
+        _d1_transient_breaker["opened_at"] = None
+        _d1_transient_breaker["open_until"] = None
+        _d1_transient_breaker["reason"] = None
+        _d1_transient_breaker["consecutive_failures"] = 0
+        open_until = None
+    return {
+        "open": is_open,
+        "opened_at": _d1_transient_breaker.get("opened_at"),
+        "open_until": open_until.isoformat() if open_until is not None else None,
+        "reason": _d1_transient_breaker.get("reason"),
+        "consecutive_failures": int(_d1_transient_breaker.get("consecutive_failures") or 0),
+        "backoff_seconds": int(_d1_transient_breaker.get("backoff_seconds") or D1_TRANSIENT_BACKOFF_BASE_SEC),
+        "suppressed_calls": int(_d1_transient_breaker.get("suppressed_calls") or 0),
+    }
+
+
+def get_d1_transient_breaker_status() -> dict[str, Any]:
+    return _transient_breaker_status()
+
+
+def _reset_d1_transient_breaker() -> None:
+    _d1_transient_breaker.update({
+        "opened_at": None,
+        "open_until": None,
+        "reason": None,
+        "consecutive_failures": 0,
+        "backoff_seconds": D1_TRANSIENT_BACKOFF_BASE_SEC,
+        "open_count": 0,
+    })
+
+
+def _open_d1_transient_breaker(now: datetime | None = None) -> dict[str, Any]:
+    current = (now or _now_utc()).astimezone(timezone.utc)
+    open_count = int(_d1_transient_breaker.get("open_count") or 0)
+    backoff = min(D1_TRANSIENT_BACKOFF_BASE_SEC * (2 ** open_count), D1_TRANSIENT_BACKOFF_MAX_SEC)
+    _d1_transient_breaker["opened_at"] = current.isoformat()
+    _d1_transient_breaker["open_until"] = (current + timedelta(seconds=backoff)).isoformat()
+    _d1_transient_breaker["reason"] = "D1_TRANSIENT_UNAVAILABLE"
+    _d1_transient_breaker["backoff_seconds"] = backoff
+    _d1_transient_breaker["open_count"] = open_count + 1
+    return _transient_breaker_status(current)
+
+
+def _record_d1_transient_failure(reason: str) -> dict[str, Any]:
+    count = int(_d1_transient_breaker.get("consecutive_failures") or 0) + 1
+    _d1_transient_breaker["consecutive_failures"] = count
+    _d1_transient_breaker["reason"] = reason
+    if count >= D1_TRANSIENT_FAILURE_THRESHOLD:
+        return _open_d1_transient_breaker()
+    return _transient_breaker_status()
+
+
 def _open_d1_quota_breaker(now: datetime | None = None) -> dict[str, Any]:
     current = (now or _now_utc()).astimezone(timezone.utc)
     reset = _next_d1_reset(current)
@@ -137,19 +213,35 @@ def _open_d1_quota_breaker(now: datetime | None = None) -> dict[str, Any]:
 
 
 async def _d1_get(client: Any, path: str, **kwargs: Any) -> Any:
-    status = _quota_breaker_status()
-    if status["open"]:
+    quota_status = _quota_breaker_status()
+    if quota_status["open"]:
         _d1_quota_breaker["suppressed_calls"] = int(_d1_quota_breaker.get("suppressed_calls") or 0) + 1
         raise D1QuotaExceededError(
-            f"D1_QUOTA_EXCEEDED;retry_at={status['open_until']};network_call_suppressed=true"
+            f"D1_QUOTA_EXCEEDED;retry_at={quota_status['open_until']};network_call_suppressed=true"
+        )
+    transient_status = _transient_breaker_status()
+    if transient_status["open"]:
+        _d1_transient_breaker["suppressed_calls"] = int(_d1_transient_breaker.get("suppressed_calls") or 0) + 1
+        raise D1TransientUnavailableError(
+            f"D1_TRANSIENT_UNAVAILABLE;retry_at={transient_status['open_until']};network_call_suppressed=true"
         )
     _d1_quota_breaker["network_calls"] = int(_d1_quota_breaker.get("network_calls") or 0) + 1
-    response = await client.get(path, **kwargs)
+    try:
+        response = await client.get(path, **kwargs)
+    except httpx.TransportError as exc:
+        _record_d1_transient_failure(f"TRANSPORT:{type(exc).__name__}")
+        raise
     if _is_d1_quota_response(response):
+        _reset_d1_transient_breaker()
         opened = _open_d1_quota_breaker()
         raise D1QuotaExceededError(
             f"D1_QUOTA_EXCEEDED;retry_at={opened['open_until']};network_call_suppressed=false"
         )
+    response_status = int(getattr(response, "status_code", 0) or 0)
+    if 500 <= response_status <= 599:
+        _record_d1_transient_failure(f"HTTP_{response_status}")
+    else:
+        _reset_d1_transient_breaker()
     return response
 
 
