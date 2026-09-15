@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Any
 
-BPS_TO_DECIMAL = 0.0001
 PAPER_INSTRUMENT = {
     "contract": "SENEX_PAPER_SPOT_1H_V1",
     "instrument_identifier": "BTC/USDT",
@@ -14,10 +13,6 @@ PAPER_INSTRUMENT = {
     "cost_model_status": "COST_MODEL_NOT_AUTHORITATIVE",
     "reason": "NO_VERSIONED_PRIMARY_SOURCE_FEE_SCHEDULE_IS_BOUND_TO_DECISION_TIME",
 }
-
-
-def bps_to_decimal(bps: float) -> float:
-    return float(bps) * BPS_TO_DECIMAL
 
 
 def canonical_ev_audit(
