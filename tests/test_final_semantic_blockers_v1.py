@@ -65,7 +65,6 @@ def test_authority_snapshot_rejects_recent_prediction_transport_failure() -> Non
     store = snap.AuthoritySnapshotStore(ttl_s=60.0)
     with mock.patch.object(sc, "fetch_authority_history", new=mock.AsyncMock(return_value=rows)), \
          mock.patch.object(sc, "count_predictions_exact", new=fake_count), \
-         mock.patch.object(sc, "fetch_predictions", new=mock.AsyncMock(return_value=[])), \
          mock.patch.object(sc, "fetch_predictions_strict", new=strict_failure, create=True), \
          mock.patch.object(snap, "runtime_provenance", return_value={"exact": True}):
         with pytest.raises(snap.AuthoritySnapshotRefreshError, match="RECENT_PREDICTIONS"):
@@ -81,7 +80,6 @@ def test_legitimate_empty_recent_predictions_remain_valid() -> None:
     store = snap.AuthoritySnapshotStore(ttl_s=60.0)
     with mock.patch.object(sc, "fetch_authority_history", new=mock.AsyncMock(return_value=rows)), \
          mock.patch.object(sc, "count_predictions_exact", new=fake_count), \
-         mock.patch.object(sc, "fetch_predictions", new=mock.AsyncMock(return_value=[])), \
          mock.patch.object(sc, "fetch_predictions_strict", new=mock.AsyncMock(return_value=[]), create=True), \
          mock.patch.object(snap, "runtime_provenance", return_value={"exact": True}):
         result = asyncio.run(store.get("BTCUSDT", live_gate_builder=_gate, force=True))

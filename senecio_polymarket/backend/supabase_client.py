@@ -168,9 +168,6 @@ def _transient_breaker_status(now: datetime | None = None) -> dict[str, Any]:
     }
 
 
-def get_d1_transient_breaker_status() -> dict[str, Any]:
-    return _transient_breaker_status()
-
 
 def _reset_d1_transient_breaker() -> None:
     _d1_transient_breaker.update({
@@ -1356,16 +1353,6 @@ def reset_pending_scan_cursor() -> None:
 def get_pending_scan_diagnostics() -> dict[str, Any]:
     return dict(_pending_scan_diagnostics)
 
-
-def get_r7b_quota_diagnostics() -> dict[str, Any]:
-    """Local/test observability only; exposes counters, never credentials."""
-    return {
-        **dict(_r7b_diagnostics),
-        "exact_count_bootstrapped": bool(_exact_count_state.get("bootstrapped")),
-        "exact_count_value": _exact_count_state.get("count"),
-        "exact_count_cursor": _cursor_dict(_exact_count_state.get("cursor")),
-        "authority_symbols_loaded": sorted(_authority_symbol_state),
-    }
 
 
 def reset_r7b_incremental_state_for_tests() -> None:
