@@ -285,7 +285,7 @@ class B81ProvenanceTests(unittest.TestCase):
         self.assertEqual(gate.trade_mode, "PAPER")
         self.assertTrue(gate.live_capital_locked)
         self.assertFalse(gate.unlocked)
-        source = Path("senecio_polymarket/backend/main.py").read_text(encoding="utf-8")
+        source = Path("senecio_polymarket/backend/main_real.py").read_text(encoding="utf-8")
         self.assertIn('"PAPER"', source)
         self.assertIn("live_capital_locked", source)
 

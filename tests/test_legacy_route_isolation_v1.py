@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 
 import httpx
 
 from senecio_polymarket.backend import main_real
-from senecio_polymarket.backend import main as legacy_main
 
 
 LEGACY_MUTATING_ROUTES = {
     "/api/portfolio/kill_switch",
     "/api/portfolio/reset_kill_switch",
 }
+LEGACY_MODULES = (
+    "senecio_polymarket.backend.main",
+    "senecio_polymarket.backend.admin",
+    "senecio_polymarket.backend.ws_server",
+    "senecio_polymarket.backend.evidence_tracker",
+)
 
 
 def _post(path: str) -> httpx.Response:
@@ -25,7 +31,7 @@ def _post(path: str) -> httpx.Response:
     return asyncio.run(_call())
 
 
-def test_main_real_router_does_not_mount_legacy_post_routes() -> None:
+def test_public_router_does_not_mount_legacy_post_routes() -> None:
     mounted = {
         (getattr(route, "path", ""), method)
         for route in main_real.app.routes
@@ -35,40 +41,19 @@ def test_main_real_router_does_not_mount_legacy_post_routes() -> None:
         assert (path, "POST") not in mounted
 
 
-def test_main_real_public_guard_denies_legacy_kill_switch_post() -> None:
+def test_public_guard_denies_legacy_kill_switch_post() -> None:
     response = _post("/api/portfolio/kill_switch")
     assert response.status_code == 405
     assert response.headers.get("X-Senex-Public-Decision") == "DENY_UNSAFE_METHOD"
 
 
-def test_legacy_app_does_not_publish_antifragility_routes() -> None:
-    mounted_paths = {
-        getattr(route, "path", "")
-        for route in legacy_main.app.routes
-    }
-    assert not any(path.startswith("/api/antifragility/") for path in mounted_paths)
+def test_obsolete_legacy_modules_are_removed() -> None:
+    for module_name in LEGACY_MODULES:
+        assert importlib.util.find_spec(module_name) is None
 
 
-def test_legacy_app_does_not_publish_research_or_final_audit_routes() -> None:
-    mounted_paths = {
-        getattr(route, "path", "")
-        for route in legacy_main.app.routes
-    }
-    assert not any(path.startswith("/api/research/") for path in mounted_paths)
-    assert not any(path.startswith("/api/final_audit/") for path in mounted_paths)
-
-
-def test_main_real_does_not_import_legacy_main_module() -> None:
+def test_main_real_has_no_legacy_module_dependency() -> None:
     from pathlib import Path
     source = Path(main_real.__file__).read_text(encoding="utf-8")
-    assert "from . import main as legacy" not in source
+    assert "from . import main" not in source
     assert "legacy." not in source
-
-
-def test_legacy_and_public_runtime_share_single_wiring() -> None:
-    from senecio_polymarket.backend import runtime_shared
-    assert legacy_main._audit is runtime_shared._audit
-    assert legacy_main._bus is runtime_shared._bus
-    assert legacy_main._scheduler is runtime_shared._scheduler
-    assert legacy_main._engine is runtime_shared._engine
-    assert legacy_main._executor is runtime_shared._executor
