@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import main as legacy
+from . import runtime_shared as shared
 from . import oracle_runner
 from .authority_snapshot import STORE as authority_store, normalize_symbol
 from .authoritative_score import build_authoritative_score
@@ -61,20 +61,20 @@ def quarantine_legacy_outcome_backfill() -> None:
 
 @asynccontextmanager
 async def real_lifespan(public_app: FastAPI):
-    public_app.state.audit = legacy._audit
-    public_app.state.bus = legacy._bus
-    public_app.state.retriever = legacy._retriever
-    public_app.state.scanner_a = legacy._scanner_a
-    public_app.state.scanner_b = legacy._scanner_b
-    public_app.state.wallet_tracker = legacy._wallet_tracker
-    public_app.state.engine = legacy._engine
-    public_app.state.executor = legacy._executor
-    public_app.state.scheduler = legacy._scheduler
+    public_app.state.audit = shared._audit
+    public_app.state.bus = shared._bus
+    public_app.state.retriever = shared._retriever
+    public_app.state.scanner_a = shared._scanner_a
+    public_app.state.scanner_b = shared._scanner_b
+    public_app.state.wallet_tracker = shared._wallet_tracker
+    public_app.state.engine = shared._engine
+    public_app.state.executor = shared._executor
+    public_app.state.scheduler = shared._scheduler
 
     demo = synthetic_demo_enabled()
     if demo:
         log.warning("SENEX synthetic demo scheduler EXPLICITLY ENABLED")
-        legacy._scheduler.start()
+        shared._scheduler.start()
     else:
         log.info("SENEX production mode: synthetic scheduler disabled")
 
@@ -103,8 +103,8 @@ async def real_lifespan(public_app: FastAPI):
         await oracle_runner.stop()
         await asyncio.gather(_kalshi.stop(), _boros.stop(), _poly.stop())
         if demo:
-            await legacy._scheduler.stop()
-        await legacy._bus.close()
+            await shared._scheduler.stop()
+        await shared._bus.close()
 
 
 def _build_public_app() -> FastAPI:
@@ -159,10 +159,10 @@ def _locked_gate_without_coordinator(score: dict[str, Any]) -> dict[str, Any]:
 
 
 def _live_gate_from_score(score: dict[str, Any]) -> dict[str, Any]:
-    coord = legacy._get_coordinator()
+    coord = shared._get_coordinator()
     if coord is None:
         return _locked_gate_without_coordinator(score)
-    state = legacy._paper_locked_live_gate_from_score(coord, score)
+    state = shared._paper_locked_live_gate_from_score(coord, score)
     state["orders_enabled"] = False
     return state
 
