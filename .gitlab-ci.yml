@@ -1,0 +1,37 @@
+stages:
+  - verify
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  SUPABASE_URL: "http://127.0.0.1:9"
+  SUPABASE_KEY: "sandbox-fake-not-a-secret"
+
+edge_lab_deterministic_gate:
+  stage: verify
+  image: python:3.11-bookworm
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends nodejs git ca-certificates
+    - python -m pip install --require-hashes -r senecio_polymarket/requirements.lock
+    - python -m pip install pytest pytest-subtests
+  script:
+    - export PYTHONPATH="$CI_PROJECT_DIR:$CI_PROJECT_DIR/senecio_polymarket"
+    - python --version
+    - node --version
+    - test "$(git rev-parse "$CI_COMMIT_SHA^")" = "e67a07620292cba06043aa21c5c48c3ae78781b3"
+    - test "$(git rev-parse "$CI_COMMIT_SHA^^")" = "7b2bf3bfbdf237a5d502af6c20445c3d2ac67879"
+    - test "$(git rev-parse "$CI_COMMIT_SHA^^^")" = "f58e2f3e5555b954a93b988225036b65b60ac9b8"
+    - python ci/verify_edge_lab.py
+    - python -m compileall -q edge_lab senecio_polymarket tests
+    - python -m pytest tests/edge_lab -q
+    - python -m pytest tests/ -q
+    - python -m pytest -q tests/test_paper_hard_lock.py tests/test_network_write_safety.py tests/test_health_readiness.py tests/test_paper_execution_realism.py
+    - git diff --check f58e2f3e5555b954a93b988225036b65b60ac9b8 "$CI_COMMIT_SHA"
+    - echo "DIFF_CHECK=PASS"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
