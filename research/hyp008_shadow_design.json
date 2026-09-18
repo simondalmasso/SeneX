@@ -1,0 +1,46 @@
+{
+  "hypothesis_id": "HYP-008",
+  "name": "SENEX-POLYMARKET-SHADOW",
+  "status": "DESIGNED_NOT_RUN",
+  "external_contract": {
+    "series_id": "10114",
+    "series_slug": "btc-up-or-down-hourly",
+    "asset": "BTC/USDT",
+    "source": "BINANCE_BTCUSDT",
+    "candle": "FINALIZED_1H",
+    "start": "EXACT_POLYMARKET_EVENT_START_TIME_CLOCK_HOUR",
+    "end": "SAME_BINANCE_1H_CANDLE_FINAL_CLOSE",
+    "label": "UP_IF_CLOSE_GTE_OPEN_ELSE_DOWN",
+    "tie_semantics": "UP_ON_EQUAL",
+    "timestamp_semantics": "IDENTICAL_UTC_INSTANTS_TO_EVENT_START_AND_END"
+  },
+  "senex_shadow_signal": {
+    "capture_time": "EXACT_CLOCK_HOUR_BOUNDARY",
+    "information_cut": "AS_OF_BOUNDARY_ONLY",
+    "polymarket_directional_injection": "DISABLED",
+    "raw_fields": [
+      "step2_features.up_prob",
+      "step2_features.direction",
+      "prediction"
+    ],
+    "freeze": [
+      "code_hash",
+      "config_hash",
+      "effective_weights_hash",
+      "feature_availability_policy"
+    ],
+    "writeback": false
+  },
+  "isolation": {
+    "namespace": "EDGE_LAB_ONLY",
+    "core_mutations": 0,
+    "production_cadence_change": false,
+    "settlement_authority_change": false,
+    "trade_authority": "NONE",
+    "live": false
+  },
+  "run_status": "NOT_RUN",
+  "observations": 0,
+  "edge_status": "UNPROVEN",
+  "brier_logloss_allowed": false
+}

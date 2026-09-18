@@ -1,0 +1,58 @@
+{
+  "authority_candidate_n": 0,
+  "brier_logloss_allowed": false,
+  "edge_status": "UNPROVEN",
+  "excluded_rows": 15,
+  "historical_diagnostic": {
+    "LONG": {
+      "losses": 1,
+      "n": 3,
+      "wilson_95": [
+        0.2076596008020477,
+        0.9385080552796037
+      ],
+      "win_rate": 0.6666666666666666,
+      "wins": 2
+    },
+    "SHORT": {
+      "losses": 5,
+      "n": 7,
+      "wilson_95": [
+        0.08221892400405678,
+        0.6410655481673808
+      ],
+      "win_rate": 0.2857142857142857,
+      "wins": 2
+    },
+    "diagnostic_only": true
+  },
+  "historical_overlap_excluded": 15,
+  "historical_policy": "DIAGNOSTIC_ONLY_NONOVERLAP",
+  "hypothesis_id": "HYP-002",
+  "proof_qualified_rows": 25,
+  "prospective_authority_candidates": {
+    "LONG": {
+      "losses": 0,
+      "n": 0,
+      "wilson_95": null,
+      "win_rate": null,
+      "wins": 0
+    },
+    "SHORT": {
+      "losses": 0,
+      "n": 0,
+      "wilson_95": null,
+      "win_rate": null,
+      "wins": 0
+    },
+    "authority_candidate_only": true
+  },
+  "prospective_policy": "AUTHORITY_CANDIDATE_ONLY_IF_FREEZE_MATCHES_AND_NONOVERLAP",
+  "prospective_registration_at_utc": "2026-09-18T04:20:39.618657+00:00",
+  "public_rows_seen": 50,
+  "run_at_utc": "2026-09-18T04:24:04.668164+00:00",
+  "selected_historical_nonoverlap_1h_rows": 10,
+  "source_endpoint": "https://h011-web--senecio-h011--wbjggn89fnf8.code.run/api/oracle/predictions/db",
+  "verdict": "INCONCLUSIVE",
+  "version": "hyp002-native-directional-v1"
+}

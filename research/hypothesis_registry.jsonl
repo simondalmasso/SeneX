@@ -1,9 +1,11 @@
-{"hypothesis_id":"HYP-001","definition":"Polymarket p_market vs SENEX p_senex","category":"Predictive baseline","status":"SUPERSEDED_BY_HYP-001A_HYP-001B_PRESERVED"}
-{"hypothesis_id":"HYP-001A","definition":"Exact contract equivalence: Polymarket BTC Up/Down 1h vs current SENEX authoritative 1h outcome","category":"Baseline validity","status":"RUN_REJECTED_NOT_EQUIVALENT"}
-{"hypothesis_id":"HYP-001B","definition":"Mathematical semantics and prospective independent calibration eligibility of step2_features.up_prob","category":"Probability semantics","status":"RUN_RETAIN_FOR_PROSPECTIVE_CALIBRATION_ONLY"}
-{"hypothesis_id":"HYP-002","definition":"LONG vs SHORT separately","category":"Directional asymmetry","status":"REGISTERED_NOT_RUN"}
-{"hypothesis_id":"HYP-003","definition":"SENEX vs SENEX + Scarlett by horizon","category":"External forecast","status":"DEFERRED_BY_OWNER_2026-09-17"}
-{"hypothesis_id":"HYP-004","definition":"SENEX fixed sizing vs SENEX + GARCH regime/sizing","category":"Volatility/regime","status":"DEFERRED_BY_OWNER_2026-09-17"}
+{"hypothesis_id":"HYP-001","definition":"Original Polymarket-vs-SENEX probability baseline","category":"Predictive baseline","status":"SUPERSEDED_BY_001A_001B_001C_PRESERVED"}
+{"hypothesis_id":"HYP-001A","definition":"Exact contract equivalence: Polymarket BTC Up/Down 1h vs current SENEX authoritative 1h","category":"Baseline validity","status":"RUN_REJECTED_NOT_EQUIVALENT"}
+{"hypothesis_id":"HYP-001B","definition":"Mathematical semantics and prospective independent calibration eligibility of step2_features.up_prob","category":"Probability semantics","status":"RETAIN_PROSPECTIVE_CALIBRATION_ONLY_NOT_STARTED"}
+{"hypothesis_id":"HYP-001C","definition":"Prospective SENEX-native frozen cohort collector","category":"Native evidence","status":"COLLECTOR_REGISTERED_AUTHORITY_N0"}
+{"hypothesis_id":"HYP-002","definition":"LONG vs SHORT directional analysis on native SENEX 1h directional labels","category":"Directional asymmetry","status":"RUN_HISTORICAL_DIAGNOSTIC_ONLY_AUTHORITY_N0"}
+{"hypothesis_id":"HYP-003","definition":"SENEX vs SENEX + Scarlett by horizon","category":"External forecast","status":"DEFERRED_BY_OWNER_DO_NOT_RUN"}
+{"hypothesis_id":"HYP-004","definition":"SENEX fixed sizing vs SENEX + GARCH regime/sizing","category":"Volatility/regime","status":"DEFERRED_BY_OWNER_DO_NOT_RUN"}
 {"hypothesis_id":"HYP-005","definition":"Order-book imbalance candidate","category":"Prediction-market structure","status":"REGISTERED_NOT_RUN"}
 {"hypothesis_id":"HYP-006","definition":"Polymarket vs Kalshi exact-equivalence dislocation","category":"Cross-market structure","status":"REGISTERED_NOT_RUN"}
 {"hypothesis_id":"HYP-007","definition":"Spread-capture / maker feasibility","category":"Structural edge","status":"REGISTERED_NOT_RUN"}
+{"hypothesis_id":"HYP-008","definition":"SENEX-POLYMARKET-SHADOW exact clock-hour Binance BTC/USDT 1H contract","category":"Shadow external-label evaluation","status":"DESIGNED_NOT_RUN_NOT_PROMOTED"}
