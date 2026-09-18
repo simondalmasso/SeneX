@@ -1,0 +1,230 @@
+{
+  "docs": [
+    "https://docs.polymarket.com/market-data/discover-markets",
+    "https://docs.polymarket.com/market-data/market-details",
+    "https://docs.polymarket.com/concepts/resolution"
+  ],
+  "endpoint": "https://gamma-api.polymarket.com/events?series_id=10114&closed=false&limit=100&order=endDate&ascending=true",
+  "markets": [
+    {
+      "active": true,
+      "clob_token_ids": [
+        "11987864345170343561404874554821444936856801796481622789251855559748997166940",
+        "73067996799996901923127995285073739373112212967555098967015261686111663929867"
+      ],
+      "closed": false,
+      "condition_id": "0x44020121d5e073f6103983f921b3fd36c0ad5f9501e1f7991ff5508d4b120a28",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T03:00:00Z",
+      "event_id": "1030916",
+      "event_start_time_utc": "2026-09-18T02:00:00Z",
+      "market_id": "4602943",
+      "outcome_prices": [
+        "0.9745",
+        "0.0255"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-17-2026-10pm-et",
+      "title": "Bitcoin Up or Down - September 17, 10PM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "44063045721936687682334662045407651754136024677547616919168514430190321045652",
+        "42180914976701229567216509473640140858591803099135755572657768274247145481743"
+      ],
+      "closed": false,
+      "condition_id": "0x95a109d29bcccc76a46ade0335036d76f5b59d9e5b9bdd389b929b7fac40b5cd",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T04:00:00Z",
+      "event_id": "1031085",
+      "event_start_time_utc": "2026-09-18T03:00:00Z",
+      "market_id": "4603650",
+      "outcome_prices": [
+        "0.475",
+        "0.525"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-17-2026-11pm-et",
+      "title": "Bitcoin Up or Down - September 17, 11PM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "14339651020829903215059819465773199359306391854430202640299989918005119781339",
+        "13288136888851096688637192218889808988703159975348511955548599204601755399213"
+      ],
+      "closed": false,
+      "condition_id": "0xd846c101360aab65ce6f2563746b23be530b543c941daaf70863d32f9432b7c4",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T05:00:00Z",
+      "event_id": "1031244",
+      "event_start_time_utc": "2026-09-18T04:00:00Z",
+      "market_id": "4604370",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-12am-et",
+      "title": "Bitcoin Up or Down - September 18, 12AM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "72236100579084662694961027139950243077650241353377560149958165318347680997782",
+        "44926949343300406553592447913895488598924604336743078785712527099208439158947"
+      ],
+      "closed": false,
+      "condition_id": "0x9ee81feaac895e4f24553ff7808c074b09f72b18eed0178ef503b80d519cd9ec",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T06:00:00Z",
+      "event_id": "1031517",
+      "event_start_time_utc": "2026-09-18T05:00:00Z",
+      "market_id": "4606690",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-1am-et",
+      "title": "Bitcoin Up or Down - September 18, 1AM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "71267433323712753634095941336842727611078217384387472905574675624427498652527",
+        "100776412884135206619447953961105803351227331336428995005306837124648373241890"
+      ],
+      "closed": false,
+      "condition_id": "0x73f44df13835e8d5c1486f840e4a7d5a530fab2690255dc8abbca39f3406421f",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T07:00:00Z",
+      "event_id": "1031684",
+      "event_start_time_utc": "2026-09-18T06:00:00Z",
+      "market_id": "4607847",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-2am-et",
+      "title": "Bitcoin Up or Down - September 18, 2AM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "19959644959065781630043373958059145995779877016984244311897727974897400888015",
+        "87149120830173239333523279130974165041037000180280404993793079180871738127070"
+      ],
+      "closed": false,
+      "condition_id": "0xd0303be79d1f3195abf9d0faa616c64309274299ab71ca1806125da58b59d0d0",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T08:00:00Z",
+      "event_id": "1031827",
+      "event_start_time_utc": "2026-09-18T07:00:00Z",
+      "market_id": "4608591",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-3am-et",
+      "title": "Bitcoin Up or Down - September 18, 3AM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "98949430204562094998584793338651008997761603626777881811576190398191078693033",
+        "18096639523589788974072044468273701756194982733935516400208726927116216284728"
+      ],
+      "closed": false,
+      "condition_id": "0xbccc27cdd214a0f72429380e1c0eddfd05531c5574608ed16471b38e1b1e437d",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T09:00:00Z",
+      "event_id": "1032001",
+      "event_start_time_utc": "2026-09-18T08:00:00Z",
+      "market_id": "4609043",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-4am-et",
+      "title": "Bitcoin Up or Down - September 18, 4AM ET"
+    },
+    {
+      "active": true,
+      "clob_token_ids": [
+        "66149796661789882434223264471281995322521588930934896533334273042058716632369",
+        "68134283588911414286832013278987298867649263939545894034233475014985956967070"
+      ],
+      "closed": false,
+      "condition_id": "0xf1ecd5372ee72ea2d338ee7f997b7b182963e3d1aae5e7f023dabf2ba5d13330",
+      "description": "This market will resolve to \"Up\" if the close price is greater than or equal to the open price for the BTC/USDT 1 hour candle that begins on the time and date specified in the title. Otherwise, this market will resolve to \"Down\".\n\nThe resolution source for this market is information from Binance, specifically the BTC/USDT pair (https://www.binance.com/en/trade/BTC_USDT). The close \u00ab C \u00bb and open \u00ab O \u00bb displayed at the top of the graph for the relevant \"1H\" candle will be used once the data for that candle is finalized.\n\nPlease note that this market is about the price according to Binance BTC/USDT, not according to other exchanges or trading pairs.",
+      "end_time_utc": "2026-09-18T10:00:00Z",
+      "event_id": "1032162",
+      "event_start_time_utc": "2026-09-18T09:00:00Z",
+      "market_id": "4609488",
+      "outcome_prices": [
+        "0.5",
+        "0.5"
+      ],
+      "outcomes": [
+        "Up",
+        "Down"
+      ],
+      "resolution_source": "https://www.binance.com/en/trade/BTC_USDT",
+      "series_id": "10114",
+      "series_slug": "btc-up-or-down-hourly",
+      "slug": "bitcoin-up-or-down-september-18-2026-5am-et",
+      "title": "Bitcoin Up or Down - September 18, 5AM ET"
+    }
+  ],
+  "observed_at_utc": "2026-09-18T02:51:51.480967+00:00",
+  "series_id": "10114",
+  "source": "OFFICIAL_POLYMARKET_GAMMA_PUBLIC_API",
+  "version": "hyp001a-polymarket-btc-hourly-official-snapshot-v1"
+}

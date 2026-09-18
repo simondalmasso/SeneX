@@ -1,0 +1,31 @@
+{
+  "version": "hyp001b-prospective-calibration-plan-v1",
+  "status": "REGISTERED_NOT_STARTED",
+  "registered_at_utc": "2026-09-18T02:53:02.126Z",
+  "raw_field": "audit.pipeline.step2_features.up_prob",
+  "raw_field_mutation": "PROHIBITED",
+  "raw_semantics": "LOGISTIC_SQUASHED_ENGINEERED_PRESSURE_SCORE",
+  "target": {
+    "id": "SENEX_NATIVE_STRICT_UP_T_PLUS_3600",
+    "definition": "1 if proof-qualified price_1h_later > price_now else 0",
+    "tie_semantics": "TIE_IS_NOT_UP_Y_EQUALS_0",
+    "polymarket_equivalence": false
+  },
+  "cohort": {
+    "prospective_only": true,
+    "independent_nonoverlap_1h": true,
+    "split_policy": "FORWARD_CALIBRATION_BLOCK_THEN_UNTOUCHED_VALIDATION_BLOCK",
+    "freeze": [
+      "code_hash",
+      "config_hash",
+      "effective_weights_hash",
+      "feature_availability_policy"
+    ],
+    "exchange_policy": "FREEZE_ONE_EXCHANGE_OR_STRATIFY_BY_EXCHANGE;NO_SILENT_POOLING"
+  },
+  "candidate_mapping": "PLATT_ON_LOGIT_UP_PROB",
+  "fit_status": "NOT_STARTED",
+  "validation_status": "NOT_STARTED",
+  "brier_logloss_allowed_now": false,
+  "edge_status": "UNPROVEN"
+}
