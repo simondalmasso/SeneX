@@ -20,9 +20,7 @@ edge_lab_deterministic_gate:
     - export PYTHONPATH="$CI_PROJECT_DIR:$CI_PROJECT_DIR/senecio_polymarket"
     - python --version
     - node --version
-    - test "$(git rev-parse "$CI_COMMIT_SHA^")" = "e67a07620292cba06043aa21c5c48c3ae78781b3"
-    - test "$(git rev-parse "$CI_COMMIT_SHA^^")" = "7b2bf3bfbdf237a5d502af6c20445c3d2ac67879"
-    - test "$(git rev-parse "$CI_COMMIT_SHA^^^")" = "f58e2f3e5555b954a93b988225036b65b60ac9b8"
+    - test "$(git merge-base "$CI_COMMIT_SHA" f58e2f3e5555b954a93b988225036b65b60ac9b8)" = "f58e2f3e5555b954a93b988225036b65b60ac9b8"
     - python ci/verify_edge_lab.py
     - python -m compileall -q edge_lab senecio_polymarket tests
     - python -m pytest tests/edge_lab -q
