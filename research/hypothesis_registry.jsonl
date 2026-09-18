@@ -1,0 +1,7 @@
+{"hypothesis_id":"HYP-001","definition":"Polymarket p_market vs SENEX p_senex","category":"Predictive baseline","status":"REGISTERED"}
+{"hypothesis_id":"HYP-002","definition":"LONG vs SHORT separately","category":"Directional asymmetry","status":"REGISTERED"}
+{"hypothesis_id":"HYP-003","definition":"SENEX vs SENEX + Scarlett by horizon","category":"External forecast","status":"REGISTERED"}
+{"hypothesis_id":"HYP-004","definition":"SENEX fixed sizing vs SENEX + GARCH regime/sizing","category":"Volatility/regime","status":"REGISTERED"}
+{"hypothesis_id":"HYP-005","definition":"Order-book imbalance candidate","category":"Prediction-market structure","status":"REGISTERED"}
+{"hypothesis_id":"HYP-006","definition":"Polymarket vs Kalshi exact-equivalence dislocation","category":"Cross-market structure","status":"REGISTERED"}
+{"hypothesis_id":"HYP-007","definition":"Spread-capture / maker feasibility","category":"Structural edge","status":"REGISTERED"}
