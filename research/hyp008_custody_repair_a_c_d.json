@@ -1,0 +1,230 @@
+{
+  "audit_id": "AUD_ARQ2_CUSTODY_REPAIR_A_C_D",
+  "hypothesis_id": "HYP-008",
+  "authority_pre_repair_head": "82b7018c032b318325a17be455c7fc0673d20b6d",
+  "protocol_hash": "8f0a2125c44ffb8873cb4908a13e6a4a998bb93f903ec8cfe6d5ea97570fd44b",
+  "collection_status": "PAUSED",
+  "task_a": {
+    "status": "PASS",
+    "recovery_source": "ORIGINAL_PROBE_INPUTS_AND_GITLAB_FROZEN_ARM_EVIDENCE",
+    "original_question_order": [
+      "directional_quality",
+      "execution_quality",
+      "toxic_flow"
+    ],
+    "questions": {
+      "directional_quality": {
+        "type": "choice",
+        "instructions": "Judge only whether the supplied decision-time execution state is supportive, adverse, or insufficient for the already-supplied candidate direction. Do not choose an action, size, threshold, risk limit, or use future information.",
+        "criteria": {
+          "supportive": "Decision-time evidence is coherent with the supplied candidate direction.",
+          "adverse": "Decision-time evidence materially argues against the supplied candidate direction.",
+          "unclear": "The supplied decision-time evidence is insufficient or mixed."
+        }
+      },
+      "execution_quality": {
+        "type": "choice",
+        "instructions": "Judge only the execution quality visible in the supplied decision-time state. Do not choose an action, size, threshold, or risk limit.",
+        "criteria": {
+          "good": "The supplied decision-time market state supports clean execution quality.",
+          "poor": "The supplied decision-time market state shows materially poor execution quality.",
+          "unclear": "Execution quality cannot be established from the supplied state."
+        }
+      },
+      "toxic_flow": {
+        "type": "choice",
+        "instructions": "Judge only whether the supplied decision-time state shows evidence consistent with toxic or adverse flow. Do not use any post-decision information.",
+        "criteria": {
+          "present": "Decision-time evidence is consistent with materially toxic or adverse flow.",
+          "absent": "Decision-time evidence does not show materially toxic or adverse flow.",
+          "unclear": "The supplied decision-time state is insufficient or mixed."
+        }
+      }
+    },
+    "output_contract": {
+      "directional_quality": {
+        "question_type": "choice",
+        "observed_response_fields": [
+          "type",
+          "choice",
+          "confidence",
+          "probabilities"
+        ]
+      },
+      "execution_quality": {
+        "question_type": "choice",
+        "observed_response_fields": [
+          "type",
+          "choice",
+          "confidence",
+          "probabilities"
+        ]
+      },
+      "toxic_flow": {
+        "question_type": "choice",
+        "observed_response_fields": [
+          "type",
+          "choice",
+          "confidence",
+          "probabilities"
+        ]
+      },
+      "separate_formal_json_schema_frozen": false
+    },
+    "model_exact": "jev-1.13.0",
+    "veto_rule": {
+      "veto_if_any": [
+        "directional_quality=adverse",
+        "execution_quality=poor",
+        "toxic_flow=present"
+      ],
+      "no_probability_thresholds": true,
+      "unclear_is_veto": false
+    },
+    "canonical_serialization": {
+      "runtime": "Python 3 json",
+      "expression": "json.dumps(value, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")",
+      "sha256": "hashlib.sha256(canonical_bytes).hexdigest()",
+      "question_schema_scope": "exact questions object",
+      "arm_scope": "exact original arm object; arm_hash is not self-included"
+    },
+    "declared_question_schema_hash": "f689a24ba9613caaa725a91d23f21fe52a244e457c69d2e2233cffa8e44d7a1d",
+    "recomputed_question_schema_hash": "f689a24ba9613caaa725a91d23f21fe52a244e457c69d2e2233cffa8e44d7a1d",
+    "canonical_question_bytes": 1461,
+    "arm_original": {
+      "arm_id": "JEV_SHADOW_ARM_V1",
+      "hypothesis_id": "HYP-008",
+      "status": "FROZEN_PRE_RUN",
+      "role": "LOG_ONLY_SHADOW_VETO",
+      "candidate_generation_effect": false,
+      "execution_authority": false,
+      "orders": false,
+      "live": false,
+      "capital": false,
+      "provider": "TypeSafe API",
+      "model_request": "jev-latest",
+      "model_exact": "jev-1.13.0",
+      "decision_input_schema": "ARQ3:JEV_INPUT_AT_DECISION/jev_execution_handoff_v1",
+      "question_schema_hash": "f689a24ba9613caaa725a91d23f21fe52a244e457c69d2e2233cffa8e44d7a1d",
+      "questions": {
+        "directional_quality": {
+          "type": "choice",
+          "instructions": "Judge only whether the supplied decision-time execution state is supportive, adverse, or insufficient for the already-supplied candidate direction. Do not choose an action, size, threshold, risk limit, or use future information.",
+          "criteria": {
+            "supportive": "Decision-time evidence is coherent with the supplied candidate direction.",
+            "adverse": "Decision-time evidence materially argues against the supplied candidate direction.",
+            "unclear": "The supplied decision-time evidence is insufficient or mixed."
+          }
+        },
+        "execution_quality": {
+          "type": "choice",
+          "instructions": "Judge only the execution quality visible in the supplied decision-time state. Do not choose an action, size, threshold, or risk limit.",
+          "criteria": {
+            "good": "The supplied decision-time market state supports clean execution quality.",
+            "poor": "The supplied decision-time market state shows materially poor execution quality.",
+            "unclear": "Execution quality cannot be established from the supplied state."
+          }
+        },
+        "toxic_flow": {
+          "type": "choice",
+          "instructions": "Judge only whether the supplied decision-time state shows evidence consistent with toxic or adverse flow. Do not use any post-decision information.",
+          "criteria": {
+            "present": "Decision-time evidence is consistent with materially toxic or adverse flow.",
+            "absent": "Decision-time evidence does not show materially toxic or adverse flow.",
+            "unclear": "The supplied decision-time state is insufficient or mixed."
+          }
+        }
+      },
+      "veto_rule": {
+        "veto_if_any": [
+          "directional_quality=adverse",
+          "execution_quality=poor",
+          "toxic_flow=present"
+        ],
+        "no_probability_thresholds": true,
+        "unclear_is_veto": false
+      },
+      "probe": {
+        "calls": 1,
+        "max_calls_authorized": 3,
+        "passed": true,
+        "timestamp_utc": "2026-09-20T04:13:08.657Z",
+        "input_hash": "c8c2a69c805c458afe5fe1df437b11c488e0a5dfefec5bb53f526ae0d7fd3124",
+        "latency_ms": 1509,
+        "input_tokens": 1046,
+        "output_tokens": 124,
+        "estimated_list_cost_usd": 0.000043932,
+        "cost_basis": "TypeSafe list price $0.042/M input tokens; output tokens free; estimate is not invoice amount",
+        "outputs": {
+          "directional_quality": {
+            "choice": "unclear",
+            "confidence": 0.35,
+            "probabilities": {
+              "supportive": 0.37,
+              "adverse": 0.06,
+              "unclear": 0.57
+            }
+          },
+          "execution_quality": {
+            "choice": "good",
+            "confidence": 0.74,
+            "probabilities": {
+              "poor": 0.06,
+              "unclear": 0.11,
+              "good": 0.83
+            }
+          },
+          "toxic_flow": {
+            "choice": "absent",
+            "confidence": 0.88,
+            "probabilities": {
+              "unclear": 0.06,
+              "present": 0.02,
+              "absent": 0.92
+            }
+          }
+        }
+      },
+      "edge_status": "UNPROVEN"
+    },
+    "declared_arm_hash": "6bc5be515b0843793d1f7d698d154cb3867f32e745387ab9cfacff4bfb471686",
+    "recomputed_arm_hash": "6bc5be515b0843793d1f7d698d154cb3867f32e745387ab9cfacff4bfb471686",
+    "canonical_arm_bytes": 2883
+  },
+  "task_c": {
+    "status": "BLOCKED",
+    "reason": "ORIGINAL_HYP008_WRITER_NOT_REPRODUCIBLE",
+    "row_commit": "82b7018c032b318325a17be455c7fc0673d20b6d",
+    "row_commit_title": "research(hyp008): capture prospective observation 1",
+    "process_identity": "scheduled ChatGPT HYP-008 prospective cohort execution using GitLab write action",
+    "exact_repository_writer_program": null,
+    "repository_search_result": "No code symbol or script at the authority head contains the cohort filename, leakage string, decision_capture_timestamp field, or HYP008 opportunity prefix outside the persisted row/protocol.",
+    "design_only_not_writer": "edge_lab/hyp008_shadow.py",
+    "reproducible": false,
+    "no_reconstruction_from_memory": true
+  },
+  "task_d": {
+    "status": "PASS",
+    "observation_id": "HYP008-3b15a6ef53b4c1da3f9a861c",
+    "cohort_path": "research/hyp008_prospective_cohort.jsonl",
+    "preserved_row_sha256": "a6e7384c7f94b0f4d5faa9d9754344e466b1f7e940184a1cea12fca8a7c0025b",
+    "preserved_row_bytes": 1424,
+    "recorded_eligibility_true": true,
+    "protocol_admissible": false,
+    "reason": "EXACT_BOUNDARY_CAPTURE_VIOLATION",
+    "eventStartTime": "2026-09-20T05:00:00Z",
+    "decision_capture_timestamp": "2026-09-20T05:02:30.407828Z",
+    "boundary_delta_ms": 150407.828,
+    "preexisting_exclusion_basis": {
+      "decision_state_asof_boundary_required": true,
+      "retrospective_backfill": false
+    },
+    "stale_clean_run_note": {
+      "issue_iid": 6,
+      "note_id": 3870857383,
+      "status": "SUPERSEDED_BY_AUD",
+      "historical_note_preserved": true
+    }
+  },
+  "edge": "UNPROVEN"
+}
