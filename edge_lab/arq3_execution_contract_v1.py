@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 ARQ3_CONTRACT_SOURCE_SHA = "92086c3d3227afe524fe86fa983cae1d291a1168"
 ARQ3_CONTRACT_SOURCE_PATH = "execution_organelle/contract.py"
 ARQ3_CAPTURE_POLICY_SOURCE_SHA = ARQ3_CONTRACT_SOURCE_SHA
+ARQ3_JEV_PACKET_SOURCE_SHA = ARQ3_CONTRACT_SOURCE_SHA
+ARQ3_JEV_PACKET_SOURCE_PATH = "execution_organelle/jev_packet.py"
 SCHEMA_VERSION = "execution_evidence_v1"
 MAX_CAPTURE_LATENESS_MS = 2000
 _HASH_LEN = 64
@@ -257,3 +259,85 @@ def validate_execution_record(record: dict[str, Any]) -> list[str]:
 
 def canonical_record_hash(record: dict[str, Any]) -> str:
     return _sha256(record)
+
+_FORBIDDEN_DECISION_KEY_PARTS = (
+    "arrival",
+    "markout",
+    "resolution",
+    "settled",
+    "settlement",
+    "winner",
+    "realized",
+    "post_outcome",
+    "execution_false_label",
+)
+
+
+def _walk_decision_keys(value: Any, prefix: str = ""):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            yield path, str(key).lower()
+            yield from _walk_decision_keys(child, path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _walk_decision_keys(child, f"{prefix}[{index}]")
+
+
+def assert_decision_packet_no_leakage(payload: dict[str, Any]) -> None:
+    offenders = [
+        path
+        for path, key in _walk_decision_keys(payload)
+        if any(part in key for part in _FORBIDDEN_DECISION_KEY_PARTS)
+    ]
+    if offenders:
+        raise ValueError("decision_packet_leakage:" + ",".join(sorted(offenders)))
+
+
+def _spread(book: dict[str, Any]) -> str | None:
+    try:
+        best_bid = max(Decimal(str(level[0])) for level in book["bids"])
+        best_ask = min(Decimal(str(level[0])) for level in book["asks"])
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return None
+    return str(best_ask - best_bid)
+
+
+def build_jev_input_at_decision(record: dict[str, Any]) -> dict[str, Any]:
+    """Pinned decision-half of ARQ3 build_jev_handoff_packet at ARQ3_JEV_PACKET_SOURCE_SHA."""
+    decision_book = record["decision_book"]
+    decision_execution = record.get("decision_execution") or {}
+    copyability = record.get("source_copyability") or {}
+    decision = {
+        "schema_version": "jev_execution_handoff_v1",
+        "opportunity_id": record["opportunity_id"],
+        "market_slug": record["market_slug"],
+        "condition_id": record["condition_id"],
+        "token_id": record["token_id"],
+        "decision_time": record["decision_time"],
+        "book_age_ms": record["latency"].get("book_age_ms"),
+        "book_skew_ms": record["latency"].get("cross_source_skew_ms"),
+        "spread": _spread(decision_book),
+        "depth_at_requested_size": decision_execution.get("executable_shares"),
+        "decision_vwap": decision_execution.get("vwap"),
+        "fee_status": decision_execution.get("fee_status"),
+        "source_copyability_classification": copyability.get("classification"),
+        "market_metadata": {
+            "source": decision_book.get("source"),
+            "tick_size": decision_book.get("tick_size"),
+            "minimum_order_size": decision_book.get("minimum_order_size"),
+        },
+        "candidate": {
+            "side": (record.get("candidate") or {}).get("side"),
+            "outcome": (record.get("candidate") or {}).get("outcome"),
+            "requested_notional_usd": (record.get("candidate") or {}).get(
+                "requested_notional_usd"
+            ),
+            "requested_shares": (record.get("candidate") or {}).get(
+                "requested_shares"
+            ),
+        },
+    }
+    assert_decision_packet_no_leakage(decision)
+    return decision
+

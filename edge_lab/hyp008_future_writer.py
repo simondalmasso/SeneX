@@ -10,7 +10,9 @@ from typing import Any
 from edge_lab.adapters.polymarket_gamma import parse_btc_hourly_contract
 from edge_lab.arq3_execution_contract_v1 import (
     ARQ3_CONTRACT_SOURCE_SHA,
+    ARQ3_JEV_PACKET_SOURCE_SHA,
     MAX_CAPTURE_LATENESS_MS,
+    build_jev_input_at_decision,
     validate_execution_record,
 )
 from edge_lab.hyp008_shadow import is_exact_clock_hour
@@ -171,6 +173,11 @@ def _validate_source(source_senex: dict[str, Any], boundary: datetime) -> str:
         raise FutureRowRejected("SENEX_SOURCE_TS_MISSING")
     if _utc(str(source_ts)) > boundary:
         raise FutureRowRejected("SENEX_SOURCE_AFTER_BOUNDARY")
+    created_at = source_senex.get("created_at")
+    if not created_at:
+        raise FutureRowRejected("SENEX_CREATED_AT_MISSING")
+    if _utc(str(created_at)) > boundary:
+        raise FutureRowRejected("SENEX_CREATED_AT_AFTER_BOUNDARY")
     prediction = str(source_senex.get("prediction") or "").upper()
     if prediction not in _CANDIDATE_MAP:
         raise FutureRowRejected("SENEX_PREDICTION_INVALID")
@@ -252,6 +259,8 @@ def _validate_execution(
     market_slug: str,
     boundary_ms: int,
     capture_timing: dict[str, Any],
+    candidate: str,
+    token_ids: list[str],
 ) -> int:
     if not isinstance(execution_evidence, dict):
         raise FutureRowRejected("EXECUTION_EVIDENCE_INVALID")
@@ -271,13 +280,29 @@ def _validate_execution(
     if not identity_ok:
         raise FutureRowRejected("ARQ3_IDENTITY_MISMATCH")
 
+    execution_candidate = execution_evidence.get("candidate") or {}
+    if str(execution_candidate.get("outcome") or "").upper() != candidate:
+        raise FutureRowRejected("EXECUTION_CANDIDATE_MISMATCH")
+    if candidate in {"UP", "DOWN"}:
+        expected_token = token_ids[0] if candidate == "UP" else token_ids[1]
+        if str(execution_evidence.get("token_id") or "") != expected_token:
+            raise FutureRowRejected("EXECUTION_TOKEN_OUTCOME_MISMATCH")
+
     try:
         event_time = int(execution_evidence["event_time"])
+        source_time = int(execution_evidence["source_time"])
         decision_time = int(execution_evidence["decision_time"])
+        decision_book_source_time = int(
+            (execution_evidence.get("decision_book") or {})["source_timestamp"]
+        )
     except (TypeError, ValueError, KeyError):
         raise FutureRowRejected("EXECUTION_EVIDENCE_INVALID") from None
     if event_time != boundary_ms:
         raise FutureRowRejected("EXECUTION_EVENT_TIME_MISMATCH")
+    if source_time > boundary_ms:
+        raise FutureRowRejected("EXECUTION_SOURCE_AFTER_BOUNDARY")
+    if decision_book_source_time > boundary_ms:
+        raise FutureRowRejected("DECISION_BOOK_SOURCE_AFTER_BOUNDARY")
     if decision_time < boundary_ms or decision_time > boundary_ms + MAX_CAPTURE_LATENESS_MS:
         raise FutureRowRejected("EXECUTION_TIMING_INVALID")
     if decision_time > int(capture_timing["capture_completed_ms"]):
@@ -299,31 +324,10 @@ def _walk_keys(value: Any, prefix: str = ""):
 def _validate_jev_input(
     jev_input: dict[str, Any],
     *,
-    opp_id: str,
-    condition_id: str,
-    market_slug: str,
-    decision_time: int,
-    candidate: str,
+    execution_evidence: dict[str, Any],
 ) -> None:
-    if not isinstance(jev_input, dict) or jev_input.get("schema_version") != "jev_execution_handoff_v1":
+    if not isinstance(jev_input, dict):
         raise FutureRowRejected("JEV_INPUT_INVALID")
-    identity_ok = (
-        str(jev_input.get("opportunity_id") or "") == opp_id
-        and str(jev_input.get("condition_id") or "") == condition_id
-        and str(jev_input.get("market_slug") or "") == market_slug
-    )
-    if not identity_ok:
-        raise FutureRowRejected("ARQ3_IDENTITY_MISMATCH")
-    try:
-        packet_decision_time = int(jev_input.get("decision_time"))
-    except (TypeError, ValueError):
-        raise FutureRowRejected("JEV_INPUT_INVALID") from None
-    if packet_decision_time != decision_time:
-        raise FutureRowRejected("JEV_INPUT_TIMING_INVALID")
-    jev_candidate = jev_input.get("candidate")
-    if not isinstance(jev_candidate, dict) or str(jev_candidate.get("outcome") or "").upper() != candidate:
-        raise FutureRowRejected("JEV_INPUT_CANDIDATE_MISMATCH")
-
     offenders = [
         path
         for path, key in _walk_keys(jev_input)
@@ -331,6 +335,12 @@ def _validate_jev_input(
     ]
     if offenders:
         raise FutureRowRejected("JEV_INPUT_LEAKAGE:" + ",".join(sorted(offenders)))
+    try:
+        expected = build_jev_input_at_decision(execution_evidence)
+    except Exception as exc:
+        raise FutureRowRejected("JEV_INPUT_DERIVATION_INVALID") from exc
+    if _canonical_bytes(jev_input) != _canonical_bytes(expected):
+        raise FutureRowRejected("JEV_INPUT_EXACT_MISMATCH")
 
 
 def build_future_row(
@@ -369,7 +379,7 @@ def build_future_row(
         arq3_capture_timing,
         boundary_ms=boundary_ms,
     )
-    decision_time = _validate_execution(
+    _decision_time = _validate_execution(
         execution_evidence,
         opp_id=opp_id,
         event_id=event_id,
@@ -377,19 +387,18 @@ def build_future_row(
         market_slug=market_slug,
         boundary_ms=boundary_ms,
         capture_timing=timing_truth,
+        candidate=candidate,
+        token_ids=token_ids,
     )
     _validate_jev_input(
         jev_input_at_decision,
-        opp_id=opp_id,
-        condition_id=condition_id,
-        market_slug=market_slug,
-        decision_time=decision_time,
-        candidate=candidate,
+        execution_evidence=execution_evidence,
     )
 
     return {
         "writer_version": WRITER_VERSION,
         "arq3_contract_source_sha": ARQ3_CONTRACT_SOURCE_SHA,
+        "arq3_jev_packet_source_sha": ARQ3_JEV_PACKET_SOURCE_SHA,
         "protocol_hash": EXPECTED_PROTOCOL_HASH,
         "jev_arm_hash": EXPECTED_JEV_ARM_HASH,
         "opportunity_id": opp_id,
