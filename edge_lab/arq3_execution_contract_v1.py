@@ -340,4 +340,3 @@ def build_jev_input_at_decision(record: dict[str, Any]) -> dict[str, Any]:
     }
     assert_decision_packet_no_leakage(decision)
     return decision
-
