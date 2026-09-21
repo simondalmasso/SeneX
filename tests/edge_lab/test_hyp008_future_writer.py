@@ -5,6 +5,7 @@ import hashlib
 import json
 from copy import deepcopy
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -120,7 +121,7 @@ def _lightweight_execution() -> dict:
 
 def _valid_execution() -> dict:
     t = _epoch_ms(START)
-    source_time = t + 100
+    source_time = t - 100
     receipt_time = t + 500
     decision_time = t + 500
     arrival_time = t + 700
@@ -232,12 +233,12 @@ def _valid_execution() -> dict:
     }
 
 
-def _capture_timing(*, lateness_ms: int = 500) -> dict:
+def _capture_timing(*, lateness_ms: int = 800) -> dict:
     t = _epoch_ms(START)
     completed = t + lateness_ms
     started = t + 8
     request = t + 8
-    receipt = completed
+    receipt = t + 500
     return {
         "scheduled_due_ms": t,
         "capture_started_ms": started,
@@ -250,34 +251,42 @@ def _capture_timing(*, lateness_ms: int = 500) -> dict:
     }
 
 
-def _jev_input(execution: dict | None = None) -> dict:
-    record = execution or _valid_execution()
+def _expected_jev_input(record: dict) -> dict:
+    decision_book = record["decision_book"]
+    decision_execution = record.get("decision_execution") or {}
+    copyability = record.get("source_copyability") or {}
+    best_bid = max(Decimal(str(level[0])) for level in decision_book["bids"])
+    best_ask = min(Decimal(str(level[0])) for level in decision_book["asks"])
     return {
         "schema_version": "jev_execution_handoff_v1",
-        "opportunity_id": opportunity_id(CONDITION, START),
-        "market_slug": "bitcoin-up-or-down-september-20-2026-9pm-et",
-        "condition_id": CONDITION,
-        "token_id": "down-token",
+        "opportunity_id": record["opportunity_id"],
+        "market_slug": record["market_slug"],
+        "condition_id": record["condition_id"],
+        "token_id": record["token_id"],
         "decision_time": record["decision_time"],
-        "book_age_ms": record["latency"]["book_age_ms"],
-        "book_skew_ms": record["latency"]["cross_source_skew_ms"],
-        "spread": "0.02",
-        "depth_at_requested_size": "5",
-        "decision_vwap": "0.51",
-        "fee_status": "FEE_FREE",
-        "source_copyability_classification": "PUBLIC_READ_ONLY_CLOB",
+        "book_age_ms": record["latency"].get("book_age_ms"),
+        "book_skew_ms": record["latency"].get("cross_source_skew_ms"),
+        "spread": str(best_ask - best_bid),
+        "depth_at_requested_size": decision_execution.get("executable_shares"),
+        "decision_vwap": decision_execution.get("vwap"),
+        "fee_status": decision_execution.get("fee_status"),
+        "source_copyability_classification": copyability.get("classification"),
         "market_metadata": {
-            "source": "POLYMARKET_CLOB_PUBLIC",
-            "tick_size": "0.01",
-            "minimum_order_size": "5",
+            "source": decision_book.get("source"),
+            "tick_size": decision_book.get("tick_size"),
+            "minimum_order_size": decision_book.get("minimum_order_size"),
         },
         "candidate": {
-            "side": "BUY",
-            "outcome": "DOWN",
-            "requested_notional_usd": "2.55",
-            "requested_shares": "5",
+            "side": (record.get("candidate") or {}).get("side"),
+            "outcome": (record.get("candidate") or {}).get("outcome"),
+            "requested_notional_usd": (record.get("candidate") or {}).get("requested_notional_usd"),
+            "requested_shares": (record.get("candidate") or {}).get("requested_shares"),
         },
     }
+
+
+def _jev_input(execution: dict | None = None) -> dict:
+    return _expected_jev_input(execution or _valid_execution())
 
 
 def _kwargs() -> dict:
@@ -290,7 +299,7 @@ def _kwargs() -> dict:
         "arq3_arm": _arm(),
         "arq3_capture_timing": _capture_timing(),
         "execution_evidence": execution,
-        "jev_input_at_decision": _jev_input(execution),
+        "jev_input_at_decision": _expected_jev_input(execution),
     }
 
 
@@ -304,22 +313,109 @@ def test_prior_lightweight_execution_fixture_is_rejected() -> None:
     assert errors
     args = _kwargs()
     args["execution_evidence"] = _lightweight_execution()
-    args["jev_input_at_decision"] = _jev_input(_valid_execution())
     with pytest.raises(FutureRowRejected, match="EXECUTION_EVIDENCE_INVALID"):
         build_future_row(**args)
 
 
-def test_record_valid_under_pinned_arq3_contract_is_accepted_with_truthful_timing() -> None:
+def test_boundary_information_source_is_preboundary_while_network_timing_is_truthfully_late() -> None:
     execution = _valid_execution()
-    assert validate_execution_record(execution) == []
     row = build_future_row(**_kwargs())
-    assert row["scheduled_boundary_timestamp"] == START
-    assert row["timing_truth"]["scheduled_due_ms"] == _epoch_ms(START)
-    assert row["timing_truth"]["capture_started_ms"] > _epoch_ms(START)
-    assert row["timing_truth"]["capture_completed_ms"] > _epoch_ms(START)
-    assert row["timing_truth"]["lateness_ms"] == 500
-    assert row["execution_evidence_v1"]["decision_time"] > _epoch_ms(START)
-    assert row["JEV_INPUT_AT_DECISION"]["decision_time"] == execution["decision_time"]
+    boundary = _epoch_ms(START)
+    assert execution["source_time"] < boundary
+    assert execution["decision_book"]["source_timestamp"] < boundary
+    assert execution["receipt_time"] > boundary
+    assert execution["decision_time"] > boundary
+    assert row["timing_truth"]["capture_started_ms"] > boundary
+    assert row["timing_truth"]["capture_completed_ms"] > boundary
+    assert row["timing_truth"]["capture_completed_ms"] <= boundary + 2000
+    assert row["timing_truth"]["lateness_ms"] == 800
+    assert row["source_senex"]["ts"] <= START
+    assert row["source_senex"]["created_at"] <= START
+
+
+def test_exact_arq3_derived_jev_packet_is_accepted() -> None:
+    execution = _valid_execution()
+    expected = _expected_jev_input(execution)
+    args = _kwargs()
+    args["jev_input_at_decision"] = deepcopy(expected)
+    row = build_future_row(**args)
+    assert row["JEV_INPUT_AT_DECISION"] == expected
+
+
+def test_source_senex_created_at_after_boundary_fails_closed() -> None:
+    args = _kwargs()
+    args["source_senex"]["created_at"] = "2026-09-21T01:00:00.001+00:00"
+    with pytest.raises(FutureRowRejected, match="SENEX_CREATED_AT_AFTER_BOUNDARY"):
+        build_future_row(**args)
+
+
+def test_execution_source_time_after_boundary_fails_closed() -> None:
+    args = _kwargs()
+    boundary = _epoch_ms(START)
+    execution = args["execution_evidence"]
+    execution["source_time"] = boundary + 1
+    execution["latency"]["source_to_receive_ms"] = execution["receipt_time"] - execution["source_time"]
+    args["jev_input_at_decision"] = _expected_jev_input(execution)
+    assert validate_execution_record(execution) == []
+    with pytest.raises(FutureRowRejected, match="EXECUTION_SOURCE_AFTER_BOUNDARY"):
+        build_future_row(**args)
+
+
+def test_decision_book_source_timestamp_after_boundary_fails_closed() -> None:
+    args = _kwargs()
+    boundary = _epoch_ms(START)
+    execution = args["execution_evidence"]
+    execution["decision_book"]["source_timestamp"] = boundary + 1
+    execution["latency"]["book_age_ms"] = execution["decision_time"] - (boundary + 1)
+    args["jev_input_at_decision"] = _expected_jev_input(execution)
+    assert validate_execution_record(execution) == []
+    with pytest.raises(FutureRowRejected, match="DECISION_BOOK_SOURCE_AFTER_BOUNDARY"):
+        build_future_row(**args)
+
+
+def test_execution_candidate_must_equal_frozen_senex_candidate() -> None:
+    args = _kwargs()
+    execution = args["execution_evidence"]
+    execution["candidate"]["outcome"] = "UP"
+    execution["token_id"] = "up-token"
+    args["jev_input_at_decision"] = _expected_jev_input(execution)
+    with pytest.raises(FutureRowRejected, match="EXECUTION_CANDIDATE_MISMATCH"):
+        build_future_row(**args)
+
+
+def test_directional_token_must_match_immutable_candidate_outcome() -> None:
+    args = _kwargs()
+    execution = args["execution_evidence"]
+    execution["token_id"] = "up-token"
+    args["jev_input_at_decision"] = _expected_jev_input(execution)
+    with pytest.raises(FutureRowRejected, match="EXECUTION_TOKEN_OUTCOME_MISMATCH"):
+        build_future_row(**args)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda p: p.__setitem__("token_id", "up-token"),
+        lambda p: p.__setitem__("spread", "0.03"),
+        lambda p: p.__setitem__("book_age_ms", p["book_age_ms"] + 1),
+        lambda p: p.__setitem__("book_skew_ms", p["book_skew_ms"] + 1),
+        lambda p: p.__setitem__("decision_vwap", "0.52"),
+        lambda p: p.__setitem__("depth_at_requested_size", "6"),
+        lambda p: p.__setitem__("fee_status", "PROVEN"),
+        lambda p: p["market_metadata"].__setitem__("source", "OTHER"),
+        lambda p: p["market_metadata"].__setitem__("tick_size", "0.02"),
+        lambda p: p["market_metadata"].__setitem__("minimum_order_size", "6"),
+        lambda p: p["candidate"].__setitem__("requested_shares", "6"),
+        lambda p: p["candidate"].__setitem__("outcome", "UP"),
+    ],
+)
+def test_supplied_jev_packet_must_match_pinned_derivation_exactly(mutator) -> None:
+    args = _kwargs()
+    packet = deepcopy(args["jev_input_at_decision"])
+    mutator(packet)
+    args["jev_input_at_decision"] = packet
+    with pytest.raises(FutureRowRejected, match="JEV_INPUT_EXACT_MISMATCH"):
+        build_future_row(**args)
 
 
 @pytest.mark.parametrize(
@@ -448,7 +544,9 @@ def test_candidate_mapping_is_frozen_and_polymarket_direction_is_disabled() -> N
         args = _kwargs()
         args["source_senex"]["prediction"] = prediction
         args["execution_evidence"]["candidate"]["outcome"] = expected
-        args["jev_input_at_decision"]["candidate"]["outcome"] = expected
+        if expected == "UP":
+            args["execution_evidence"]["token_id"] = "up-token"
+        args["jev_input_at_decision"] = _expected_jev_input(args["execution_evidence"])
         row = build_future_row(**args)
         assert row["candidate"] == expected
         assert row["source_senex"]["prediction"] == prediction
