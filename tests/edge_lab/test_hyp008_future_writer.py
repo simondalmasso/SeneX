@@ -4,10 +4,16 @@ import ast
 import hashlib
 import json
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from edge_lab.arq3_execution_contract_v1 import (
+    ARQ3_CONTRACT_SOURCE_SHA,
+    MAX_CAPTURE_LATENESS_MS,
+    validate_execution_record,
+)
 from edge_lab.hyp008_future_writer import (
     EXPECTED_PROTOCOL_HASH,
     FutureRowRejected,
@@ -21,13 +27,29 @@ PROTOCOL_PATH = ROOT / "research" / "hyp008_prospective_protocol_v1.json"
 OBS1_PATH = ROOT / "research" / "hyp008_prospective_cohort.jsonl"
 OBS1_SHA256 = "a6e7384c7f94b0f4d5faa9d9754344e466b1f7e940184a1cea12fca8a7c0025b"
 OBS1_ID = "HYP008-3b15a6ef53b4c1da3f9a861c"
+PINNED_ARQ3_SHA = "92086c3d3227afe524fe86fa983cae1d291a1168"
 START = "2026-09-21T01:00:00Z"
 END = "2026-09-21T02:00:00Z"
 CONDITION = "0xabc123"
 
 
-def _boundary_ms() -> int:
-    return 179,  # replaced below
+def _epoch_ms(value: str) -> int:
+    return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
+
+
+def _iso_from_ms(value: int) -> str:
+    return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _canonical_hash(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _market() -> dict:
@@ -65,11 +87,6 @@ def _source() -> dict:
     }
 
 
-def _epoch_ms(value: str) -> int:
-    from datetime import datetime
-    return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
-
-
 def _arm() -> dict:
     return {
         "ready_before_boundary": True,
@@ -79,7 +96,7 @@ def _arm() -> dict:
     }
 
 
-def _execution() -> dict:
+def _lightweight_execution() -> dict:
     t = _epoch_ms(START)
     return {
         "schema_version": "execution_evidence_v1",
@@ -93,41 +110,266 @@ def _execution() -> dict:
         "decision_book": {"bids": [["0.49", "10"]], "asks": [["0.51", "10"]]},
         "arrival_book": {"bids": [["0.49", "10"]], "asks": [["0.51", "10"]]},
         "execution": {"executable": True},
-        "provenance": {"code_hash": "a" * 64, "config_hash": "b" * 64, "policy_hash": "c" * 64},
+        "provenance": {
+            "code_hash": "a" * 64,
+            "config_hash": "b" * 64,
+            "policy_hash": "c" * 64,
+        },
     }
 
 
-def _jev_input() -> dict:
+def _valid_execution() -> dict:
     t = _epoch_ms(START)
+    source_time = t + 100
+    receipt_time = t + 500
+    decision_time = t + 500
+    arrival_time = t + 700
+
+    raw_decision = {
+        "bids": [["0.49", "10"]],
+        "asks": [["0.51", "10"]],
+        "tick_size": "0.01",
+        "min_order_size": "5",
+    }
+    raw_arrival = {
+        "bids": [["0.48", "10"]],
+        "asks": [["0.52", "10"]],
+        "tick_size": "0.01",
+        "min_order_size": "5",
+    }
+    decision_hash = _canonical_hash(raw_decision)
+    arrival_hash = _canonical_hash(raw_arrival)
+
+    decision_book = {
+        "source": "POLYMARKET_CLOB_PUBLIC",
+        "source_timestamp": source_time,
+        "received_timestamp": receipt_time,
+        "sha256": decision_hash,
+        "bids": deepcopy(raw_decision["bids"]),
+        "asks": deepcopy(raw_decision["asks"]),
+        "tick_size": "0.01",
+        "minimum_order_size": "5",
+        "fee_schedule": {"status": "FEE_FREE"},
+    }
+    arrival_book = {
+        "source": "POLYMARKET_CLOB_PUBLIC",
+        "source_timestamp": t + 550,
+        "received_timestamp": arrival_time,
+        "sha256": arrival_hash,
+        "bids": deepcopy(raw_arrival["bids"]),
+        "asks": deepcopy(raw_arrival["asks"]),
+        "tick_size": "0.01",
+        "minimum_order_size": "5",
+        "fee_schedule": {"status": "FEE_FREE"},
+    }
+
+    return {
+        "schema_version": "execution_evidence_v1",
+        "opportunity_id": opportunity_id(CONDITION, START),
+        "event_id": "future-event-1",
+        "condition_id": CONDITION,
+        "token_id": "down-token",
+        "market_slug": "bitcoin-up-or-down-september-20-2026-9pm-et",
+        "event_time": t,
+        "source_time": source_time,
+        "receipt_time": receipt_time,
+        "decision_time": decision_time,
+        "arrival_time": arrival_time,
+        "decision_book": decision_book,
+        "arrival_book": arrival_book,
+        "raw_evidence": {
+            "decision_book": raw_decision,
+            "arrival_book": raw_arrival,
+        },
+        "candidate": {
+            "side": "BUY",
+            "outcome": "DOWN",
+            "requested_notional_usd": "2.55",
+            "requested_shares": "5",
+        },
+        "execution": {
+            "executable": True,
+            "reject_reason": None,
+            "executable_shares": "5",
+            "fill_fraction": "1",
+            "levels_consumed": 1,
+            "best_price": "0.52",
+            "vwap": "0.52",
+            "spread_cost_usd": "0.025",
+            "depth_slippage_usd": "0",
+            "fees_usd": "0",
+            "rebate_usd_if_proven": "0",
+            "total_entry_cost_usd": "2.60",
+        },
+        "decision_execution": {
+            "executable_shares": "5",
+            "vwap": "0.51",
+            "fee_status": "FEE_FREE",
+        },
+        "latency": {
+            "source_to_receive_ms": receipt_time - source_time,
+            "decision_to_arrival_ms": arrival_time - decision_time,
+            "book_age_ms": decision_time - source_time,
+            "cross_source_skew_ms": 50,
+        },
+        "markouts": [],
+        "adverse_selection": {},
+        "source_copyability": {
+            "classification": "PUBLIC_READ_ONLY_CLOB",
+            "evidence_hash": "d" * 64,
+        },
+        "provenance": {
+            "code_hash": "a" * 64,
+            "config_hash": "b" * 64,
+            "policy_hash": "c" * 64,
+            "raw_source_hashes": [decision_hash, arrival_hash],
+        },
+        "policy_limits": {
+            "max_book_age_ms": 1000,
+            "max_cross_source_skew_ms": 1000,
+            "fixed_markout_horizons_s": [],
+        },
+    }
+
+
+def _capture_timing(*, lateness_ms: int = 500) -> dict:
+    t = _epoch_ms(START)
+    completed = t + lateness_ms
+    started = t + 8
+    request = t + 8
+    receipt = completed
+    return {
+        "scheduled_due_ms": t,
+        "capture_started_ms": started,
+        "request_timestamp": _iso_from_ms(request),
+        "receipt_timestamp": _iso_from_ms(receipt),
+        "capture_completed_ms": completed,
+        "actual_capture_ms": completed,
+        "lateness_ms": lateness_ms,
+        "TIMING_VALID": lateness_ms <= MAX_CAPTURE_LATENESS_MS,
+    }
+
+
+def _jev_input(execution: dict | None = None) -> dict:
+    record = execution or _valid_execution()
     return {
         "schema_version": "jev_execution_handoff_v1",
         "opportunity_id": opportunity_id(CONDITION, START),
         "market_slug": "bitcoin-up-or-down-september-20-2026-9pm-et",
         "condition_id": CONDITION,
         "token_id": "down-token",
-        "decision_time": t,
-        "book_age_ms": 0,
-        "book_skew_ms": 0,
+        "decision_time": record["decision_time"],
+        "book_age_ms": record["latency"]["book_age_ms"],
+        "book_skew_ms": record["latency"]["cross_source_skew_ms"],
         "spread": "0.02",
         "depth_at_requested_size": "5",
         "decision_vwap": "0.51",
-        "fee_status": "PROVEN",
+        "fee_status": "FEE_FREE",
         "source_copyability_classification": "PUBLIC_READ_ONLY_CLOB",
-        "market_metadata": {"source": "POLYMARKET_CLOB_PUBLIC", "tick_size": "0.01", "minimum_order_size": "5"},
-        "candidate": {"side": "BUY", "outcome": "DOWN", "requested_notional_usd": "2.55", "requested_shares": "5"},
+        "market_metadata": {
+            "source": "POLYMARKET_CLOB_PUBLIC",
+            "tick_size": "0.01",
+            "minimum_order_size": "5",
+        },
+        "candidate": {
+            "side": "BUY",
+            "outcome": "DOWN",
+            "requested_notional_usd": "2.55",
+            "requested_shares": "5",
+        },
     }
 
 
 def _kwargs() -> dict:
+    execution = _valid_execution()
     return {
         "protocol_path": PROTOCOL_PATH,
         "market": _market(),
         "source_senex": _source(),
-        "decision_capture_timestamp": START,
+        "scheduled_boundary_timestamp": START,
         "arq3_arm": _arm(),
-        "execution_evidence": _execution(),
-        "jev_input_at_decision": _jev_input(),
+        "arq3_capture_timing": _capture_timing(),
+        "execution_evidence": execution,
+        "jev_input_at_decision": _jev_input(execution),
     }
+
+
+def test_pinned_contract_source_is_exact() -> None:
+    assert ARQ3_CONTRACT_SOURCE_SHA == PINNED_ARQ3_SHA
+    assert MAX_CAPTURE_LATENESS_MS == 2000
+
+
+def test_prior_lightweight_execution_fixture_is_rejected() -> None:
+    errors = validate_execution_record(_lightweight_execution())
+    assert errors
+    args = _kwargs()
+    args["execution_evidence"] = _lightweight_execution()
+    args["jev_input_at_decision"] = _jev_input(_valid_execution())
+    with pytest.raises(FutureRowRejected, match="EXECUTION_EVIDENCE_INVALID"):
+        build_future_row(**args)
+
+
+def test_record_valid_under_pinned_arq3_contract_is_accepted_with_truthful_timing() -> None:
+    execution = _valid_execution()
+    assert validate_execution_record(execution) == []
+    row = build_future_row(**_kwargs())
+    assert row["scheduled_boundary_timestamp"] == START
+    assert row["timing_truth"]["scheduled_due_ms"] == _epoch_ms(START)
+    assert row["timing_truth"]["capture_started_ms"] > _epoch_ms(START)
+    assert row["timing_truth"]["capture_completed_ms"] > _epoch_ms(START)
+    assert row["timing_truth"]["lateness_ms"] == 500
+    assert row["execution_evidence_v1"]["decision_time"] > _epoch_ms(START)
+    assert row["JEV_INPUT_AT_DECISION"]["decision_time"] == execution["decision_time"]
+
+
+@pytest.mark.parametrize(
+    "mutator,expected_error",
+    [
+        (lambda r: r.pop("token_id"), "TOKEN_ID_MISSING"),
+        (lambda r: r.pop("source_time"), "SOURCE_TIME_MISSING"),
+        (lambda r: r.__setitem__("source_time", r["receipt_time"] + 1), "SOURCE_TIME_AFTER_RECEIPT"),
+        (lambda r: r.__setitem__("receipt_time", r["decision_time"] + 1), "RECEIPT_AFTER_DECISION"),
+        (lambda r: r["decision_book"].pop("source"), "DECISION_BOOK_SOURCE_MISSING"),
+        (lambda r: r["decision_book"].pop("source_timestamp"), "DECISION_BOOK_SOURCE_TIMESTAMP_MISSING"),
+        (lambda r: r["decision_book"].pop("received_timestamp"), "DECISION_BOOK_RECEIVED_TIMESTAMP_MISSING"),
+        (lambda r: r["decision_book"].pop("sha256"), "DECISION_BOOK_SHA256_MISSING"),
+        (lambda r: r["decision_book"].pop("tick_size"), "DECISION_BOOK_TICK_SIZE_MISSING"),
+        (lambda r: r["decision_book"].pop("minimum_order_size"), "DECISION_BOOK_MINIMUM_ORDER_SIZE_MISSING"),
+        (lambda r: r["decision_book"].__setitem__("fee_schedule", {"status": "UNKNOWN"}), "DECISION_FEE_SCHEDULE_UNPROVEN"),
+        (lambda r: r["decision_book"].__setitem__("source_timestamp", r["decision_time"] + 1), "DECISION_BOOK_FROM_FUTURE"),
+        (lambda r: r["decision_book"].__setitem__("received_timestamp", r["decision_time"] + 1), "DECISION_BOOK_RECEIVED_AFTER_DECISION_TIME"),
+        (lambda r: r["execution"].pop("fees_usd"), "EXECUTION_FEES_USD_MISSING"),
+        (lambda r: (r["execution"].__setitem__("executable", False), r["execution"].__setitem__("reject_reason", None)), "REJECTION_REASON_MISSING"),
+        (lambda r: r.pop("raw_evidence"), "RAW_EVIDENCE_MISSING"),
+        (lambda r: r["raw_evidence"]["decision_book"].__setitem__("bids", [["0.01", "1"]]), "DECISION_RAW_HASH_MISMATCH"),
+        (lambda r: r["provenance"].pop("raw_source_hashes"), "PROVENANCE_RAW_SOURCE_HASHES_INVALID"),
+        (lambda r: r["latency"].__setitem__("book_age_ms", -1), "LATENCY_BOOK_AGE_MS_NEGATIVE"),
+        (lambda r: r.pop("policy_limits"), "MAX_BOOK_AGE_POLICY_MISSING"),
+        (lambda r: r.__setitem__("source_copyability", {"classification": "PUBLIC"}), "SOURCE_COPYABILITY_EVIDENCE_INVALID"),
+    ],
+)
+def test_representative_arq3_invalid_records_fail_closed(mutator, expected_error: str) -> None:
+    execution = _valid_execution()
+    mutator(execution)
+    assert expected_error in validate_execution_record(execution)
+    args = _kwargs()
+    args["execution_evidence"] = execution
+    with pytest.raises(FutureRowRejected, match="EXECUTION_EVIDENCE_INVALID"):
+        build_future_row(**args)
+
+
+def test_capture_timing_later_than_authoritative_two_seconds_fails_closed() -> None:
+    args = _kwargs()
+    args["arq3_capture_timing"] = _capture_timing(lateness_ms=MAX_CAPTURE_LATENESS_MS + 1)
+    with pytest.raises(FutureRowRejected, match="ARQ3_CAPTURE_TIMING_INVALID"):
+        build_future_row(**args)
+
+
+def test_capture_timing_requires_truthful_request_receipt_and_completion() -> None:
+    args = _kwargs()
+    args["arq3_capture_timing"]["request_timestamp"] = None
+    with pytest.raises(FutureRowRejected, match="ARQ3_CAPTURE_TIMING_INVALID"):
+        build_future_row(**args)
 
 
 def test_protocol_hash_mismatch_fails_closed(tmp_path: Path) -> None:
@@ -166,16 +408,14 @@ def test_source_senex_after_boundary_fails_closed() -> None:
 
 
 @pytest.mark.parametrize(
-    "capture,arm_update,reason",
+    "arm_update,reason",
     [
-        ("2026-09-21T01:00:00.001Z", {}, "BOUNDARY_CAPTURE_NOT_EXACT"),
-        (START, {"ready_before_boundary": False}, "ARQ3_NOT_ARMED"),
-        (START, {"armed_at": START}, "ARQ3_ARM_NOT_PREBOUNDARY"),
+        ({"ready_before_boundary": False}, "ARQ3_NOT_ARMED"),
+        ({"armed_at": START}, "ARQ3_ARM_NOT_PREBOUNDARY"),
     ],
 )
-def test_late_or_unarmed_boundary_fails_closed(capture: str, arm_update: dict, reason: str) -> None:
+def test_unarmed_boundary_fails_closed(arm_update: dict, reason: str) -> None:
     args = _kwargs()
-    args["decision_capture_timestamp"] = capture
     args["arq3_arm"].update(arm_update)
     with pytest.raises(FutureRowRejected, match=reason):
         build_future_row(**args)
@@ -207,6 +447,7 @@ def test_candidate_mapping_is_frozen_and_polymarket_direction_is_disabled() -> N
     for prediction, expected in (("LONG", "UP"), ("SHORT", "DOWN"), ("FLAT", "ABSTAIN")):
         args = _kwargs()
         args["source_senex"]["prediction"] = prediction
+        args["execution_evidence"]["candidate"]["outcome"] = expected
         args["jev_input_at_decision"]["candidate"]["outcome"] = expected
         row = build_future_row(**args)
         assert row["candidate"] == expected
@@ -243,20 +484,32 @@ def test_observation_1_remains_byte_exact() -> None:
 
 
 def test_writer_has_no_network_order_live_or_capital_path() -> None:
-    writer = ROOT / "edge_lab" / "hyp008_future_writer.py"
-    tree = ast.parse(writer.read_text(encoding="utf-8"))
-    imported = {
-        alias.name.split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Import)
-        for alias in node.names
-    }
-    imported.update(
-        (node.module or "").split(".")[0]
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-    )
-    assert imported.isdisjoint({"httpx", "requests", "urllib", "socket", "subprocess", "ccxt"})
-    source = writer.read_text(encoding="utf-8").lower()
-    for forbidden in ("place_order", "create_order", "send_order", "wallet", "private_key", "live=true", "capital_unlock"):
-        assert forbidden not in source
+    paths = [
+        ROOT / "edge_lab" / "hyp008_future_writer.py",
+        ROOT / "edge_lab" / "arq3_execution_contract_v1.py",
+    ]
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported = {
+            alias.name.split(".")[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        imported.update(
+            (node.module or "").split(".")[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+        )
+        assert imported.isdisjoint({"httpx", "requests", "urllib", "socket", "subprocess", "ccxt"})
+        source = path.read_text(encoding="utf-8").lower()
+        for forbidden in (
+            "place_order",
+            "create_order",
+            "send_order",
+            "wallet",
+            "private_key",
+            "live=true",
+            "capital_unlock",
+        ):
+            assert forbidden not in source
