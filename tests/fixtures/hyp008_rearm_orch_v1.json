@@ -1,0 +1,337 @@
+{
+  "fixture_id": "HYP008_REARM_SYNTHETIC_V1",
+  "authority_head": "62e4140d742ec691a62f1ca609bb97362389505e",
+  "current_h011_runtime": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "protocol_hash": "8f0a2125c44ffb8873cb4908a13e6a4a998bb93f903ec8cfe6d5ea97570fd44b",
+  "jev_arm_hash": "6bc5be515b0843793d1f7d698d154cb3867f32e745387ab9cfacff4bfb471686",
+  "boundary": "2026-09-24T12:00:00Z",
+  "market": {
+    "series_id": "10114",
+    "event_id": "fixture-event-001",
+    "market_id": "fixture-market-001",
+    "conditionId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+    "eventStartTime": "2026-09-24T12:00:00Z",
+    "endDate": "2026-09-24T13:00:00Z",
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "description": "This market resolves Up if the Binance BTC/USDT 1 hour candle close is greater than or equal to its open; otherwise Down.",
+    "outcomes": "[\"Up\",\"Down\"]",
+    "clobTokenIds": "[\"fixture-up-token\",\"fixture-down-token\"]"
+  },
+  "h011_packet": {
+    "source": "authority_snapshot_cache",
+    "symbol": "BTCUSDT",
+    "bounded": true,
+    "limit": 50,
+    "count": 2,
+    "predictions": [
+      {
+        "id": 7000,
+        "ts": "2026-09-24T11:40:00+00:00",
+        "created_at": "2026-09-24T11:40:01+00:00",
+        "symbol": "BTCUSDT",
+        "prediction": "LONG",
+        "confidence": 0.7,
+        "ev": 0.0001,
+        "price_now": 81000,
+        "exchange_used": "okx",
+        "audit": {}
+      },
+      {
+        "id": 7001,
+        "ts": "2026-09-24T11:55:00+00:00",
+        "created_at": "2026-09-24T11:55:01+00:00",
+        "symbol": "BTCUSDT",
+        "prediction": "SHORT",
+        "confidence": 0.9,
+        "ev": 0.0002,
+        "price_now": 80950,
+        "exchange_used": "okx",
+        "audit": {}
+      }
+    ],
+    "provenance": {
+      "source_commit": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+      "source_tree": "fixture-h011-tree",
+      "build_digest": "sha256:fixture-h011-build"
+    },
+    "safety": {
+      "paper": true,
+      "orders_enabled": false,
+      "live_capital_locked": true
+    }
+  },
+  "events": [
+    {
+      "gate": "H-15",
+      "at": "2026-09-24T11:44:00Z",
+      "owner": "ARQ2",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      }
+    },
+    {
+      "gate": "H-10",
+      "at": "2026-09-24T11:49:00Z",
+      "owner": "ARQ3",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      }
+    },
+    {
+      "gate": "H-05",
+      "at": "2026-09-24T11:54:00Z",
+      "owner": "ARQ3",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      },
+      "heartbeat": true
+    },
+    {
+      "gate": "H+00",
+      "at": "2026-09-24T12:00:00.800Z",
+      "owner": "ARQ3",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      }
+    },
+    {
+      "gate": "H+03",
+      "at": "2026-09-24T12:02:00Z",
+      "owner": "ARQ3",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      }
+    },
+    {
+      "gate": "H+05",
+      "at": "2026-09-24T12:04:00Z",
+      "owner": "ARQ2",
+      "identity": {
+        "event_id": "fixture-event-001",
+        "market_id": "fixture-market-001",
+        "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+        "eventStartTime": "2026-09-24T12:00:00Z",
+        "up_token_id": "fixture-up-token",
+        "down_token_id": "fixture-down-token"
+      }
+    }
+  ],
+  "arq3_arm": {
+    "ready_before_boundary": true,
+    "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "eventStartTime": "2026-09-24T12:00:00Z",
+    "armed_at": "2026-09-24T11:54:00Z"
+  },
+  "arq3_capture_timing": {
+    "scheduled_due_ms": 1790251200000,
+    "capture_started_ms": 1790251200008,
+    "request_timestamp": "2026-09-24T12:00:00.008Z",
+    "receipt_timestamp": "2026-09-24T12:00:00.500Z",
+    "capture_completed_ms": 1790251200800,
+    "actual_capture_ms": 1790251200800,
+    "lateness_ms": 800,
+    "TIMING_VALID": true
+  },
+  "execution_evidence": {
+    "schema_version": "execution_evidence_v1",
+    "opportunity_id": "HYP008-07ff0b31df128cbf6bdd8292",
+    "event_id": "fixture-event-001",
+    "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "token_id": "fixture-down-token",
+    "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+    "event_time": 1790251200000,
+    "source_time": 1790251199900,
+    "receipt_time": 1790251200500,
+    "decision_time": 1790251200500,
+    "arrival_time": 1790251200700,
+    "decision_book": {
+      "source": "POLYMARKET_CLOB_PUBLIC",
+      "source_timestamp": 1790251199900,
+      "received_timestamp": 1790251200500,
+      "sha256": "c8212bb00506ed3ae5562c9ccc35b07504dbba77e1a07e5620b1a014af3ede6d",
+      "bids": [
+        [
+          "0.49",
+          "10"
+        ]
+      ],
+      "asks": [
+        [
+          "0.51",
+          "10"
+        ]
+      ],
+      "tick_size": "0.01",
+      "minimum_order_size": "5",
+      "fee_schedule": {
+        "status": "FEE_FREE"
+      }
+    },
+    "arrival_book": {
+      "source": "POLYMARKET_CLOB_PUBLIC",
+      "source_timestamp": 1790251200550,
+      "received_timestamp": 1790251200700,
+      "sha256": "86122b13d07c39ba6fd99ed8feeea6c5b8ab5bc2f6c9faeee3d2a824111fec36",
+      "bids": [
+        [
+          "0.48",
+          "10"
+        ]
+      ],
+      "asks": [
+        [
+          "0.52",
+          "10"
+        ]
+      ],
+      "tick_size": "0.01",
+      "minimum_order_size": "5",
+      "fee_schedule": {
+        "status": "FEE_FREE"
+      }
+    },
+    "raw_evidence": {
+      "decision_book": {
+        "bids": [
+          [
+            "0.49",
+            "10"
+          ]
+        ],
+        "asks": [
+          [
+            "0.51",
+            "10"
+          ]
+        ],
+        "tick_size": "0.01",
+        "min_order_size": "5"
+      },
+      "arrival_book": {
+        "bids": [
+          [
+            "0.48",
+            "10"
+          ]
+        ],
+        "asks": [
+          [
+            "0.52",
+            "10"
+          ]
+        ],
+        "tick_size": "0.01",
+        "min_order_size": "5"
+      }
+    },
+    "candidate": {
+      "side": "BUY",
+      "outcome": "DOWN",
+      "requested_notional_usd": "2.55",
+      "requested_shares": "5"
+    },
+    "execution": {
+      "executable": true,
+      "reject_reason": null,
+      "executable_shares": "5",
+      "fill_fraction": "1",
+      "levels_consumed": 1,
+      "best_price": "0.52",
+      "vwap": "0.52",
+      "spread_cost_usd": "0.025",
+      "depth_slippage_usd": "0",
+      "fees_usd": "0",
+      "rebate_usd_if_proven": "0",
+      "total_entry_cost_usd": "2.60"
+    },
+    "decision_execution": {
+      "executable_shares": "5",
+      "vwap": "0.51",
+      "fee_status": "FEE_FREE"
+    },
+    "latency": {
+      "source_to_receive_ms": 600,
+      "decision_to_arrival_ms": 200,
+      "book_age_ms": 600,
+      "cross_source_skew_ms": 50
+    },
+    "markouts": [],
+    "adverse_selection": {},
+    "source_copyability": {
+      "classification": "PUBLIC_READ_ONLY_CLOB",
+      "evidence_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "provenance": {
+      "code_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "policy_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw_source_hashes": [
+        "c8212bb00506ed3ae5562c9ccc35b07504dbba77e1a07e5620b1a014af3ede6d",
+        "86122b13d07c39ba6fd99ed8feeea6c5b8ab5bc2f6c9faeee3d2a824111fec36"
+      ]
+    },
+    "policy_limits": {
+      "max_book_age_ms": 1000,
+      "max_cross_source_skew_ms": 1000,
+      "fixed_markout_horizons_s": []
+    }
+  },
+  "jev_input_at_decision": {
+    "schema_version": "jev_execution_handoff_v1",
+    "opportunity_id": "HYP008-07ff0b31df128cbf6bdd8292",
+    "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
+    "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "token_id": "fixture-down-token",
+    "decision_time": 1790251200500,
+    "book_age_ms": 600,
+    "book_skew_ms": 50,
+    "spread": "0.02",
+    "depth_at_requested_size": "5",
+    "decision_vwap": "0.51",
+    "fee_status": "FEE_FREE",
+    "source_copyability_classification": "PUBLIC_READ_ONLY_CLOB",
+    "market_metadata": {
+      "source": "POLYMARKET_CLOB_PUBLIC",
+      "tick_size": "0.01",
+      "minimum_order_size": "5"
+    },
+    "candidate": {
+      "side": "BUY",
+      "outcome": "DOWN",
+      "requested_notional_usd": "2.55",
+      "requested_shares": "5"
+    }
+  }
+}

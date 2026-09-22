@@ -1,0 +1,114 @@
+{
+  "manifest_id": "HYP008_READY_FOR_REARM_V1",
+  "status": "PREPARED_AWAITING_ARQ1_GATE_B_PASS",
+  "ready_for_rearm": false,
+  "authority_head": "62e4140d742ec691a62f1ca609bb97362389505e",
+  "current_h011_runtime": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "gate_b_24h": "IN_PROGRESS",
+  "rearm_requires": "ARQ1_GATE_B_24H=PASS",
+  "protocol_hash": "8f0a2125c44ffb8873cb4908a13e6a4a998bb93f903ec8cfe6d5ea97570fd44b",
+  "jev_arm_hash": "6bc5be515b0843793d1f7d698d154cb3867f32e745387ab9cfacff4bfb471686",
+  "orchestration_contract": {
+    "contract_id": "HYP008_REARM_ORCH_V1",
+    "gates": [
+      {
+        "gate": "H-15",
+        "owner": "ARQ2",
+        "deadline_offset_seconds": -900,
+        "artifact": "exact_market_identity_and_handoff"
+      },
+      {
+        "gate": "H-10",
+        "owner": "ARQ3",
+        "deadline_offset_seconds": -600,
+        "artifact": "independent_identity_ack"
+      },
+      {
+        "gate": "H-05",
+        "owner": "ARQ3",
+        "deadline_offset_seconds": -300,
+        "artifact": "collector_armed_heartbeat"
+      },
+      {
+        "gate": "H+00",
+        "owner": "ARQ3",
+        "deadline_offset_seconds": 2,
+        "artifact": "truthful_boundary_capture_max_lateness_2000ms"
+      },
+      {
+        "gate": "H+03",
+        "owner": "ARQ3",
+        "deadline_offset_seconds": 180,
+        "artifact": "validated_execution_evidence_v1_and_exact_jev_input"
+      },
+      {
+        "gate": "H+05",
+        "owner": "ARQ2",
+        "deadline_offset_seconds": 300,
+        "artifact": "c2_validation_then_single_append_authorization"
+      }
+    ],
+    "identity_fields": [
+      "event_id",
+      "market_id",
+      "condition_id",
+      "market_slug",
+      "eventStartTime",
+      "up_token_id",
+      "down_token_id"
+    ],
+    "duplicate_policy": "SAME_EVENT_RETRY_IDEMPOTENT; PRIOR_OPPORTUNITY_FAIL_CLOSED",
+    "max_capture_lateness_ms": 2000
+  },
+  "h011_source_contract": {
+    "endpoint": "/api/oracle/predictions/db",
+    "source": "authority_snapshot_cache",
+    "bounded_required": true,
+    "symbol": "BTCUSDT",
+    "required_row_fields": [
+      "id",
+      "ts",
+      "created_at",
+      "symbol",
+      "prediction",
+      "confidence",
+      "ev",
+      "price_now",
+      "exchange_used"
+    ],
+    "source_information_cut": [
+      "ts<=boundary",
+      "created_at<=boundary"
+    ],
+    "frozen_hyp008_enrichment": {
+      "polymarket_directional_use": false,
+      "polymarket_effective_weight": 0
+    },
+    "arq1_arq2_sha_parity_required": false
+  },
+  "required_after_gate_b_pass": [
+    "fresh series-10114 exact market identity",
+    "ARQ2 H-15 handoff artifact",
+    "independent ARQ3 H-10 identity ACK",
+    "ARQ3 H-05 armed/heartbeat proof",
+    "truthful ARQ3 H+00 capture timing <=2000ms",
+    "execution_evidence_v1 for exact opportunity",
+    "JEV_INPUT_AT_DECISION canonically bound to execution evidence",
+    "bounded H011 BTCUSDT source packet with ts and created_at <= boundary",
+    "ARQ2 C2 writer acceptance",
+    "duplicate-opportunity ledger check before any append"
+  ],
+  "dry_run_controls": {
+    "synthetic_fixtures_only": true,
+    "live_capture_permitted": false,
+    "cohort_append_permitted": false,
+    "jev_call_permitted": false,
+    "laya_call_permitted": false,
+    "protocol_mutation_permitted": false,
+    "merge_permitted": false,
+    "deploy_permitted": false,
+    "live_orders_permitted": false,
+    "capital_permitted": false
+  },
+  "edge": "UNPROVEN"
+}
