@@ -94,6 +94,16 @@ def test_mutable_refresh_is_hard_capped():
     assert '"limit": str(len(batch))' in source
 
 
+def test_dual_reconciler_discovery_is_local_and_batch_capped():
+    from senecio_polymarket.backend import settlement_reconciler as sr
+
+    source = inspect.getsource(sr.reconcile_once)
+    assert sr.BATCH_LIMIT <= 200
+    assert "get_local_authority_rows" in source
+    assert "client.get(" not in source
+    assert "eligible[: max(1, BATCH_LIMIT)]" in source
+
+
 def test_budget_gate_passes_normal_and_2x_stress():
     budget = sc.d1_rows_read_budget_projection()
     assert budget["full_table_count_rows_day"] == 0
