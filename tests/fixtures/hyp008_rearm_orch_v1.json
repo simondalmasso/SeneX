@@ -166,7 +166,7 @@
   },
   "execution_evidence": {
     "schema_version": "execution_evidence_v1",
-    "opportunity_id": "HYP008-07ff0b31df128cbf6bdd8292",
+    "opportunity_id": "HYP008-73d66ac9bb6d7666ff8ca5a1",
     "event_id": "fixture-event-001",
     "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "token_id": "fixture-down-token",
@@ -310,7 +310,7 @@
   },
   "jev_input_at_decision": {
     "schema_version": "jev_execution_handoff_v1",
-    "opportunity_id": "HYP008-07ff0b31df128cbf6bdd8292",
+    "opportunity_id": "HYP008-73d66ac9bb6d7666ff8ca5a1",
     "market_slug": "bitcoin-up-or-down-september-24-2026-8am-et",
     "condition_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "token_id": "fixture-down-token",
