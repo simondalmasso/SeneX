@@ -60,6 +60,42 @@ def test_list_authority_scopes_round_trip_uses_durable_seal_contract():
         assert aseal.list_authority_scopes() == ["BTCUSDT"]
 
 
+def test_mutable_refresh_preserves_sealed_timestamp_representation():
+    row = {
+        "id": "1",
+        "ts": "2026-09-22T09:00:00Z",
+        "symbol": "BTCUSDT",
+        "prediction": "LONG",
+        "confidence": 0.7,
+        "price_now": 100.0,
+        "outcome": None,
+        "exchange_used": "test",
+        "audit": {},
+    }
+    cursor = {"ts": row["ts"], "id": row["id"]}
+    refreshed = {**row, "ts": "2026-09-22T09:00:00+00:00"}
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+        os.environ, {"SENEX_AUTHORITY_SEAL_DIR": tmp}, clear=False
+    ):
+        sc.reset_r7b_incremental_state_for_tests()
+        aseal.save_authority_state(
+            "BTCUSDT",
+            [row],
+            cursor,
+            identity=IDENTITY,
+            writer_contract=sc.AUTHORITY_MUTATION_CONTRACT,
+        )
+        with mock.patch.object(
+            sc, "internal_identity_projection", return_value=IDENTITY
+        ), mock.patch.object(
+            sc, "_fetch_authority_delta_raw", new=mock.AsyncMock(return_value=[])
+        ), mock.patch.object(
+            sc, "_refresh_mutable_rows", new=mock.AsyncMock(return_value=[refreshed])
+        ):
+            rows = asyncio.run(sc.fetch_authority_history("BTCUSDT"))
+    assert rows[0]["ts"] == "2026-09-22T09:00:00Z"
+
+
 def test_snapshot_refresh_preserves_exact_authority_history_reason():
     store = authority_snapshot.AuthoritySnapshotStore(ttl_s=60)
     history_error = sc.AuthorityHistoryIncompleteError(

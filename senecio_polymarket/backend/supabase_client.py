@@ -851,7 +851,15 @@ async def fetch_authority_history(
     refreshed = await _refresh_mutable_rows(symbol, mutable)
     for row in refreshed:
         row_id = _row_cursor(row)[1]
-        if state["rows"].get(row_id) != row:
+        existing = state["rows"].get(row_id)
+        if isinstance(existing, dict):
+            # id/ts are immutable identity fields. The gateway may reserialize
+            # the same UTC instant (Z vs +00:00); preserve the sealed text so a
+            # mutable refresh cannot invalidate the durable coverage cursor.
+            row = dict(row)
+            row["id"] = existing.get("id")
+            row["ts"] = existing.get("ts")
+        if existing != row:
             state["rows"][row_id] = row
             changed = True
 
