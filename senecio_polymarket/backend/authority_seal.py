@@ -318,6 +318,29 @@ def load_count_state(
     return payload
 
 
+def list_authority_scopes() -> list[str]:
+    """Return locally persisted authority scopes without any D1/network I/O."""
+    root = _root()
+    if not root.exists():
+        return []
+    scopes: set[str] = set()
+    for path in root.glob("authority-*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict) and payload.get("contract") == AUTHORITY_CONTRACT:
+            scope = str(payload.get("scope") or "").strip()
+            if scope:
+                scopes.add(scope)
+    return sorted(scopes)
+
+
+def runtime_state_dir() -> Path:
+    """Public local-state directory for bounded companion cursors."""
+    return _root()
+
+
 def bootstrap_enabled() -> bool:
     return str(os.environ.get("SENEX_AUTHORITY_BOOTSTRAP_ALLOWED") or "0").strip() == "1"
 

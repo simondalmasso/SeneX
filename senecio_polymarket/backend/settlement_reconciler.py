@@ -8,6 +8,7 @@ without a valid origin witness remain unchanged and non-authoritative.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -26,7 +27,11 @@ from .settlement_contract import (
     normalize_symbol,
     parse_utc,
 )
-from .supabase_client import build_supabase_headers
+from .supabase_client import (
+    build_supabase_headers,
+    get_local_authority_rows,
+)
+from . import authority_seal as durable_seal
 
 log = logging.getLogger("senex.settlement_reconciler")
 
@@ -36,6 +41,14 @@ SUPABASE_TABLE = os.environ.get("SUPABASE_TABLE", "oracle_predictions")
 INTERVAL_S = int(os.environ.get("SETTLEMENT_RECONCILE_INTERVAL_SEC", "900"))
 BATCH_LIMIT = int(os.environ.get("SETTLEMENT_RECONCILE_BATCH", "200"))
 HEARTBEAT_FILE = Path(os.environ.get("SENEX_RECONCILER_HEARTBEAT_FILE", "/tmp/senex-reconciler-heartbeat"))
+CURSOR_CONTRACT = "senex-settlement-reconciler-local-cursor-v1"
+
+
+def _cursor_file() -> Path:
+    return Path(
+        os.environ.get("SENEX_RECONCILER_CURSOR_FILE")
+        or (durable_seal.runtime_state_dir() / "settlement-reconciler-cursor.json")
+    )
 
 
 def _headers() -> dict[str, str]:
@@ -54,6 +67,48 @@ def _audit_dict(value: Any) -> dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _cursor_hash(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _load_cursor() -> int:
+    cursor_file = _cursor_file()
+    if not cursor_file.exists():
+        return 0
+    payload = json.loads(cursor_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("contract") != CURSOR_CONTRACT:
+        raise RuntimeError("SETTLEMENT_RECONCILER_CURSOR_INVALID")
+    supplied = str(payload.get("cursor_hash") or "")
+    unsigned = dict(payload)
+    unsigned.pop("cursor_hash", None)
+    if supplied != _cursor_hash(unsigned):
+        raise RuntimeError("SETTLEMENT_RECONCILER_CURSOR_HASH_MISMATCH")
+    value = int(payload.get("last_id") or 0)
+    if value < 0:
+        raise RuntimeError("SETTLEMENT_RECONCILER_CURSOR_NEGATIVE")
+    return value
+
+
+def _save_cursor(last_id: int) -> None:
+    cursor_file = _cursor_file()
+    cursor_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "contract": CURSOR_CONTRACT,
+        "last_id": int(last_id),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    payload["cursor_hash"] = _cursor_hash(payload)
+    tmp = cursor_file.with_suffix(cursor_file.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    os.replace(tmp, cursor_file)
 
 
 async def _repair_row(client: httpx.AsyncClient, row: dict[str, Any]) -> str:
@@ -139,52 +194,75 @@ async def _repair_row(client: httpx.AsyncClient, row: dict[str, Any]) -> str:
         body = response.json() if response.content else []
     except Exception:
         body = []
-    return "repaired" if response.status_code in (200, 204) and isinstance(body, list) and body else "error"
+    repaired = response.status_code in (200, 204) and isinstance(body, list) and bool(body)
+    if not repaired:
+        return "error"
+    # The uvicorn authority loop owns the durable seal. The reconciler is a
+    # separate process, so it never writes that seal; the next bounded exact-ID
+    # mutable refresh imports this D1 repair without a cross-process lost update.
+    return "repaired"
 
 
 async def reconcile_once() -> dict[str, int]:
-    """Repair only already-settled rows; stable keyset traversal prevents drift."""
+    """Repair a bounded local candidate batch; never scan D1 for backlog."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be provided by the runtime environment")
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=WINDOW_1H_S)).isoformat()
-    counters = {"scanned": 0, "repaired": 0, "skipped": 0, "errors": 0, "conflicts": 0}
-    cursor_ts: Optional[str] = None
-    cursor_id: Optional[str] = None
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_1H_S)
+    counters = {
+        "scanned": 0,
+        "d1_rows_read": 0,
+        "local_rows_considered": 0,
+        "repaired": 0,
+        "skipped": 0,
+        "errors": 0,
+        "conflicts": 0,
+        "scan_cap_hit": 0,
+    }
+    try:
+        cursor_id = _load_cursor()
+    except Exception:
+        counters["errors"] += 1
+        log.exception("settlement reconciler cursor invalid; failing closed")
+        return counters
+
+    rows = get_local_authority_rows(require_current_identity=True)
+    counters["local_rows_considered"] = len(rows)
+    eligible: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            row_id = int(row.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if row_id <= cursor_id:
+            continue
+        if row.get("outcome") not in {"WIN", "LOSS"}:
+            continue
+        audit = _audit_dict(row.get("audit"))
+        if audit.get("outcomes_dual") is not None:
+            continue
+        row_dt = parse_utc(row.get("ts"))
+        if row_dt is None or row_dt > cutoff:
+            continue
+        eligible.append(dict(row))
+    eligible.sort(key=lambda row: int(row.get("id") or 0))
+    candidates = eligible[: max(1, BATCH_LIMIT)]
+    counters["scan_cap_hit"] = int(len(eligible) > len(candidates))
 
     async with httpx.AsyncClient(timeout=20.0, headers=_headers()) as client:
-        while True:
-            params: dict[str, str] = {
-                "select": "id,ts,symbol,prediction,price_now,outcome,audit,exchange_used",
-                "outcome": "in.(WIN,LOSS)",
-                "audit->outcomes_dual": "is.null",
-                "ts": f"lte.{cutoff}",
-                "order": "ts.asc,id.asc",
-                "limit": str(BATCH_LIMIT),
-            }
-            if cursor_ts is not None and cursor_id is not None:
-                params["or"] = f"(ts.gt.{cursor_ts},and(ts.eq.{cursor_ts},id.gt.{cursor_id}))"
-            response = await client.get(f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}", params=params)
-            if response.status_code != 200:
-                counters["errors"] += 1
+        for row in candidates:
+            counters["scanned"] += 1
+            result = await _repair_row(client, row)
+            key = {
+                "repaired": "repaired",
+                "conflict": "conflicts",
+                "skipped": "skipped",
+                "error": "errors",
+            }[result]
+            counters[key] += 1
+            if result == "error":
                 break
-            rows = response.json() or []
-            if not isinstance(rows, list) or not rows:
-                break
-            counters["scanned"] += len(rows)
-            for row in rows:
-                result = await _repair_row(client, row)
-                key = {
-                    "repaired": "repaired",
-                    "conflict": "conflicts",
-                    "skipped": "skipped",
-                    "error": "errors",
-                }[result]
-                counters[key] += 1
-            last = rows[-1]
-            cursor_ts = str(last.get("ts") or "")
-            cursor_id = str(last.get("id") or "")
-            if len(rows) < BATCH_LIMIT:
-                break
+            cursor_id = int(row["id"])
+            _save_cursor(cursor_id)
 
     log.info("settlement reconciliation complete: %s", counters)
     return counters

@@ -518,15 +518,9 @@ async def _refresh_directional_stats() -> None:
         log.warning("supabase_client unavailable for directional stats: %s", e)
         return
 
-    # The global bounded query is diagnostic only. It must never provide the
-    # authority cohort because newer activity in one symbol can evict another
-    # symbol from the global newest-N window.
-    try:
-        diagnostic_rows = await supabase_client.fetch_predictions(limit=500)
-    except Exception as e:
-        log.warning("aggregate directional diagnostic fetch failed: %s", e)
-        diagnostic_rows = []
-
+    # D1 quota hotfix: no independent global newest-N diagnostic read here.
+    # Aggregate diagnostics are derived from the same per-symbol authority
+    # rows already captured for this cycle.
     def build_diagnostic_by_window(source_rows: list[dict[str, Any]]) -> dict[str, dict]:
         buckets: dict[str, dict[str, dict[str, int]]] = {
             "15m": {
@@ -584,13 +578,6 @@ async def _refresh_directional_stats() -> None:
         return by_window
 
     all_qualified: list[dict[str, Any]] = []
-    for row in diagnostic_rows:
-        if not is_proof_qualified(row):
-            continue
-        symbol = _normalize_symbol(row.get("symbol"))
-        if not symbol:
-            continue
-        all_qualified.append(row)
 
     configured_symbols = {_normalize_symbol(symbol) for symbol in SYMBOLS}
     symbols = sorted(configured_symbols)
@@ -598,19 +585,31 @@ async def _refresh_directional_stats() -> None:
     history_complete_by_symbol: dict[str, bool] = {}
     history_rows_by_symbol: dict[str, int] = {}
     for symbol in symbols:
-        try:
-            symbol_rows = await supabase_client.fetch_authority_history(symbol=symbol)
+        symbol_rows = supabase_client.get_local_authority_rows(
+            symbol,
+            require_current_identity=True,
+        )
+        if symbol_rows:
             history_complete_by_symbol[symbol] = True
-        except Exception as e:
-            log.warning("directional authority history fetch failed for %s: %s", symbol, e)
-            symbol_rows = []
+        elif symbol == "BTCUSDT":
+            # H011's 5-minute AuthoritySnapshotStore owns BTC capture. Never
+            # duplicate that network read from the 15-minute oracle loop.
             history_complete_by_symbol[symbol] = False
+        else:
+            try:
+                symbol_rows = await supabase_client.fetch_authority_history(symbol=symbol)
+                history_complete_by_symbol[symbol] = True
+            except Exception as e:
+                log.warning("directional authority history fetch failed for %s: %s", symbol, e)
+                symbol_rows = []
+                history_complete_by_symbol[symbol] = False
         history_rows_by_symbol[symbol] = len(symbol_rows)
         qualified_by_symbol[symbol] = [
             row for row in symbol_rows
             if is_proof_qualified(row)
             and _normalize_symbol(row.get("symbol")) == symbol
         ]
+        all_qualified.extend(qualified_by_symbol[symbol])
 
     per_symbol: dict[str, dict[str, Any]] = {}
 
