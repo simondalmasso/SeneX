@@ -329,7 +329,7 @@ def list_authority_scopes() -> list[str]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if isinstance(payload, dict) and payload.get("contract") == AUTHORITY_CONTRACT:
+        if isinstance(payload, dict) and payload.get("contract") == SEAL_CONTRACT:
             scope = str(payload.get("scope") or "").strip()
             if scope:
                 scopes.add(scope)

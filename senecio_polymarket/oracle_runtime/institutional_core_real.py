@@ -40,7 +40,8 @@ SHADOW_FETCH_PROJECTION = (
     "confidence",
     "price_now",
     "outcome",
-    "audit",
+    "origin_price_v1:audit->origin_price_v1",
+    "outcomes_dual:audit->outcomes_dual",
     "exchange_used",
 )
 _shadow_fetch_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -104,7 +105,21 @@ def fetch_shadow_authoritative_rows(symbol: str) -> list[dict[str, Any]]:
     if response.status_code != 200:
         raise RuntimeError(f"supabase_learning_http_{response.status_code}")
     data = response.json()
-    rows = [dict(row) for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+    rows: list[dict[str, Any]] = []
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            origin = row.pop("origin_price_v1", None)
+            dual = row.pop("outcomes_dual", None)
+            audit: dict[str, Any] = {}
+            if isinstance(origin, dict):
+                audit["origin_price_v1"] = origin
+            if isinstance(dual, dict):
+                audit["outcomes_dual"] = dual
+            row["audit"] = audit
+            rows.append(row)
     _shadow_fetch_cache[normalized] = (now, [dict(row) for row in rows])
     return rows
 

@@ -301,9 +301,13 @@ class AuthoritySnapshotStore:
         )
         failures: list[str] = []
         if isinstance(history_result, BaseException):
-            failures.append(f"AUTHORITY_HISTORY:{type(history_result).__name__}")
+            detail = str(history_result) or type(history_result).__name__
+            failures.append(
+                f"AUTHORITY_HISTORY:{type(history_result).__name__}:{detail}"
+            )
         if isinstance(count_result, BaseException):
-            failures.append(f"EXACT_COUNT:{type(count_result).__name__}")
+            detail = str(count_result) or type(count_result).__name__
+            failures.append(f"EXACT_COUNT:{type(count_result).__name__}:{detail}")
         if failures:
             raise AuthoritySnapshotRefreshError(";".join(failures))
         if not isinstance(history_result, list):
