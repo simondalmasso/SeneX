@@ -1,0 +1,158 @@
+{
+  "num_order": "ARQ2-STRATEGY-RADAR-006",
+  "base_head": "ae07cac5a7c9cde2b8c31ed9b70b3f39c059a52c",
+  "scope": "AMENDMENT_B_ONLY",
+  "roles": [
+    {
+      "ROLE": "MARKET_JUDGE_SHADOW",
+      "REFERENCE_REPO": "https://github.com/jarrodwatts/jev-trader",
+      "STATE_INPUT": "compact observed market/trade state; jev-trader uses order-book/mid/spread/position context",
+      "DECISION_OUTPUT": "typed buy/sell probabilities; hold only on lateness in reference loop",
+      "MODEL_DEPENDENCY": "TypeSafe Jev optional in repo, with mock fallback for development",
+      "RUNTIME": "Bun/TypeScript; reference app also binds Monad RPC + Kuru execution",
+      "MEMORY_FOOTPRINT": "small in-process state/history; no vector DB required by model role",
+      "HOT_PATH_LATENCY": "reference targets one decision per ~300ms Monad block; README reports ~80ms mock-inference stand-in and ~100ms loop p50 in dry run",
+      "EXTERNAL_SERVICES": [
+        "TypeSafe API for Jev",
+        "Monad RPC",
+        "Kuru exchange"
+      ],
+      "CAN_RUN_INSIDE_H011": "NO",
+      "CAN_RUN_AS_SIDECAR": "YES",
+      "CAN_RUN_AS_RESEARCH_AGENT": "YES",
+      "DUPLICATES_EXISTING_SENEX": "YES",
+      "MARGINAL_VALUE_MEASURABLE": "YES",
+      "FAIL_CLOSED_POSSIBLE": "YES",
+      "KEEP_ROLE": "NO",
+      "RATIONALE": "The model-role pattern is valid, but SENEX already has a frozen HYP-008 Jev shadow judgment arm plus authoritative deterministic score. Importing a second market judge would duplicate an existing shadow role; Monad/Kuru execution is explicitly incompatible."
+    },
+    {
+      "ROLE": "STRATEGY_CURATOR",
+      "REFERENCE_REPO": "https://github.com/AkashPriyadarshii/jev-curate",
+      "STATE_INPUT": "verbatim lead text plus bounded source metadata, primary-evidence links, market family and reproducibility facts",
+      "DECISION_OUTPUT": "KEEP | REJECT | NEEDS_EVIDENCE plus typed relevance/quality/risk judgments; source text remains unchanged",
+      "MODEL_DEPENDENCY": "reference implementation uses TypeSafe Jev 1.13.0 typed Choice/Score/Noul; recommended SENEX contract remains provider-neutral",
+      "RUNTIME": "reference core is Rust with Python/PyO3 bindings and HTTP client; streaming JSONL/Parquet design",
+      "MEMORY_FOOTPRINT": "streaming/no vector DB; outputs can be append-only research artifacts",
+      "HOT_PATH_LATENCY": "OUTSIDE_TRADING_HOT_PATH; reference reports ~20 rows/s TypeSafe-rate-limited and ~24 rows/s local mock",
+      "EXTERNAL_SERVICES": [
+        "TypeSafe API if Jev provider selected"
+      ],
+      "CAN_RUN_INSIDE_H011": "NO",
+      "CAN_RUN_AS_SIDECAR": "YES",
+      "CAN_RUN_AS_RESEARCH_AGENT": "YES",
+      "DUPLICATES_EXISTING_SENEX": "NO",
+      "MARGINAL_VALUE_MEASURABLE": "YES",
+      "FAIL_CLOSED_POSSIBLE": "YES",
+      "KEEP_ROLE": "YES",
+      "RATIONALE": "SENEX has no first-class lead curator. This role can screen PolyDekos/FMZ/GitHub leads without changing score/gates/orders. Fail closed to NEEDS_EVIDENCE when primary proof or provider is unavailable, and evaluate marginal value against AUD-labelled lead decisions."
+    },
+    {
+      "ROLE": "RISK_VETO",
+      "REFERENCE_REPO": "https://github.com/irfndi/prism-liquidity-agent",
+      "STATE_INPUT": "proposal plus observed risk state; Prism additionally uses pool state, fee/IL ratio, drift, TVL velocity and memory",
+      "DECISION_OUTPUT": "ALLOW-like HOLD vs REBALANCE/EXIT/ENTER under deterministic risk gate",
+      "MODEL_DEPENDENCY": "reference role is primarily rule-based; vector memory informs observations",
+      "RUNTIME": "Bun 1.4.x with Solana/Meteora integrations and sqlite-vec memory",
+      "MEMORY_FOOTPRINT": "persistent SQLite vector memory with expiring patterns/warnings/outcomes",
+      "HOT_PATH_LATENCY": "10-minute reference cycle; not designed for SENEX 1h order boundary",
+      "EXTERNAL_SERVICES": [
+        "Solana RPC",
+        "Meteora Data API",
+        "GeckoTerminal"
+      ],
+      "CAN_RUN_INSIDE_H011": "NO",
+      "CAN_RUN_AS_SIDECAR": "YES",
+      "CAN_RUN_AS_RESEARCH_AGENT": "YES",
+      "DUPLICATES_EXISTING_SENEX": "YES",
+      "MARGINAL_VALUE_MEASURABLE": "YES",
+      "FAIL_CLOSED_POSSIBLE": "YES",
+      "KEEP_ROLE": "NO",
+      "RATIONALE": "Its valuable property is deterministic fail-closed gating, but SENEX already owns that responsibility in PortfolioEngine/RiskKernel/ExecutionEngine. Solana LP mechanics and vector memory would add infrastructure without a distinct role."
+    },
+    {
+      "ROLE": "ARQ_EVIDENCE_JUDGE",
+      "REFERENCE_REPO": "https://github.com/qkal/Canny",
+      "STATE_INPUT": "append-only session ledger facts, edits/check results, stop/done claim, optional project rules",
+      "DECISION_OUTPUT": "deterministic allow/block from facts; optional Jev judgment produces advisory notes rather than blocking",
+      "MODEL_DEPENDENCY": "Jev optional; deterministic ledger remains authoritative when no key or uncertain judgment",
+      "RUNTIME": "Node >=22; repository advertises zero runtime dependencies for compiled CLI",
+      "MEMORY_FOOTPRINT": "append-only per-session ledger files; paths/outcomes, not file contents",
+      "HOT_PATH_LATENCY": "development hook path, not market path; README describes Jev judgment around a quarter second",
+      "EXTERNAL_SERVICES": [
+        "TypeSafe API optional"
+      ],
+      "CAN_RUN_INSIDE_H011": "NO",
+      "CAN_RUN_AS_SIDECAR": "NO",
+      "CAN_RUN_AS_RESEARCH_AGENT": "YES",
+      "DUPLICATES_EXISTING_SENEX": "YES",
+      "MARGINAL_VALUE_MEASURABLE": "YES",
+      "FAIL_CLOSED_POSSIBLE": "YES",
+      "KEEP_ROLE": "NO",
+      "RATIONALE": "Canny is strong evidence for 'facts block, judgments advise', but current SENEX ARQ/AUD/CI gates already enforce evidence-before-completion. It belongs to engineering harness governance, not a new SENEX subsystem."
+    },
+    {
+      "ROLE": "TYPED_SCORING_PATTERN",
+      "REFERENCE_REPO": "https://github.com/monteduro/killmyidea",
+      "STATE_INPUT": "text item plus declared evaluation goal",
+      "DECISION_OUTPUT": "multiple typed 0–4 question scores, weighted aggregate, clarity gate and KILL/FIX/SHIP-style categorical verdict",
+      "MODEL_DEPENDENCY": "TypeSafe Jev",
+      "RUNTIME": "Node/Vite server endpoint; optional SQLite analytics archive",
+      "MEMORY_FOOTPRINT": "none required for scoring; optional SQLite evaluation archive",
+      "HOT_PATH_LATENCY": "one external Jev evaluation request; outside trading path",
+      "EXTERNAL_SERVICES": [
+        "TypeSafe API",
+        "DataFast optional analytics"
+      ],
+      "CAN_RUN_INSIDE_H011": "NO",
+      "CAN_RUN_AS_SIDECAR": "YES",
+      "CAN_RUN_AS_RESEARCH_AGENT": "YES",
+      "DUPLICATES_EXISTING_SENEX": "YES",
+      "MARGINAL_VALUE_MEASURABLE": "YES",
+      "FAIL_CLOSED_POSSIBLE": "YES",
+      "KEEP_ROLE": "NO",
+      "RATIONALE": "The multi-question typed-scoring template is useful design evidence for STRATEGY_CURATOR, but its startup rubric/thresholds are domain-specific and it should not become a second curator role."
+    }
+  ],
+  "generality_evidence": [
+    {
+      "repo": "https://github.com/lahfir/agent-desktop",
+      "pattern": "OBSERVE→typed/actionable state→safe retryable action",
+      "senex_need_created": false
+    },
+    {
+      "repo": "https://github.com/fhshaik/typesafe-mario",
+      "pattern": "structured emulator state→Jev Choice→controller input",
+      "senex_need_created": false
+    },
+    {
+      "repo": "https://github.com/RomanSlack/jev-drone",
+      "pattern": "symbolic scene→typed tactical judgment; classical safety keeps veto",
+      "senex_need_created": false
+    },
+    {
+      "repo": "https://github.com/emrickgarrett/OneVOneJev",
+      "pattern": "structured server game state→typed action choices with heuristic fallback",
+      "senex_need_created": false
+    },
+    {
+      "repo": "https://github.com/jexp/neo4jev",
+      "pattern": "graph state→Choice/Noul→bounded next-hop decision",
+      "senex_need_created": false
+    }
+  ],
+  "resource_constraints": {
+    "current_h011": "Python/small-memory target",
+    "laya_model_weights_approx_gb": 1.7,
+    "laya_runtime_budget_approx_gb": 2,
+    "LAYA_INSIDE_CURRENT_H011": "NO",
+    "laya_future_option": "separate research worker/sidecar only with explicit sufficient RAM",
+    "jev_durable_probe_evidence": {
+      "artifact": "research/jev_shadow_arm_v1.json",
+      "model_exact": "jev-1.13.0",
+      "historical_probe_passed": true,
+      "historical_probe_timestamp_utc": "2026-09-20T04:13:08.657Z",
+      "current_runtime_availability": "UNRESOLVED"
+    }
+  }
+}

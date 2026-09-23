@@ -1,0 +1,63 @@
+{
+  "num_order": "ARQ2-STRATEGY-RADAR-006",
+  "EMBED_CANDIDATE": "STRATEGY_CURATOR",
+  "REFERENCE_REPO": "https://github.com/AkashPriyadarshii/jev-curate",
+  "MODEL_PROVIDER": "NONE",
+  "JEV_RUNTIME_AVAILABLE": "UNRESOLVED",
+  "LAYA_H011_FIT": "NO",
+  "SIDECAR_REQUIRED": "YES",
+  "WHY_NOT_DUPLICATE": "No existing SENEX component owns external strategy-lead triage with verbatim source preservation, primary-evidence verification and KEEP/REJECT/NEEDS_EVIDENCE outputs. It stays outside score/risk/execution.",
+  "MINIMAL_INPUT_SCHEMA": {
+    "lead_id": "string",
+    "source_type": "X|GitHub|paper|other",
+    "source_url": "string",
+    "source_text_verbatim": "string",
+    "source_timestamp": "UTC|null",
+    "claimed_market_family": "string|null",
+    "claimed_strategy": "string|null",
+    "primary_evidence": [
+      {
+        "url": "string",
+        "kind": "profile|market|repo|paper",
+        "verified": "boolean"
+      }
+    ],
+    "selection_bias_flags": [
+      "string"
+    ],
+    "senex_context": {
+      "target_horizon": "1h",
+      "allowed_role": "research_only"
+    }
+  },
+  "MINIMAL_OUTPUT_SCHEMA": {
+    "decision": "KEEP|REJECT|NEEDS_EVIDENCE",
+    "relevance": "DIRECT_RESEARCH|REGIME_OR_RISK|SEPARATE_SLEEVE|INCOMPATIBLE",
+    "evidence_quality": "PRIMARY_VERIFIED|PARTIAL|UNVERIFIED",
+    "replicability": "HIGH|MEDIUM|LOW|UNVERIFIED",
+    "missing_evidence": [
+      "string"
+    ],
+    "reason_codes": [
+      "string"
+    ],
+    "confidence": "optional typed probability if provider supplies it",
+    "source_text_mutated": false
+  },
+  "SHADOW_METRIC": "On a preregistered AUD-labelled lead set, compare curator decisions against blinded human/AUD gold labels: precision of KEEP, false-KEEP rate, NEEDS_EVIDENCE recall on unverified claims, and review-time reduction. No trading metric is used.",
+  "FALSIFIER": "Reject the role if it fails to improve review-time while keeping false-KEEP rate at or below the deterministic/manual baseline, or if provider unavailability forces heuristic substitution instead of NEEDS_EVIDENCE.",
+  "RESOURCE_PLAN": "Do not run inside H011. First keep a provider-neutral research contract. Historical Jev probe exists but current runtime is unverified; Laya may only be a future >=2GB research worker/sidecar. No vector DB or persistent model memory is required.",
+  "ARQ_OWNER": "ARQ2",
+  "MARGINAL_VALUE_MEASURABLE": "YES",
+  "FAIL_CLOSED": "YES: provider/error/missing primary evidence => NEEDS_EVIDENCE; never KEEP by fallback heuristic",
+  "IMPLEMENTATION_ORDER_RECOMMENDED": "NO",
+  "IMPLEMENTATION_BLOCKER": "Current provider availability/resource allocation is not proven in this order. AUD may later issue one shadow-only ARQ1 order after provider check.",
+  "DUPLICATE_ROLE_AVOIDED": [
+    "MARKET_JUDGE_SHADOW",
+    "RISK_VETO",
+    "ARQ_EVIDENCE_JUDGE",
+    "TYPED_SCORING_PATTERN"
+  ],
+  "ORDER005_TOP3_CHANGED": "NO",
+  "edge": "UNPROVEN"
+}
