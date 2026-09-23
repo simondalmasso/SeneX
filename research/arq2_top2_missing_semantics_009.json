@@ -1,0 +1,133 @@
+{
+  "num_order": "ARQ2-TOP2-MISSING-SEMANTICS-009",
+  "status": "COMPLETE",
+  "base_head": "bcb41ffe4ed1409c2270a954f113ca46047645fc",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "source_order": "ARQ2-TOP2-ABLATION-008",
+  "source_dataset_sha256": "606eda9b102243b08fc21fafed954c1da9a22d28edbeb89054204983d7221e22",
+  "row_id": 5858,
+  "row_integrity": "PASS",
+  "d1_read": {
+    "transport": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+    "query_shape": "SELECT prediction_id,payload,audit_digest,payload_sha256 FROM oracle_prediction_audit_cold WHERE prediction_id=5858 LIMIT 1",
+    "payload_sha256_persisted": "a176dcfbc434ff3c2ab81022d194baf259a7cb8c1ac60254223d1c658be5d7e4",
+    "payload_sha256_computed": "a176dcfbc434ff3c2ab81022d194baf259a7cb8c1ac60254223d1c658be5d7e4",
+    "payload_hash_match": true,
+    "rows_written": 0,
+    "changed_db": false,
+    "gateway_token_used": false,
+    "secret_retrieval": false
+  },
+  "runtime_provenance": {
+    "exact": true,
+    "source_commit": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a"
+  },
+  "persisted_decision_evidence": {
+    "availability_location": "audit.pipeline.step1_market.feature_availability_v1.oi_momentum",
+    "step2_feature_availability_present": false,
+    "oi_pressure_persisted": null,
+    "oi_availability_status": "MISSING",
+    "oi_availability_source": "okx:public_swap_open_interest",
+    "oi_fallback_value": 0,
+    "oi_observed_value": null,
+    "oi_transport_status": "PRIMARY_SOURCE",
+    "oi_instrument": "BTC/USDT:USDT",
+    "oi_market_type": "swap",
+    "masked_features": [
+      "oi_momentum"
+    ],
+    "pressures": {
+      "bidask": 0.019174,
+      "funding": -0.003,
+      "oi": null,
+      "orderflow": 0.068213,
+      "polymarket": 0,
+      "price_momentum": 0.000818,
+      "volume_delta": -0.000241
+    },
+    "numeric_pressures": {
+      "bidask": 0.019174,
+      "funding": -0.003,
+      "orderflow": 0.068213,
+      "polymarket": 0,
+      "price_momentum": 0.000818,
+      "volume_delta": -0.000241
+    },
+    "total_pressure_persisted": 0.084964,
+    "numeric_pressures_sum": 0.084964,
+    "algebra_delta": 0,
+    "algebra_tolerance": 0.000001,
+    "algebra_match": true
+  },
+  "c7_source_evidence": [
+    {
+      "path": "senecio_polymarket/oracle_runtime/institutional_core.py",
+      "blob_id": "27f3af180936a17fde726e651ad26fdc07a7f62a",
+      "content_sha256": "5c6a005203dad894ad376e37f5d0640ab5350650ab25486f670dd1eb161d6481",
+      "relevant_lines": [
+        "524-562",
+        "564-631",
+        "633-643"
+      ],
+      "proof": [
+        "ingest_market copies explicit feature availability and forces any non-observed feature state to numeric 0.0",
+        "compress_features calls base compression, masks unavailable pressure entries to None, excludes None from numeric_pressures, and recomputes total_pressure as sum(numeric_pressures)",
+        "decide uses this wrapper ingest_market/compress_features path before producing pipeline audit"
+      ]
+    },
+    {
+      "path": "senecio_polymarket/oracle/institutional_core.py",
+      "blob_id": "4e0da5786eda17da4d35934067293f065ba890af",
+      "content_sha256": "8d93224ea40118665f5e654b20fb9b6be30cef44842830abfe4befc800db968d",
+      "relevant_lines": [
+        "441-550",
+        "1091-1143"
+      ],
+      "proof": [
+        "base compression computes oi_pressure directly from market_state['oi_momentum'] times the OI weight",
+        "base decide always performs ingest_market then compress_features and persists market_state as step1_market and features as step2_features"
+      ]
+    },
+    {
+      "path": "senecio_polymarket/oracle/exchange_connector.py",
+      "blob_id": "2327c159b76650950610075028135813b943b545",
+      "content_sha256": "19ece469023d057c169b4405a2c8c5b73f9b4bf34ebbe0c531171c215e19f615",
+      "relevant_lines": [
+        "2365-2369",
+        "2393-2418"
+      ],
+      "proof": [
+        "a point-in-time OI amount is explicitly not treated as OI momentum",
+        "when OI momentum is not observed, connector persists MISSING/unavailable semantics with fallback_value 0.0"
+      ]
+    }
+  ],
+  "semantic_proof": {
+    "condition_1_oi_pressure_null": true,
+    "condition_2_availability_exists": true,
+    "condition_3_status_not_real_observed": true,
+    "condition_4_mask_contains_oi_momentum": true,
+    "condition_5_unavailable_set_zero_before_base_compression": true,
+    "condition_6_wrapper_masks_oi_and_recomputes_total_excluding_null": true,
+    "condition_7_persisted_algebra_consistent": true,
+    "condition_8_no_c7_runtime_path_retains_nonzero_oi_contribution_under_missing_status": true,
+    "scope_note": "feature_availability_v1 is persisted in step1_market by the exact c7 decide pipeline; missing_input_mask_v1 and pressures are persisted in step2_features."
+  },
+  "null_oi_semantics": "MASKED_UNAVAILABLE_ZERO_EFFECTIVE_CONTRIBUTION",
+  "recovery_verdict": "SEMANTICALLY_RECOVERABLE_WITHOUT_IMPUTATION",
+  "order008_mutated": false,
+  "zero_substitution_performed": false,
+  "labels_accessed": false,
+  "auc_runs": 0,
+  "bootstrap_runs": 0,
+  "parameters_tuned": 0,
+  "d1_writes": 0,
+  "core_mutations": 0,
+  "model_mutations": 0,
+  "deployments": 0,
+  "edge": "UNPROVEN",
+  "live": "NO",
+  "real_orders": 0,
+  "capital": 0,
+  "stop_after_return": true
+}
