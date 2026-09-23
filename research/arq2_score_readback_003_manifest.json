@@ -1,0 +1,66 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-003",
+  "status": "BLOCK_REAL",
+  "repo": "simondalmasso/SENEX",
+  "branch": "research/edge-lab-v1",
+  "base_head": "d3a5cfe9fa32c44a56c593ae794f35a620980fa3",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "mode": "READ_ONLY_DATA_PLANE + RESEARCH_ARTIFACTS_ONLY",
+  "blocker": "AUTHENTICATED_GATEWAY_CLIENT_CREDENTIAL_UNAVAILABLE_IN_EXECUTION_SESSION",
+  "authentication_evidence": {
+    "gateway_worker": "senex-order072-d1-gateway",
+    "gateway_secret_name_present": "GATEWAY_TOKEN",
+    "gateway_secret_value_read": false,
+    "local_SUPABASE_URL_present": false,
+    "local_SUPABASE_KEY_present": false,
+    "local_GATEWAY_TOKEN_present": false,
+    "gitlab_ci_SUPABASE_URL": "sandbox-unreachable",
+    "gitlab_ci_SUPABASE_KEY": "sandbox-fake",
+    "public_h011_full_audit_proxy": false
+  },
+  "strict_path_preserved": {
+    "direct_d1_sql_used": false,
+    "count_used": false,
+    "offset_scan_used": false,
+    "counts_endpoint_used": false,
+    "authority_history_select_changed": false,
+    "authority_snapshot_touched": false,
+    "cold_query_attempted": false
+  },
+  "readback": {
+    "rows_requested": 0,
+    "rows_received": 0,
+    "raw_pages": [],
+    "full_audit_n": null,
+    "decision_replay_n": null,
+    "step2_score_n": null,
+    "waterfall_n": null,
+    "settled_1h_n": null,
+    "exact_runtime_provenance_n": null,
+    "fully_joinable_n": null,
+    "completeness_pct": null,
+    "completeness_pass": null
+  },
+  "phase2": {
+    "executed": false,
+    "reason": "PHASE_1_NOT_EXECUTABLE_WITHOUT_AUTHENTICATED_GATEWAY_CLIENT_CREDENTIAL",
+    "post_c7_homogeneous_n": null,
+    "nonoverlap_1h_n": null,
+    "auc": null,
+    "auc_ci95": null,
+    "q5_q1_lift": null,
+    "q5_q1_ci95": null,
+    "waterfall_top": null,
+    "downstream_portfolio_attribution": "UNRESOLVED"
+  },
+  "control": {
+    "new_ledger_created": false,
+    "core_mutations": 0,
+    "deployments": 0,
+    "hyp008_mutations": 0,
+    "edge": "UNPROVEN",
+    "live": false,
+    "real_orders": 0,
+    "capital": 0
+  }
+}

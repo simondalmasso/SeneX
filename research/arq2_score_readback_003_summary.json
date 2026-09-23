@@ -1,0 +1,14 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-003",
+  "status": "BLOCK_REAL",
+  "decision_output": null,
+  "verdict": null,
+  "reason": "No authorized client credential for the existing gateway/COLD read path is available in this execution session. The server-side GATEWAY_TOKEN is configured but Wrangler does not expose its value. Local session variables are absent; GitLab CI intentionally injects sandbox-fake values; H011 public authority routes do not hydrate full audit.",
+  "next_minimal_action": "Provide or attach an authorized gateway client credential to the execution environment without exposing it in chat/logs, then rerun the initial bounded 80-row keyset probe exactly as frozen.",
+  "rows_requested": 0,
+  "rows_received": 0,
+  "fully_joinable_n": null,
+  "completeness_pct": null,
+  "phase2_executed": false,
+  "new_ledger_created": false
+}

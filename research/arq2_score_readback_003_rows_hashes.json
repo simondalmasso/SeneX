@@ -1,0 +1,6 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-003",
+  "status": "NO_RAW_PAGES_ACQUIRED",
+  "page_hashes": [],
+  "note": "No gateway request was issued, so there are no raw returned bytes to hash."
+}
