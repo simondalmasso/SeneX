@@ -1,0 +1,367 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-004",
+  "raw_payload_persisted": false,
+  "reason": "RAW_WRANGLER_PAGES_AND_COLD_PAYLOADS_RETAINED_ONLY_IN_EPHEMERAL_EXECUTION_WORKSPACE;REPO_STORES_HASH_MANIFEST",
+  "rows": [
+    {
+      "id": 5986,
+      "ts": "2026-09-23T04:12:43.749545Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "9a21d71537700579febf0f339376db448b4c3f054501db5d63108d1f1a146c8c",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5984,
+      "ts": "2026-09-23T03:57:10.533132Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "3edb87317ac9cc46d6e4ea540f047de1430c8965040442a84c5b63db132ad97a",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5982,
+      "ts": "2026-09-23T03:41:46.837668Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "fd669e8e80211d2afebfe6242e2f37db507da7c218738bca9c4916c1e1260121",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5980,
+      "ts": "2026-09-23T03:26:25.655624Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "7cc853026c1a4c42368ea470eb9a0a365f082f18db2a65594d97863d73923412",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5978,
+      "ts": "2026-09-23T03:10:56.227642Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "7d54317325b2e5700c9501b832872f58bb45191a59128fcacaa12a993c3514f1",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5972,
+      "ts": "2026-09-23T02:24:23.526498Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "477481d764db21801e4ca9a64b0746d5cf9077c259390dbc7645eada3de15667",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5970,
+      "ts": "2026-09-23T02:08:51.034815Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "9f5969a88fbc9687903ccbb2bc89f8bc18dfd5ef243fd14858f68f26dc675f43",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5968,
+      "ts": "2026-09-23T01:53:14.924083Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "229bed0e7ff5cc101a5476971d014fdb85f62c0f44cda21c28d9d5621828d8b9",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5966,
+      "ts": "2026-09-23T01:37:46.388567Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "d6905366e55574b9cf6fcdb681664c7e97d6d657b1807330038865d2cc851660",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5964,
+      "ts": "2026-09-23T01:22:16.252502Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "9183d036505f3f86de0467e9938fa7759e454d0b11e78e475f55f2d573c74ed9",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5962,
+      "ts": "2026-09-23T01:06:44.361546Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "0ceee038371cd132c76a39637875cf79dfacd7efa31bc3680bb7d9526acfada4",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5958,
+      "ts": "2026-09-23T00:35:42.731711Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "eb939a82174b633c9d8f822634cacd4bf3c771dcec24d9b5fbddea380bf99fe8",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5956,
+      "ts": "2026-09-23T00:20:22.910706Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "3e737c1959d18a87d2bab41be77eef700b4988eaf9f02830947dc862e6083e7d",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5954,
+      "ts": "2026-09-23T00:04:53.660900Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "f89e033f51f4878fce0f94d887172402385f68f7530dc8a84b8ae615cb001248",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5952,
+      "ts": "2026-09-22T23:49:35.231565Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "a7927584932bc84b939fa6c79482b8a4471ec9beb1c929607ccd5867a94f8776",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5948,
+      "ts": "2026-09-22T23:18:45.136842Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "26f47e4b02f2f7e3e5ac28d91f3327bd31644030a5df890fe69d9e790a103cbc",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5938,
+      "ts": "2026-09-22T22:01:50.226137Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "3938be744fac3f7eee8d99718d565ae384fe61839e2d2d89e8438525c6a92676",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5926,
+      "ts": "2026-09-22T20:29:07.029062Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "b84d653fd0512b03911dd8d8aac93c76513ee0d8670a1a93bedf3f83c90f4bd9",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5924,
+      "ts": "2026-09-22T20:13:34.821504Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "f47e1af7fbcb8b1e4031e51423de8367aaf8bfbebbe520816dff4131e03458e0",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5922,
+      "ts": "2026-09-22T19:58:03.662918Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "1b13313065e5b5d3ac411062c55f1cbb30b747c0a76595db4467e0449282afa0",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5920,
+      "ts": "2026-09-22T19:42:30.035419Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "15835fda77d91fdf2e895c8504291d6ddb27b818310272b38d34f78a5b29f6b0",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5918,
+      "ts": "2026-09-22T19:26:58.829668Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "31db9385934216d0033ce086ee13ca21f18f02ed2ef1a05b7fd1b4560cb11a2e",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5916,
+      "ts": "2026-09-22T19:11:27.325162Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "f9a6b0535ece69f6ba8f9c9358bef15c65db2b918857f9065d9a54f0be0ab559",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5914,
+      "ts": "2026-09-22T18:56:03.772101Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "98f3887ff4a20d56a7bce4d09c5ed0721282bf32fc7bc56beb424ac3f56848f4",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5912,
+      "ts": "2026-09-22T18:40:32.833097Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "9beb9cc22180ce9f91c49c7f88b8cc928c05f84b6f3a207ff7590d23e0eae14d",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5910,
+      "ts": "2026-09-22T18:25:01.994413Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "88143c2e14c4a5d7ea65aa74f766a6ea4c815707a1a5eeb71e9ff1f2ef547fe0",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5906,
+      "ts": "2026-09-22T17:53:46.822595Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "3d7ef8d5e46854764194e7a81bb3d7c731652115692c17d0597d00f24b4339b4",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5904,
+      "ts": "2026-09-22T17:38:11.458617Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "1485ac8f05ea506753d0ab4f1b92d53f26203cb05fd7eda2546bc5db6e85f401",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5902,
+      "ts": "2026-09-22T17:22:38.339027Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "09f27cccaf35d8e2a222e918b01dc9f588de8acdb3bead4b024f88c393f34b57",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5900,
+      "ts": "2026-09-22T17:07:03.031133Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "f2f0c63fb57f9b24233890c3521d249bb25aab9cbb284cc70f80aec8be5c4e82",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5898,
+      "ts": "2026-09-22T16:51:32.326382Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "0704f8753d3185e5efe3b84f2ff0927c4be7a687d5e9c416736c911080e962d0",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5896,
+      "ts": "2026-09-22T16:35:56.322701Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "0d453ab24763bdf23b1092784e54d18a959c22dec9ac044fb02653489fcae1a9",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5894,
+      "ts": "2026-09-22T16:20:16.929626Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "8acb2478541a61342c9ee94e2e884f71042961b07293bb5cc57fd5fb2bbd02e8",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5890,
+      "ts": "2026-09-22T15:49:18.033015Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "2e0549bc3c50e65e60887e071259250663b10f8dc35b0cd1747d005dd002198c",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5888,
+      "ts": "2026-09-22T15:33:40.425943Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "51eb418b08f926f54170c2ac7ec80fc5cf83e3216ac1d771479cded7acfcd667",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5886,
+      "ts": "2026-09-22T15:18:10.327720Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "9a50e2fd443d30b6b8e91ecab6e88aecd17e3349ce8899b56cb3d7b58cb8a677",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5884,
+      "ts": "2026-09-22T15:02:33.220033Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "bde7f2fafcbb208d0de6ca24fc171a26d687aaee51bc4286224c017f3e35ba00",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5882,
+      "ts": "2026-09-22T14:46:59.132978Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "cb62339bc7cea83f52df42d2941400200720a6b232b63f0ad245102e59619590",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5878,
+      "ts": "2026-09-22T14:15:40.540882Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "52338d6232767145477b7f68e1b5ae6a659e5e338f9c1731adf30490df7a6c55",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5874,
+      "ts": "2026-09-22T13:44:32.025633Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "d8faa2147cb5e878b7f50a6df579edb11149cb188de1163bdf5c91fcb47df816",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5872,
+      "ts": "2026-09-22T13:28:37.602590Z",
+      "prediction": "LONG",
+      "cold_payload_sha256": "97edc000ccc304a640fb643d86017ea4fd580fb758d595e2c8353cb73226118d",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5870,
+      "ts": "2026-09-22T13:13:16.212394Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "8a6cd79d1c67440bb77ae920695b048ce5f2347034f5532205a1db9333850aa0",
+      "nonoverlap_selected": false
+    },
+    {
+      "id": 5868,
+      "ts": "2026-09-22T12:57:43.158762Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "94eee935da30df139250b8492453d755faa29cc87f789df687c62d738b9c5a01",
+      "nonoverlap_selected": true
+    },
+    {
+      "id": 5860,
+      "ts": "2026-09-22T11:55:39.132161Z",
+      "prediction": "SHORT",
+      "cold_payload_sha256": "d8348d99fd2d3a9e62e27129be342fea51750d3797b3e6bb0f621dd8c94ddbf2",
+      "nonoverlap_selected": true
+    }
+  ],
+  "page_hashes": [
+    {
+      "kind": "HOT",
+      "page": 1,
+      "sha256": "cbbfe3d00e4d81faee2904e44ab53cacceae2544804e2f703612753091168e24"
+    },
+    {
+      "kind": "COLD",
+      "page": 1,
+      "sha256": "3b47f1a5a495af9c475c5ab4707c4bec76559355a2414b10033339b4fead66f7"
+    },
+    {
+      "kind": "HOT",
+      "page": 2,
+      "sha256": "40b896b286e0a885b5715b96a6f5cd13cb1cc20404b6e1a2b6f0470c1c7d33dc"
+    },
+    {
+      "kind": "COLD",
+      "page": 2,
+      "sha256": "9b34e761c37601ecf0923c355bbc2db9ab40338c37016484f0cf961dfb5cc8f6"
+    },
+    {
+      "kind": "HOT",
+      "page": 3,
+      "sha256": "1240ec8ca4118b41f42f249b0ee4b197bef1c58f5b35a17ff207fa83fe21db91"
+    },
+    {
+      "kind": "HOT",
+      "page": 4,
+      "sha256": "8995cca39cff7c73acf9d6220e15d33c04d4016f1dc3f9bc6c3c19b873120074"
+    },
+    {
+      "kind": "HOT",
+      "page": 5,
+      "sha256": "8ec22fe7e48f625cfc11b3aac45dd91f473e9d183773a879a309216e12e30f61"
+    },
+    {
+      "kind": "HOT",
+      "page": 6,
+      "sha256": "1f86606263f5b68e19511be515f1a0912ba4722d3fbf79ebd339242c326a2b65"
+    },
+    {
+      "kind": "HOT",
+      "page": 7,
+      "sha256": "25486b05e742aafdfbc5a641a50d790a9b380477ebce000f2da56cb0a51be2e7"
+    },
+    {
+      "kind": "HOT",
+      "page": 8,
+      "sha256": "05d6609a88a58e6b947491183a126793f4611f153dce10b726f1f420d0bdb8d3"
+    }
+  ]
+}

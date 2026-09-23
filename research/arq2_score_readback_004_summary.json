@@ -1,0 +1,133 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-004",
+  "status": "COMPLETE",
+  "completeness": {
+    "full_audit_n": 44,
+    "decision_replay_n": 44,
+    "step2_score_n": 44,
+    "waterfall_n": 44,
+    "settled_1h_n": 44,
+    "exact_runtime_provenance_n": 44,
+    "origin_proof_n": 44,
+    "settlement_provenance_n": 44,
+    "fully_joinable_n": 44,
+    "denominator_n": 44,
+    "pct": 100,
+    "pass": true
+  },
+  "diagnostic_only": true,
+  "post_c7_homogeneous_n": 44,
+  "nonoverlap_1h_n": 15,
+  "directional_n": 15,
+  "tie_n": 0,
+  "auc": 0.3148148148148148,
+  "auc_ci95": [
+    0.03835470085470088,
+    0.6590909090909091
+  ],
+  "quintile_up_frequency": [
+    0.6666666666666666,
+    0.6666666666666666,
+    1,
+    0.3333333333333333,
+    0.3333333333333333
+  ],
+  "q5_q1_lift": -0.3333333333333333,
+  "q5_q1_ci95": [
+    -1,
+    0.33333333333333337
+  ],
+  "raw_direction_correct_n": 5,
+  "raw_direction_correct_rate": 0.3333333333333333,
+  "declared_direction_correct_n": 5,
+  "declared_direction_correct_rate": 0.3333333333333333,
+  "waterfall_counts": {
+    "DIRECTIONAL_EXECUTE": 44
+  },
+  "raw_reason_counts": {
+    "EU_EXECUTE: dir=LONG conv=0.7239 gate=0.980 ev=0.001023 risk=0.0000 size=0.0766 kelly=0.1810 conv_mult=0.9799 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7220 gate=0.979 ev=0.000610 risk=0.0000 size=0.0763 kelly=0.1805 conv_mult=0.9794 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6981 gate=0.973 ev=0.001162 risk=0.0000 size=0.0733 kelly=0.1745 conv_mult=0.9728 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.5349 gate=0.835 ev=0.000974 risk=0.0000 size=0.0451 kelly=0.1337 conv_mult=0.8347 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6987 gate=0.973 ev=0.000244 risk=0.0000 size=0.0734 kelly=0.1747 conv_mult=0.9730 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.4815 gate=0.727 ev=0.000784 risk=0.0000 size=0.0402 kelly=0.1204 conv_mult=0.7268 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6068 gate=0.923 ev=0.000158 risk=0.0000 size=0.0566 kelly=0.1517 conv_mult=0.9228 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.8360 gate=0.995 ev=0.000185 risk=0.0000 size=0.0955 kelly=0.2090 conv_mult=0.9947 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.8384 gate=0.995 ev=0.000969 risk=0.0000 size=0.0958 kelly=0.2096 conv_mult=0.9948 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5017 gate=0.772 ev=0.000064 risk=0.0000 size=0.0391 kelly=0.1254 conv_mult=0.7722 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6947 gate=0.972 ev=0.000616 risk=0.0000 size=0.0729 kelly=0.1737 conv_mult=0.9717 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7277 gate=0.981 ev=0.000129 risk=0.0000 size=0.0770 kelly=0.1819 conv_mult=0.9808 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5917 gate=0.909 ev=0.000401 risk=0.0000 size=0.0543 kelly=0.1479 conv_mult=0.9089 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.8253 gate=0.994 ev=0.000293 risk=0.0000 size=0.0943 kelly=0.2063 conv_mult=0.9940 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7263 gate=0.980 ev=0.000276 risk=0.0000 size=0.0769 kelly=0.1816 conv_mult=0.9805 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.7235 gate=0.980 ev=0.000186 risk=0.0000 size=0.0765 kelly=0.1809 conv_mult=0.9798 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6438 gate=0.949 ev=0.000210 risk=0.0000 size=0.0660 kelly=0.1610 conv_mult=0.9491 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.8301 gate=0.994 ev=0.000481 risk=0.0000 size=0.0948 kelly=0.2075 conv_mult=0.9943 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6878 gate=0.969 ev=0.000363 risk=0.0000 size=0.0720 kelly=0.1720 conv_mult=0.9693 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.7986 gate=0.992 ev=0.001204 risk=0.0000 size=0.0910 kelly=0.1997 conv_mult=0.9917 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6973 gate=0.973 ev=0.001003 risk=0.0000 size=0.0732 kelly=0.1743 conv_mult=0.9725 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6692 gate=0.962 ev=0.000298 risk=0.0000 size=0.0695 kelly=0.1673 conv_mult=0.9620 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5910 gate=0.908 ev=0.000173 risk=0.0000 size=0.0542 kelly=0.1477 conv_mult=0.9082 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5481 gate=0.855 ev=0.000428 risk=0.0000 size=0.0506 kelly=0.1370 conv_mult=0.8553 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.8255 gate=0.994 ev=0.000768 risk=0.0000 size=0.0943 kelly=0.2064 conv_mult=0.9940 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7190 gate=0.979 ev=0.000571 risk=0.0000 size=0.0760 kelly=0.1797 conv_mult=0.9787 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.4324 gate=0.596 ev=0.000322 risk=0.0000 size=0.0278 kelly=0.1081 conv_mult=0.5961 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7118 gate=0.977 ev=0.000466 risk=0.0000 size=0.0751 kelly=0.1779 conv_mult=0.9768 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.5763 gate=0.892 ev=0.000768 risk=0.0000 size=0.0555 kelly=0.1441 conv_mult=0.8924 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5904 gate=0.908 ev=0.000512 risk=0.0000 size=0.0578 kelly=0.1476 conv_mult=0.9076 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6162 gate=0.931 ev=0.000855 risk=0.0000 size=0.0579 kelly=0.1541 conv_mult=0.9305 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6509 gate=0.953 ev=0.000223 risk=0.0000 size=0.0670 kelly=0.1627 conv_mult=0.9530 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.8373 gate=0.995 ev=0.000614 risk=0.0000 size=0.0957 kelly=0.2093 conv_mult=0.9948 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5544 gate=0.864 ev=0.001049 risk=0.0000 size=0.0517 kelly=0.1386 conv_mult=0.8645 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7272 gate=0.981 ev=0.000163 risk=0.0000 size=0.0770 kelly=0.1818 conv_mult=0.9807 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7234 gate=0.980 ev=0.000675 risk=0.0000 size=0.0765 kelly=0.1809 conv_mult=0.9798 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.5720 gate=0.887 ev=0.000055 risk=0.0000 size=0.0513 kelly=0.1430 conv_mult=0.8873 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6140 gate=0.929 ev=0.000095 risk=0.0000 size=0.0576 kelly=0.1535 conv_mult=0.9288 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.7204 gate=0.979 ev=0.000071 risk=0.0000 size=0.0761 kelly=0.1801 conv_mult=0.9790 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6164 gate=0.931 ev=0.002376 risk=0.0000 size=0.0579 kelly=0.1541 conv_mult=0.9306 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=LONG conv=0.6919 gate=0.971 ev=0.001528 risk=0.0000 size=0.0725 kelly=0.1730 conv_mult=0.9708 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.7130 gate=0.977 ev=0.000736 risk=0.0000 size=0.0752 kelly=0.1782 conv_mult=0.9772 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6500 gate=0.953 ev=0.000377 risk=0.0000 size=0.0668 kelly=0.1625 conv_mult=0.9526 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1,
+    "EU_EXECUTE: dir=SHORT conv=0.6208 gate=0.934 ev=0.000782 risk=0.0000 size=0.0626 kelly=0.1552 conv_mult=0.9340 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000": 1
+  },
+  "final_prediction_counts": {
+    "LONG": 27,
+    "SHORT": 17
+  },
+  "descriptive_by_prediction": {
+    "LONG": {
+      "n": 7,
+      "auc": 0.3333333333333333,
+      "future_up_rate": 0.42857142857142855,
+      "direction_correct_rate": 0.42857142857142855
+    },
+    "SHORT": {
+      "n": 8,
+      "auc": 0.5833333333333334,
+      "future_up_rate": 0.75,
+      "direction_correct_rate": 0.25
+    }
+  },
+  "descriptive_by_regime": {
+    "BULL": {
+      "n": 6,
+      "auc": 0.125,
+      "future_up_rate": 0.6666666666666666,
+      "direction_correct_rate": 0.16666666666666666
+    },
+    "NEUTRAL": {
+      "n": 9,
+      "auc": 0.3,
+      "future_up_rate": 0.5555555555555556,
+      "direction_correct_rate": 0.4444444444444444
+    }
+  },
+  "bootstrap": {
+    "replicates": 5000,
+    "seed": 20260923,
+    "auc_valid_replicates": 4998,
+    "lift_valid_replicates": 5000
+  },
+  "downstream_portfolio_attribution": "UNRESOLVED",
+  "verdict": "EXISTING_AUDIT_SUFFICIENT"
+}

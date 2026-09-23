@@ -1,0 +1,128 @@
+{
+  "num_order": "ARQ2-SCORE-READBACK-004",
+  "status": "COMPLETE",
+  "transport": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+  "base_head": "05aef91096433385edb3f4c271316dfa717dcae2",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "post_c7_cutoff_created_at_utc": "2026-09-22T11:37:34Z",
+  "bounds": {
+    "page_size": 80,
+    "max_hot_pages": 8,
+    "max_hot_rows": 640,
+    "offset_used": false,
+    "count_used": false,
+    "admin_scan_used": false
+  },
+  "readback": {
+    "hot_rows_examined": 640,
+    "btc_settled_candidates": 44,
+    "cold_rows_requested": 44,
+    "cold_rows_received": 44,
+    "integrity_mismatch_n": 0,
+    "probe_population_lt80": true
+  },
+  "page_evidence": [
+    {
+      "kind": "HOT",
+      "page": 1,
+      "sha256": "cbbfe3d00e4d81faee2904e44ab53cacceae2544804e2f703612753091168e24",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "COLD",
+      "page": 1,
+      "sha256": "3b47f1a5a495af9c475c5ab4707c4bec76559355a2414b10033339b4fead66f7",
+      "rows": 17,
+      "rows_read": 51,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 2,
+      "sha256": "40b896b286e0a885b5715b96a6f5cd13cb1cc20404b6e1a2b6f0470c1c7d33dc",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "COLD",
+      "page": 2,
+      "sha256": "9b34e761c37601ecf0923c355bbc2db9ab40338c37016484f0cf961dfb5cc8f6",
+      "rows": 27,
+      "rows_read": 81,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 3,
+      "sha256": "1240ec8ca4118b41f42f249b0ee4b197bef1c58f5b35a17ff207fa83fe21db91",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 4,
+      "sha256": "8995cca39cff7c73acf9d6220e15d33c04d4016f1dc3f9bc6c3c19b873120074",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 5,
+      "sha256": "8ec22fe7e48f625cfc11b3aac45dd91f473e9d183773a879a309216e12e30f61",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 6,
+      "sha256": "1f86606263f5b68e19511be515f1a0912ba4722d3fbf79ebd339242c326a2b65",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 7,
+      "sha256": "25486b05e742aafdfbc5a641a50d790a9b380477ebce000f2da56cb0a51be2e7",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "kind": "HOT",
+      "page": 8,
+      "sha256": "05d6609a88a58e6b947491183a126793f4611f153dce10b726f1f420d0bdb8d3",
+      "rows": 80,
+      "rows_read": 80,
+      "rows_written": 0,
+      "changed_db": false
+    }
+  ],
+  "controls": {
+    "gateway_secret_accessed": false,
+    "d1_writes": 0,
+    "new_ledger_created": false,
+    "core_mutations": 0,
+    "deployments": 0,
+    "hyp008_mutations": 0,
+    "edge": "UNPROVEN",
+    "live": false,
+    "real_orders": 0,
+    "capital": 0
+  }
+}
