@@ -1,7 +1,7 @@
 # ARQ2-SCORE-READBACK-004
 
-Status: **COMPLETE**  
-Verdict: **EXISTING_AUDIT_SUFFICIENT**  
+Status: **COMPLETE**
+Verdict: **EXISTING_AUDIT_SUFFICIENT**
 Interpretation: **DIAGNOSTIC_ONLY**. This order does not establish EDGE.
 
 ## Transport and bounds
