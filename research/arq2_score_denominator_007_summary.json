@@ -1,0 +1,191 @@
+{
+  "hot_rows_examined": 320,
+  "all_post_c7_candidates": 125,
+  "full_audit_n": 125,
+  "labelable_n": 125,
+  "unresolved_label_n": 0,
+  "label_completeness_pct": 100.0,
+  "nonoverlap_1h_n": 32,
+  "step2_direction_counts": {
+    "LONG": 57,
+    "SHORT": 42,
+    "NEUTRAL": 26
+  },
+  "action_counts": {
+    "EXECUTE": 65,
+    "HOLD": 60
+  },
+  "final_prediction_counts": {
+    "FLAT": 60,
+    "LONG": 35,
+    "SHORT": 30
+  },
+  "top_gate_or_raw_reasons": [
+    {
+      "reason": "no_direction",
+      "n": 26
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.4324 gate=0.596 ev=0.000322 risk=0.0000 size=0.0278 kelly=0.1081 conv_mult=0.5961 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.4815 gate=0.727 ev=0.000784 risk=0.0000 size=0.0402 kelly=0.1204 conv_mult=0.7268 entropy_mult=0.9194 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5017 gate=0.772 ev=0.000064 risk=0.0000 size=0.0391 kelly=0.1254 conv_mult=0.7722 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5481 gate=0.855 ev=0.000428 risk=0.0000 size=0.0506 kelly=0.1370 conv_mult=0.8553 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5544 gate=0.864 ev=0.001049 risk=0.0000 size=0.0517 kelly=0.1386 conv_mult=0.8645 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5720 gate=0.887 ev=0.000055 risk=0.0000 size=0.0513 kelly=0.1430 conv_mult=0.8873 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5904 gate=0.908 ev=0.000512 risk=0.0000 size=0.0578 kelly=0.1476 conv_mult=0.9076 entropy_mult=0.8639 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5910 gate=0.908 ev=0.000173 risk=0.0000 size=0.0542 kelly=0.1477 conv_mult=0.9082 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    },
+    {
+      "reason": "EU_EXECUTE: dir=LONG conv=0.5917 gate=0.909 ev=0.000401 risk=0.0000 size=0.0543 kelly=0.1479 conv_mult=0.9089 entropy_mult=0.8083 calib_mult=1.0000 risk_mult=0.5000 exec_adj=0.9997 feedback=1.0000",
+      "n": 1
+    }
+  ],
+  "raw_score_distribution": {
+    "n": 125,
+    "min": 2.4e-05,
+    "p10": 0.0059982,
+    "p25": 0.073468,
+    "mean": 0.6182320640000001,
+    "p50": 0.825518,
+    "p75": 0.992007,
+    "p90": 0.9978334,
+    "max": 0.999978
+  },
+  "directional_final_rate": 0.52,
+  "flat_final_rate": 0.48,
+  "execute_rate": 0.52,
+  "auc_all_opportunity": 0.6477732793522267,
+  "auc_ci95": [
+    0.4296824919871795,
+    0.8636363636363636
+  ],
+  "auc_004_style_subset": 0.3515151515151515,
+  "auc_selection_delta": -0.2962581278370752,
+  "rank_ic": 0.2515342877312603,
+  "q5_q1_lift": 0.07142857142857145,
+  "raw_direction_accuracy": 0.5769230769230769,
+  "n_all_nonoverlap": 32,
+  "n_004_style_nonoverlap": 26,
+  "score_verdict": "INCONCLUSIVE",
+  "bootstrap": {
+    "replicates": 5000,
+    "seed": 20260923
+  },
+  "num_order": "ARQ2-SCORE-DENOMINATOR-007",
+  "status": "COMPLETE",
+  "diagnostic_only": true,
+  "transport": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "target_semantics": {
+    "id": "SENEX_NATIVE_STRICT_UP_T_PLUS_3600",
+    "definition": "1 iff proof-qualified same-source price at t+3600 > origin price else 0",
+    "tie": "0",
+    "polymarket_equivalence": false
+  },
+  "selection_bias_diagnostic_only": true,
+  "order004_selection_bias_resolved": true,
+  "top1_top2_top3_touched": false,
+  "strategy_curator_implemented": false,
+  "d1_writes": 0,
+  "core_mutations": 0,
+  "model_mutations": 0,
+  "deployments": 0,
+  "hyp008_mutations": 0,
+  "edge": "UNPROVEN",
+  "transport_evidence": {
+    "transport": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+    "evaluation_time_utc": "2026-09-23T20:52:17+00:00",
+    "post_c7_cutoff_utc": "2026-09-22T11:37:34+00:00",
+    "maturity_cutoff_utc": "2026-09-23T19:52:17+00:00",
+    "hot_rows_examined": 320,
+    "hot_mature_btc_prejoin_n": 125,
+    "cold_rows_requested": 125,
+    "cold_rows_received": 125,
+    "full_audit_n": 125,
+    "excluded_n": 0,
+    "excluded": [],
+    "crossed_c7_boundary": true,
+    "page_evidence": [
+      {
+        "kind": "HOT",
+        "page": 1,
+        "sha256": "e6269090d3a7e6742caa1bfc7c785f16d8cf06b76afc3a4d96be9b164f261d21",
+        "rows": 80,
+        "rows_read": 80,
+        "rows_written": 0,
+        "changed_db": false
+      },
+      {
+        "kind": "HOT",
+        "page": 2,
+        "sha256": "4d20378428c90368ec16f03ba22bc0927964ef20ff92b2bb4998b910182e2793",
+        "rows": 80,
+        "rows_read": 80,
+        "rows_written": 0,
+        "changed_db": false
+      },
+      {
+        "kind": "HOT",
+        "page": 3,
+        "sha256": "3f095593ec25ff84225e9cc3d98ac6581d4b98bc16a9540a6ff21b7480dcc4ca",
+        "rows": 80,
+        "rows_read": 80,
+        "rows_written": 0,
+        "changed_db": false
+      },
+      {
+        "kind": "HOT",
+        "page": 4,
+        "sha256": "d9a75621f1a24f5d0161cce712e0fe3ab461ca4c02b162593a608148f55b282b",
+        "rows": 80,
+        "rows_read": 80,
+        "rows_written": 0,
+        "changed_db": false
+      },
+      {
+        "kind": "COLD",
+        "page": 1,
+        "sha256": "af607b939c3f5f9ac8e46995bc3d54a2047b4f15b46e481254e9e5d3192e7112",
+        "requested_ids": 80,
+        "rows": 80,
+        "rows_read": 240,
+        "rows_written": 0,
+        "changed_db": false
+      },
+      {
+        "kind": "COLD",
+        "page": 2,
+        "sha256": "8c4b1e01dd910041498aafbed0f0564c5d7cc146d0f0b532b69e8a79524f58e9",
+        "requested_ids": 45,
+        "rows": 45,
+        "rows_read": 135,
+        "rows_written": 0,
+        "changed_db": false
+      }
+    ],
+    "d1_writes": 0
+  },
+  "dataset_sha256": "606eda9b102243b08fc21fafed954c1da9a22d28edbeb89054204983d7221e22"
+}
