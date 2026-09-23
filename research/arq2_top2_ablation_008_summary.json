@@ -1,0 +1,130 @@
+{
+  "num_order": "ARQ2-TOP2-ABLATION-008",
+  "status": "PERSISTENCE_INSUFFICIENT",
+  "source_dataset_sha256": "606eda9b102243b08fc21fafed954c1da9a22d28edbeb89054204983d7221e22",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "source_rows_n": 125,
+  "inferential_nonoverlap_n": 32,
+  "nonoverlap_id_sha256": "0a31c990bc28313429dff96df086f6da41db448ea7f76c686f0e32fbc51cf8bd",
+  "pressures_present_n": 125,
+  "top2_components_present_n": 124,
+  "top2_completeness_rate": 0.992,
+  "nonoverlap_top2_complete_n": 31,
+  "missing_nonoverlap": [
+    {
+      "source_prediction_id": 5858,
+      "missing_components": [
+        "oi"
+      ],
+      "persisted_oi": null
+    }
+  ],
+  "completeness_gate": {
+    "denominator_required_pct": 95,
+    "denominator_pass": true,
+    "every_nonoverlap_row_required": true,
+    "nonoverlap_pass": false,
+    "stop_reason": "INFERENTIAL_NONOVERLAP_ROW_MISSING_PERSISTED_TOP2_COMPONENT"
+  },
+  "cold_read_evidence": {
+    "transport": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+    "exact_source_ids_only": true,
+    "chunks": [
+      {
+        "requested_ids": 80,
+        "received_rows": 80,
+        "rows_read": 240,
+        "rows_written": 0,
+        "changed_db": false,
+        "sha256": "5d596ccd20cc567cf893b1b690b6cd9dfa83ece322360c702a2dc6c49c9dba60"
+      },
+      {
+        "requested_ids": 45,
+        "received_rows": 45,
+        "rows_read": 135,
+        "rows_written": 0,
+        "changed_db": false,
+        "sha256": "2e8a7948519aa33eec5fca31273637c546c7fab3c798023d2a449078165c87be"
+      }
+    ],
+    "d1_writes": 0,
+    "offset_used": false,
+    "count_star_used": false,
+    "broad_hot_scan": false,
+    "gateway_token_used": false,
+    "secret_retrieval": false
+  },
+  "frozen_formula": {
+    "top2_pressure_v1": "pressures.orderflow + pressures.funding + pressures.oi",
+    "no_top2_pressure_v1": "total_pressure - TOP2_PRESSURE_V1",
+    "full_score_v1": "total_pressure",
+    "micro_only_score_v1": "TOP2_PRESSURE_V1",
+    "fitted": false,
+    "normalized": false,
+    "rescaled": false,
+    "winsorized": false,
+    "sign_changed": false
+  },
+  "primary_test": {
+    "population": "exact ORDER-007 deterministic NONOVERLAP_1H rows",
+    "requested_replicates": 10000,
+    "seed": 20260923,
+    "paired_indices": true,
+    "executed": false,
+    "reason": "PERSISTENCE_INSUFFICIENT"
+  },
+  "negative_control": {
+    "permutation_seed": 20260923,
+    "executed": false,
+    "reason": "PERSISTENCE_INSUFFICIENT"
+  },
+  "auc_full": null,
+  "auc_no_top2": null,
+  "delta_auc_top2": null,
+  "delta_auc_ci95": null,
+  "auc_micro_only": null,
+  "rank_ic_micro_only": null,
+  "top2_mean_abs_contribution": null,
+  "top2_sign_agreement_rate": null,
+  "top2_sign_flip_rate": null,
+  "permuted_delta_auc": null,
+  "top2_verdict": "UNMEASURED",
+  "baseline_007": {
+    "auc": 0.6477732793522267,
+    "ci95": [
+      0.4296824919871795,
+      0.8636363636363636
+    ],
+    "score_verdict": "INCONCLUSIVE",
+    "relabeled": false
+  },
+  "top1_tested": false,
+  "top3_tested": false,
+  "individual_component_tests": 0,
+  "parameters_tuned": 0,
+  "strategy_curator": {
+    "status": "BACKLOG_ONLY",
+    "implemented": false,
+    "toolcheck_verdict": "Caution",
+    "toolcheck_score": 74
+  },
+  "controls": {
+    "arq1": "HOLD",
+    "arq3": "HOLD",
+    "hyp008": "PAUSE",
+    "ready_for_rearm": false,
+    "paper_only": true,
+    "orders_enabled": false,
+    "live_capital_locked": true
+  },
+  "d1_writes": 0,
+  "core_mutations": 0,
+  "model_mutations": 0,
+  "deployments": 0,
+  "hyp008_mutations": 0,
+  "edge": "UNPROVEN",
+  "live": "NO",
+  "real_orders": 0,
+  "capital": 0,
+  "stop_after_return": true
+}
