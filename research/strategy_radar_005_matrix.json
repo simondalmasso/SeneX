@@ -1,0 +1,360 @@
+{
+  "num_order": "ARQ2-STRATEGY-RADAR-005",
+  "base_head": "eb7c76b92118828c46f692c06bb9ba234db8e3e7",
+  "score_semantics": "RESEARCH_PRIORITY_ONLY_NOT_EXPECTED_PROFITABILITY",
+  "rubric": [
+    "evidence_quality",
+    "oos_rigor",
+    "cost_realism",
+    "anti_overfit_rigor",
+    "15m_1h_relevance",
+    "senex_data_availability",
+    "implementation_isolation",
+    "falsifiability"
+  ],
+  "families": [
+    {
+      "code": "A",
+      "strategy_family": "multi-horizon trend / TSMOM",
+      "sources": [
+        "S01",
+        "S14"
+      ],
+      "classification": "ADAPTABLE_REGIME_OR_RISK_CONTROL",
+      "scores": [
+        2,
+        2,
+        2,
+        1,
+        0,
+        2,
+        2,
+        2
+      ],
+      "total": 13,
+      "reason": "Strongest external strategy-level evidence, but source horizons are 20d/30d+; cannot be transplanted as 1h direction."
+    },
+    {
+      "code": "B",
+      "strategy_family": "range/chop / mean reversion",
+      "sources": [
+        "S05",
+        "S18"
+      ],
+      "classification": "ADAPTABLE_ONLY_AFTER_EXACT_RULE",
+      "scores": [
+        1,
+        1,
+        0,
+        1,
+        1,
+        2,
+        1,
+        2
+      ],
+      "total": 9,
+      "reason": "Manager evidence says chop favors market-neutral books and Q-7 finds short-term reversal cross-sectionally, but no public exact BTC-only 1h mean-reversion rule with costs."
+    },
+    {
+      "code": "C",
+      "strategy_family": "market-neutral basis / cash-and-carry",
+      "sources": [
+        "S02",
+        "S05",
+        "S06",
+        "S20"
+      ],
+      "classification": "SEPARATE_SLEEVE",
+      "scores": [
+        2,
+        0,
+        2,
+        1,
+        0,
+        0,
+        2,
+        2
+      ],
+      "total": 9,
+      "reason": "Economically coherent and observable, but different instruments/objective; never relabel as SENEX directional alpha."
+    },
+    {
+      "code": "D",
+      "strategy_family": "funding + perp basis",
+      "sources": [
+        "S08",
+        "S09",
+        "S10",
+        "S18",
+        "S19"
+      ],
+      "classification": "ADAPTABLE_REGIME_FEATURE",
+      "scores": [
+        2,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "total": 12,
+      "reason": "Funding/OI already exist in SENEX and are current market-state variables; academic evidence is multi-asset/cross-sectional, so only regime/factor testing is justified."
+    },
+    {
+      "code": "E",
+      "strategy_family": "order-flow / CVD / price-volume / book imbalance",
+      "sources": [
+        "S08",
+        "S09",
+        "S10",
+        "S19"
+      ],
+      "classification": "ADAPTABLE_DIRECT_RESEARCH",
+      "scores": [
+        2,
+        0,
+        0,
+        1,
+        2,
+        2,
+        2,
+        2
+      ],
+      "total": 11,
+      "reason": "Closest to SENEX intraday data and current flow changes are well measured, but high-turnover cost/OOS evidence is insufficient for promotion."
+    },
+    {
+      "code": "F",
+      "strategy_family": "volatility regime / semivolatility timing",
+      "sources": [
+        "S01",
+        "S03",
+        "S04",
+        "S15",
+        "S17"
+      ],
+      "classification": "ADAPTABLE_RISK_CONTROL",
+      "scores": [
+        2,
+        0,
+        0,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "total": 10,
+      "reason": "BTC-specific semivolatility mechanism is plausible and falsifiable; accessible source does not establish 1h horizon, costs or explicit OOS."
+    },
+    {
+      "code": "G",
+      "strategy_family": "volatility breakout / liquidation-instability",
+      "sources": [
+        "S10",
+        "S12",
+        "S16"
+      ],
+      "classification": "ADAPTABLE_RISK_MONITOR",
+      "scores": [
+        2,
+        2,
+        0,
+        2,
+        0,
+        0,
+        2,
+        2
+      ],
+      "total": 10,
+      "reason": "Held-out liquidation-centered warning evidence is strong but daily/multi-asset and SENEX lacks a frozen liquidation feed."
+    },
+    {
+      "code": "H",
+      "strategy_family": "options VRP / implied-realized spread",
+      "sources": [
+        "S03",
+        "S04",
+        "S06",
+        "S08",
+        "S09",
+        "S10"
+      ],
+      "classification": "SEPARATE_SLEEVE_OR_REGIME_ONLY",
+      "scores": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        2,
+        2
+      ],
+      "total": 6,
+      "reason": "Current VRP observations and manager commentary are strong regime evidence, but no reproducible costed options rule is public and SENEX is not an options engine."
+    },
+    {
+      "code": "I",
+      "strategy_family": "on-chain / flow shallow heuristics",
+      "sources": [
+        "S07",
+        "S11",
+        "S12",
+        "S13",
+        "S18"
+      ],
+      "classification": "ADAPTABLE_WITH_BOUNDED_EXTENSION",
+      "scores": [
+        2,
+        2,
+        2,
+        2,
+        0,
+        0,
+        1,
+        2
+      ],
+      "total": 11,
+      "reason": "Alpha Lab methodology has excellent OOS/slippage discipline, but no exact candidate rule is supplied and most required on-chain data are not present in SENEX."
+    },
+    {
+      "code": "J",
+      "strategy_family": "macro / risk-beta regime filters",
+      "sources": [
+        "S03",
+        "S04",
+        "S11",
+        "S13",
+        "S17"
+      ],
+      "classification": "REGIME_ONLY",
+      "scores": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        1
+      ],
+      "total": 5,
+      "reason": "Useful context and null-control evidence, but market commentary is not a tested 1h rule; investor-attention feature is specifically negative."
+    }
+  ],
+  "strategist_manager_scan": [
+    {
+      "name": "Colin Basco",
+      "organization": "Coinbase Institutional",
+      "date_range": "2026-08-07..2026-09-11",
+      "family": "trend/systematic BTC; macro/derivatives regime",
+      "horizon": "20d-forward trend study plus weekly market structure",
+      "instruments": "BTC spot/perpetuals/options context",
+      "reproducible": "PARTIAL",
+      "evidence_type": "institutional primary research",
+      "conflict_context": "exchange/prime brokerage research; commercial market participant"
+    },
+    {
+      "name": "Grant Fisher",
+      "organization": "Meli Vora Capital",
+      "date_range": "2026-08-27",
+      "family": "discretionary trading the chop",
+      "horizon": "July range episode",
+      "instruments": "digital assets",
+      "reproducible": "NO_PUBLIC_EXACT_RULE",
+      "evidence_type": "manager interview/deep dive",
+      "conflict_context": "manager commentary in allocator publication"
+    },
+    {
+      "name": "Rupam Shrivastava",
+      "organization": "Frontiers Capital",
+      "date_range": "2026-08-27",
+      "family": "systematic multi-strategy trading the chop",
+      "horizon": "July range episode",
+      "instruments": "digital assets",
+      "reproducible": "NO_PUBLIC_EXACT_RULE",
+      "evidence_type": "manager interview/deep dive",
+      "conflict_context": "manager commentary in allocator publication"
+    },
+    {
+      "name": "Albert Ventura-Traveset",
+      "organization": "Iqana",
+      "date_range": "2026-07-23",
+      "family": "volatility arbitrage / VRP",
+      "horizon": "options/market-neutral",
+      "instruments": "crypto options and hedges",
+      "reproducible": "NO_PUBLIC_EXACT_RULE",
+      "evidence_type": "manager/team interview",
+      "conflict_context": "Iqana markets institutional investment solutions"
+    }
+  ],
+  "top3": [
+    {
+      "rank": 1,
+      "name": "MULTI_HORIZON_TREND_AGREEMENT_AS_REGIME_FEATURE",
+      "family": "A",
+      "research_priority_score": 13,
+      "WHY_IT_SURVIVES": "Coinbase independently observes monotonic 20d forward returns as 30/90/365d trend horizons agree; Howden-Andreev supply fixed-lookback walk-forward and explicit cost sensitivity.",
+      "WHY_IT_MIGHT_FAIL": "Evidence is daily/multi-day, not 1h; Coinbase whole-framework OOS is not documented and the 30d optimum is explicitly fragile.",
+      "SENEX_DATA_ALREADY_PRESENT": [
+        "BTC price history",
+        "frozen 1h candidate/outcome machinery"
+      ],
+      "MISSING_DATA": [
+        "none for simple trailing-return agreement; enough warm-up history must exist"
+      ],
+      "MINIMUM_ATOMIC_TEST": "Do not alter raw score. Pre-register 0/1/2/3 positive trailing BTC returns at 30d/90d/365d as a regime tag, then evaluate the existing frozen SENEX 1h score across future all-opportunity observations by tag. No threshold fitting and no exposure change.",
+      "PRIMARY_METRIC": "Difference in frozen-score 1h discrimination/calibration across pre-registered trend-agreement strata; descriptive until prospective N accrues.",
+      "FALSIFIER": "No ordered improvement/stability across trend-agreement strata, or effect reverses out of sample.",
+      "REQUIRED_N_HORIZON": "365d warm-up plus every prospective all-opportunity 1h label thereafter; source does not justify an invented fixed promotion N. Keep 20d source result as external context, not SENEX target."
+    },
+    {
+      "rank": 2,
+      "name": "PERP_MICROSTRUCTURE_STATE_FUNDING_OI_ORDERFLOW",
+      "family": "D+E",
+      "research_priority_score": 12,
+      "WHY_IT_SURVIVES": "SENEX already persists funding/OI/order-flow/book signals; Glassnode documents rapid CVD/funding/OI regime reversals and perp-return research repeatedly identifies basis/price-volume/funding drivers.",
+      "WHY_IT_MIGHT_FAIL": "Perp factor evidence is cross-sectional/multi-asset and accessible 2026 paper does not show a sufficient OOS/multiple-testing protocol for 1h; turnover costs could erase signal.",
+      "SENEX_DATA_ALREADY_PRESENT": [
+        "funding_signal",
+        "oi_momentum",
+        "orderflow",
+        "bidask_imbalance",
+        "volume_delta",
+        "price_momentum"
+      ],
+      "MISSING_DATA": [
+        "canonical CVD definition if separate from existing orderflow",
+        "venue-consistent fee/slippage model for any later trading test"
+      ],
+      "MINIMUM_ATOMIC_TEST": "With all existing feature transforms frozen, test each raw signed/ranked pre-decision microstructure field individually against future 1h direction on a chronological holdout; no combinations, thresholds or feature selection in the first test.",
+      "PRIMARY_METRIC": "Holdout ROC-AUC/Spearman rank association per preregistered raw field, with turnover/cost reporting before any strategy claim.",
+      "FALSIFIER": "All preregistered fields are indistinguishable from null or sign-unstable on holdout, or any apparent effect disappears net of conservative costs.",
+      "REQUIRED_N_HORIZON": "All prospective 1h opportunities in a preregistered chronological holdout; no numeric promotion N is supplied by external sources, so none is invented here."
+    },
+    {
+      "rank": 3,
+      "name": "SEMIVOLATILITY_STATE_AS_RISK_CONTROL",
+      "family": "F",
+      "research_priority_score": 10,
+      "WHY_IT_SURVIVES": "Fresh BTC-specific research finds upside- and downside-driven volatility states are economically different; this directly challenges symmetric volatility brakes and is isolated from direction prediction.",
+      "WHY_IT_MIGHT_FAIL": "Accessible evidence does not establish 15m/1h transfer, transaction costs or explicit OOS split; effect may be daily-horizon only.",
+      "SENEX_DATA_ALREADY_PRESENT": [
+        "BTC OHLC/returns sufficient to derive upside/downside realized semivolatility in a future isolated research module"
+      ],
+      "MISSING_DATA": [
+        "paper-exact lookback/horizon and code semantics must be recovered before any implementation",
+        "no semivolatility field currently frozen in decision audit"
+      ],
+      "MINIMUM_ATOMIC_TEST": "First recover paper-exact timing semantics. Then, in PAPER-only research, compare frozen SENEX outcomes across pre-decision upside-vs-downside semivolatility states without changing candidate direction or thresholds.",
+      "PRIMARY_METRIC": "Out-of-sample risk-control utility: drawdown/variance change conditional on unchanged directional decisions; return impact secondary.",
+      "FALSIFIER": "No OOS risk reduction at unchanged candidate logic, or any benefit requires horizon/threshold tuning not preregistered from source.",
+      "REQUIRED_N_HORIZON": "UNRESOLVED_FROM_ACCESSIBLE_SOURCE; no 1h N/horizon is invented. Candidate cannot advance beyond protocol design until exact source timing is recovered."
+    }
+  ],
+  "replacement_answer": "NO_KEEP_FROZEN",
+  "order004_selection_bias_acknowledged": true
+}

@@ -1,0 +1,17 @@
+{
+  "as_of_utc": "2026-09-23",
+  "evidence_window": "2026-09-02..2026-09-21",
+  "current_regime": {
+    "trend_range_state": "TRANSITIONAL: Sep 2/8 clearly range-bound; Sep 16 slipped below range; Sep 21 rebounded >10% and touched ~$86k. Do not encode a stable single regime from this sequence.",
+    "spot_perp_taker_flow": "Sep 14 spot/perp CVD showed aggressive selling; by Sep 21 spot and perp taker flow flipped to net buying.",
+    "funding_basis": "Sep 21 futures funding was above its high band. CME carry had rebuilt in July, but basis/carry remains a separate market-neutral sleeve.",
+    "oi_leverage": "Sep 21 futures OI was above high band; options OI also elevated. The rebound included short liquidations.",
+    "realized_vs_implied_vol": "Regime flipped across September: Coinbase Sep 3 reported realized far below implied/VRP +15.1v, while Glassnode Sep 8/14/21 reported negative volatility spread with realized above implied. This instability argues against a static vol threshold.",
+    "liquidity_depth": "Sep 16 Glassnode reported resting bids concentrated within ~10% and thinner depth below; Sep 21 rally was partly liquidation-assisted.",
+    "onchain_flows": "Sep 16 new demand had stalled across realized-cap inflows, ETFs, stablecoins and treasuries; Sep 21 ETF flow remained the major dissenting indicator even as spot/perp buying improved.",
+    "macro_risk": "Sep 3–16 sources show high global term premia, oil/geopolitical supply shocks and FOMC/event risk as material; treat as regime context, not a directional rule."
+  },
+  "no_parameter_fitting": true,
+  "no_future_performance_claim": true,
+  "edge": "UNPROVEN"
+}
