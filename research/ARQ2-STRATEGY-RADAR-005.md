@@ -1,7 +1,7 @@
 # ARQ2-STRATEGY-RADAR-005
 
-Status: **COMPLETE**  
-Mode: **EXTERNAL_RESEARCH_ONLY**  
+Status: **COMPLETE**
+Mode: **EXTERNAL_RESEARCH_ONLY**
 Base: `eb7c76b92118828c46f692c06bb9ba234db8e3e7`
 
 ## Decision
