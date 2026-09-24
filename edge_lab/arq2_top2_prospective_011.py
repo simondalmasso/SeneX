@@ -27,9 +27,10 @@ RETRO_DELTA_AUC_010 = 0.0080971659919028
 
 TOP2_COMPONENT_TO_FEATURE = {
     "orderflow": "orderflow",
-    "funding": "funding",
+    "funding": "funding_signal",
     "oi": "oi_momentum",
 }
+OBSERVED_STATUSES = {"REAL_OBSERVED_ZERO", "REAL_NONZERO"}
 
 
 def _dt(value: Any) -> datetime:
@@ -169,12 +170,12 @@ def effective_top2_component(
     feature = TOP2_COMPONENT_TO_FEATURE[component]
     availability = step1.get("feature_availability_v1")
     state = availability.get(feature) if isinstance(availability, dict) else None
-    if (
-        not isinstance(state, dict)
-        or state.get("status") != "MISSING"
-        or state.get("fallback_value") is None
-        or float(state.get("fallback_value")) != 0.0
-    ):
+    if not isinstance(state, dict):
+        raise ValueError("NULL_SEMANTICS_UNPROVEN:AVAILABILITY")
+    status = state.get("status")
+    if status is None or status in OBSERVED_STATUSES:
+        raise ValueError("NULL_SEMANTICS_UNPROVEN:AVAILABILITY")
+    if state.get("fallback_value") is None or float(state.get("fallback_value")) != 0.0:
         raise ValueError("NULL_SEMANTICS_UNPROVEN:AVAILABILITY")
 
     mask = step2.get("missing_input_mask_v1")
@@ -207,7 +208,7 @@ def effective_top2_component(
         "persisted_value": None,
         "recovered_by_runtime_semantics": True,
         "feature": feature,
-        "availability_status": state.get("status"),
+        "availability_status": status,
         "fallback_value": 0.0,
         "masked": True,
         "algebra_match": True,
@@ -283,6 +284,14 @@ def should_stop_at_known_high_water(
     if high is None:
         return False
     return int(current_id) <= int(high)
+
+
+def _sign(value: float) -> int:
+    if value > 0:
+        return 1
+    if value < 0:
+        return -1
+    return 0
 
 
 def _average_ranks(values: Sequence[float]) -> list[float]:
@@ -418,12 +427,12 @@ def final_analysis(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     sign_agreement = sum(
         1
         for r in rows
-        if (float(r["top2_pressure"]) > 0) == (float(r["full_score"]) > 0)
+        if _sign(float(r["top2_pressure"])) == _sign(float(r["full_score"]))
     ) / len(rows)
     sign_flip = sum(
         1
         for r in rows
-        if (float(r["full_score"]) > 0) != (float(r["no_top2_score"]) > 0)
+        if _sign(float(r["full_score"])) != _sign(float(r["no_top2_score"]))
     ) / len(rows)
 
     prospective_delta = float(primary["delta_auc_top2"])
@@ -446,7 +455,7 @@ def final_analysis(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "prospective_delta_auc_011": prospective_delta,
         "delta_direction_consistent": (
             "YES"
-            if (RETRO_DELTA_AUC_010 >= 0) == (prospective_delta >= 0)
+            if _sign(RETRO_DELTA_AUC_010) == _sign(prospective_delta)
             else "NO"
         ),
         "n": len(rows),

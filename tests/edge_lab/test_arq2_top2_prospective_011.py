@@ -44,7 +44,7 @@ def _audit(
 ) -> dict:
     feature = {
         "oi": "oi_momentum",
-        "funding": "funding",
+        "funding": "funding_signal",
         "orderflow": "orderflow",
     }[component]
     pressures = {
@@ -186,7 +186,7 @@ def test_exact_c7_provenance_required() -> None:
     ("component", "feature"),
     [
         ("oi", "oi_momentum"),
-        ("funding", "funding"),
+        ("funding", "funding_signal"),
         ("orderflow", "orderflow"),
     ],
 )
@@ -369,3 +369,17 @@ def test_hot_cold_hash_mismatch_fails_closed() -> None:
             cold,
             evaluation_time=_dt("2026-09-24T04:00:00Z"),
         )
+
+
+def test_source_error_null_is_recoverable_under_exact_c7_nonobserved_semantics() -> None:
+    audit = _audit(
+        component="funding",
+        persisted_value=None,
+        availability_status="SOURCE_ERROR",
+        fallback=0.0,
+        masked=["funding_signal"],
+    )
+    out = effective_top2_component(component="funding", audit=audit)
+    assert out["effective_value"] == 0.0
+    assert out["recovered_by_runtime_semantics"] is True
+    assert out["availability_status"] == "SOURCE_ERROR"
