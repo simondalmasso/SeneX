@@ -1,32 +1,109 @@
 {
   "num_order": "ARQ2-TOP2-PROSPECTIVE-011",
+  "status": "COLLECTING",
   "mode": "PROSPECTIVE_RESEARCH_ONLY",
+  "base_head": "131c7974d08da96cf96ad3821dd8dc307ea1fcfe",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "source_order_007": "ARQ2-SCORE-DENOMINATOR-007",
+  "source_order_010": "ARQ2-TOP2-ABLATION-010",
+  "initialized_at_utc": "2026-09-24T03:09:28Z",
   "freeze_ts_utc": "2026-09-24T00:23:35Z",
   "earliest_possible_complete_read_utc": "2026-09-28T00:23:35Z",
-  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
   "target_new_nonoverlap_n": 96,
   "min_mature_age_s": 3600,
   "nonoverlap_spacing_s": 3600,
-  "label_semantics": "SENEX_NATIVE_STRICT_UP_T_PLUS_3600",
-  "top2_components": [
-    "orderflow",
-    "funding",
-    "oi"
-  ],
-  "bootstrap": {
-    "replicates": 10000,
-    "seed": 20260924,
-    "paired_indices": true
+  "transport": {
+    "mode": "REMOTE_D1_WRANGLER_SELECT_ONLY",
+    "hot_page_size": 80,
+    "hot_order": "id DESC",
+    "keyset_cursor": "id < cursor",
+    "offset": false,
+    "count_star": false,
+    "outcome_filter": false,
+    "cold_exact_candidate_ids_only": true,
+    "cold_chunk_max": 80,
+    "d1_writes": 0
   },
-  "no_early_look": true,
-  "top1_tested": false,
-  "top3_tested": false,
-  "strategy_curator": "BACKLOG_ONLY",
-  "d1_writes": 0,
-  "edge": "UNPROVEN",
-  "base_head": "131c7974d08da96cf96ad3821dd8dc307ea1fcfe",
-  "source_order_007": "ARQ2-SCORE-DENOMINATOR-007",
-  "source_order_010": "ARQ2-TOP2-ABLATION-010",
-  "prepared_at_utc": "2026-09-24T01:42:20.506Z",
-  "normal_collection_allowed_now": false
+  "cohort": {
+    "symbol": "BTCUSDT",
+    "ts_rule": "ts > FREEZE_TS_UTC AND ts <= evaluation_time - 3600s",
+    "runtime_provenance_exact": true,
+    "runtime_source_commit": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+    "final_states_allowed": [
+      "LONG",
+      "SHORT",
+      "FLAT",
+      "HOLD"
+    ],
+    "selection_rule": "sort by ts,id ascending; select earliest eligible; each next ts >= prior_selected_ts + 3600s; freeze first 96 permanently"
+  },
+  "label_semantics": {
+    "id": "SENEX_NATIVE_STRICT_UP_T_PLUS_3600",
+    "definition": "y_up=1 iff proof-qualified same-source price at t+3600 > origin_price else 0",
+    "tie": 0,
+    "same_persisted_exchange_only": true,
+    "target_candle": "exact 1-minute candle containing target timestamp",
+    "cross_exchange_fallback": false,
+    "action_independent": true
+  },
+  "top2_semantics": {
+    "components": [
+      "orderflow",
+      "funding",
+      "oi"
+    ],
+    "null_rule": "effective value 0.0 only when row proves MISSING/non-observed + fallback_value=0.0 + corresponding missing-input mask + persisted null pressure + total-pressure algebra + exact c7 provenance",
+    "formula": {
+      "top2_pressure": "effective_orderflow_pressure + effective_funding_pressure + effective_oi_pressure",
+      "full_score": "persisted total_pressure",
+      "no_top2_score": "FULL_SCORE - TOP2_PRESSURE",
+      "micro_only_score": "TOP2_PRESSURE"
+    },
+    "sigmoid": false,
+    "normalization": false,
+    "sign_changes": false,
+    "tuning": false
+  },
+  "no_early_look": {
+    "required": true,
+    "metrics_forbidden_before_n96": [
+      "AUC_FULL",
+      "AUC_FULL_CI95",
+      "AUC_NO_TOP2",
+      "DELTA_AUC_TOP2",
+      "DELTA_AUC_CI95",
+      "AUC_MICRO_ONLY",
+      "RANK_IC_FULL",
+      "RANK_IC_MICRO_ONLY",
+      "TOP2_SIGN_AGREEMENT_RATE",
+      "TOP2_SIGN_FLIP_RATE",
+      "RAW_DIRECTION_ACCURACY"
+    ],
+    "component_performance_forbidden": true,
+    "interim_y_up_by_top2_score_forbidden": true
+  },
+  "final_analysis": {
+    "exact_n": 96,
+    "delta_auc": "AUC(FULL_SCORE,y_up)-AUC(NO_TOP2_SCORE,y_up)",
+    "bootstrap_replicates": 10000,
+    "bootstrap_seed": 20260924,
+    "paired_indices": true,
+    "skip_one_class_resamples": true,
+    "retro_delta_auc_010": 0.0080971659919028
+  },
+  "locks": {
+    "top1_tested": false,
+    "top3_tested": false,
+    "strategy_curator": "BACKLOG_ONLY",
+    "individual_component_tests": 0,
+    "parameters_tuned": 0,
+    "arq1": "HOLD",
+    "arq3": "HOLD",
+    "hyp008": "PAUSE",
+    "ready_for_rearm": false,
+    "paper_only": true,
+    "orders_enabled": false,
+    "live_capital_locked": true,
+    "edge": "UNPROVEN"
+  }
 }

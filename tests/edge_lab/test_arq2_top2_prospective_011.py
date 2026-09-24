@@ -21,6 +21,8 @@ from edge_lab.arq2_top2_prospective_011 import (
     final_analysis,
     initialize_manifest,
     initialize_progress,
+    label_action_independent,
+    prepare_candidate_from_hot_cold,
     row_is_eligible,
     select_frozen_cohort,
     should_stop_at_known_high_water,
@@ -276,3 +278,94 @@ def test_early_gate_prevents_runner_invocation_entirely() -> None:
             max_pages=1,
         )
     assert calls["n"] == 0
+
+
+def test_hot_cold_integrity_and_action_independent_label() -> None:
+    from senecio_polymarket.backend.settlement_contract import (
+        price_evidence_from_candles,
+    )
+
+    ts = "2026-09-24T02:00:00+00:00"
+    audit = _audit()
+    audit["origin_price_v1"] = {
+        "version": "origin-price-v1",
+        "price": 100.0,
+        "source": "okx",
+        "timestamp": ts,
+    }
+    audit["action_vector"] = {"action": "HOLD"}
+    payload = json.dumps({"audit": audit}, separators=(",", ":"))
+    payload_sha = hashlib.sha256(payload.encode()).hexdigest()
+
+    hot = {
+        "id": 9001,
+        "ts": ts,
+        "symbol": "BTCUSDT",
+        "prediction": "FLAT",
+        "exchange_used": "okx",
+        "audit_digest": "audit-9001",
+        "cold_payload_sha256": payload_sha,
+    }
+    cold = {
+        "prediction_id": 9001,
+        "payload": payload,
+        "audit_digest": "audit-9001",
+        "payload_sha256": payload_sha,
+    }
+    candidate = prepare_candidate_from_hot_cold(
+        hot,
+        cold,
+        evaluation_time=_dt("2026-09-24T04:00:00Z"),
+    )
+
+    target_ms = int(_dt("2026-09-24T03:00:00Z").timestamp() * 1000)
+    evidence = price_evidence_from_candles(
+        candles=[[target_ms, 0, 0, 0, 101.0, 0]],
+        exchange="okx",
+        symbol="BTCUSDT",
+        ts_iso=ts,
+        window_seconds=3600,
+        observed_at="2026-09-24T03:02:00Z",
+    )
+    labeled_hold = label_action_independent(candidate, evidence)
+
+    changed = dict(candidate)
+    changed["action"] = "EXECUTE"
+    changed["final_prediction"] = "SHORT"
+    labeled_execute = label_action_independent(changed, evidence)
+
+    assert labeled_hold["label_status"] == "LABELABLE"
+    assert labeled_execute["label_status"] == "LABELABLE"
+    assert labeled_hold["y_up"] == labeled_execute["y_up"] == 1
+
+
+def test_hot_cold_hash_mismatch_fails_closed() -> None:
+    audit = _audit()
+    audit["origin_price_v1"] = {
+        "version": "origin-price-v1",
+        "price": 100.0,
+        "source": "okx",
+        "timestamp": "2026-09-24T02:00:00+00:00",
+    }
+    payload = json.dumps({"audit": audit}, separators=(",", ":"))
+    hot = {
+        "id": 9001,
+        "ts": "2026-09-24T02:00:00+00:00",
+        "symbol": "BTCUSDT",
+        "prediction": "FLAT",
+        "exchange_used": "okx",
+        "audit_digest": "audit-9001",
+        "cold_payload_sha256": "wrong",
+    }
+    cold = {
+        "prediction_id": 9001,
+        "payload": payload,
+        "audit_digest": "audit-9001",
+        "payload_sha256": hashlib.sha256(payload.encode()).hexdigest(),
+    }
+    with pytest.raises(Exception, match="PAYLOAD_LINK_MISMATCH"):
+        prepare_candidate_from_hot_cold(
+            hot,
+            cold,
+            evaluation_time=_dt("2026-09-24T04:00:00Z"),
+        )
