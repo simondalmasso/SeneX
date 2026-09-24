@@ -1,0 +1,32 @@
+{
+  "num_order": "ARQ2-TOP2-PROSPECTIVE-011",
+  "mode": "PROSPECTIVE_RESEARCH_ONLY",
+  "freeze_ts_utc": "2026-09-24T00:23:35Z",
+  "earliest_possible_complete_read_utc": "2026-09-28T00:23:35Z",
+  "reference_core_head": "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a",
+  "target_new_nonoverlap_n": 96,
+  "min_mature_age_s": 3600,
+  "nonoverlap_spacing_s": 3600,
+  "label_semantics": "SENEX_NATIVE_STRICT_UP_T_PLUS_3600",
+  "top2_components": [
+    "orderflow",
+    "funding",
+    "oi"
+  ],
+  "bootstrap": {
+    "replicates": 10000,
+    "seed": 20260924,
+    "paired_indices": true
+  },
+  "no_early_look": true,
+  "top1_tested": false,
+  "top3_tested": false,
+  "strategy_curator": "BACKLOG_ONLY",
+  "d1_writes": 0,
+  "edge": "UNPROVEN",
+  "base_head": "131c7974d08da96cf96ad3821dd8dc307ea1fcfe",
+  "source_order_007": "ARQ2-SCORE-DENOMINATOR-007",
+  "source_order_010": "ARQ2-TOP2-ABLATION-010",
+  "prepared_at_utc": "2026-09-24T01:42:20.506Z",
+  "normal_collection_allowed_now": false
+}

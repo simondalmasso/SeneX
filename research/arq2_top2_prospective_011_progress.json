@@ -1,0 +1,21 @@
+{
+  "num_order": "ARQ2-TOP2-PROSPECTIVE-011",
+  "status": "COLLECTING",
+  "progress_n": 0,
+  "eligible_full_n": 0,
+  "excluded_n": 0,
+  "data_integrity": "PASS",
+  "no_early_look": "PASS",
+  "scan_high_water_id": null,
+  "scan_high_water_ts": null,
+  "next_desc_cursor_id": null,
+  "last_collection_attempt_utc": null,
+  "last_collection_result": "NOT_STARTED_EARLY_GATE",
+  "d1_reads": 0,
+  "d1_writes": 0,
+  "prepared_at_utc": "2026-09-24T01:42:20.506Z",
+  "earliest_possible_complete_read_utc": "2026-09-28T00:23:35Z",
+  "normal_collection_allowed_now": false,
+  "collection_gate_reason": "ZERO_D1_POLLING_BEFORE_EARLIEST_POSSIBLE_COMPLETE_READ_UTC",
+  "data_integrity_scope": "NO_ROWS_READ_YET;MANIFEST_AND_GUARDS_ONLY"
+}
