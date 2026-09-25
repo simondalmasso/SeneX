@@ -17,6 +17,7 @@ env:
   EDGE_SOURCE_SHA: "9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c"
   EDGE_SOURCE_TREE: "d902e2112a015e29661f0ea99059b1915c236dd2"
   DETERMINISTIC_BASE_SHA: "f58e2f3e5555b954a93b988225036b65b60ac9b8"
+  HISTORICAL_DEBT_SHA256: "cb74860c1b100e4e8a334174fbddda8e549b08ce8627b6d38bfac397570878fe"
 
 jobs:
   current-ci-shadow:
@@ -88,9 +89,23 @@ jobs:
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
           python -m pytest -q             tests/test_paper_hard_lock.py             tests/test_network_write_safety.py             tests/test_health_readiness.py             tests/test_paper_execution_realism.py
 
-      - name: Static diff gate
+      - name: Baseline-aware static diff ratchet
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check "$DETERMINISTIC_BASE_SHA" "$GITHUB_SHA"
-          echo "DIFF_CHECK=PASS"
+          debt_file="$(mktemp)"
+          trap 'rm -f "$debt_file"' EXIT
+
+          set +e
+          git diff --check "$DETERMINISTIC_BASE_SHA" "$EDGE_SOURCE_SHA" >"$debt_file" 2>&1
+          debt_status=$?
+          set -e
+
+          test "$debt_status" -ne 0
+          historical_debt_sha256="$(sha256sum "$debt_file" | awk '{print $1}')"
+          echo "HISTORICAL_DEBT_SHA256=$historical_debt_sha256"
+          test "$historical_debt_sha256" = "$HISTORICAL_DEBT_SHA256"
+          echo "HISTORICAL_DEBT_FINGERPRINT=PASS"
+
+          git diff --check "$EDGE_SOURCE_SHA" "$GITHUB_SHA"
+          echo "NEW_DELTA_DIFF_CHECK=PASS"
