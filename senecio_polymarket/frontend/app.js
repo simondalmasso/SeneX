@@ -489,15 +489,49 @@
     }
   }
 
+  function renderGPTrader(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const show = (value) => value == null ? 'UNKNOWN' : String(value);
+    const percent = (value) => value == null || !Number.isFinite(Number(value))
+      ? 'UNKNOWN' : `${Number(value).toFixed(2)}%`;
+    $('#gptrader-status').textContent = show(data.status);
+    $('#gptrader-packets').textContent = show(data.packet_count);
+    $('#gptrader-take').textContent = show(data.take_count);
+    $('#gptrader-abstain').textContent = show(data.abstain_count);
+    $('#gptrader-rejects').textContent = show(data.kernel_reject_count);
+    $('#gptrader-open').textContent = show(data.open_hypothetical_positions);
+    $('#gptrader-closed').textContent = show(data.closed_hypothetical_positions);
+    $('#gptrader-return').textContent = percent(data.normalized_realized_return_pct);
+    $('#gptrader-drawdown').textContent = percent(data.max_drawdown_pct);
+    $('#gptrader-verdict').textContent = data.verdict || 'INSUFFICIENT_DATA';
+    const claim = data.status === 'OK' ? 'API_DERIVED' : 'UNKNOWN/STALE';
+    $('#gptrader-meta').textContent = `[${claim}] ${data.scale_label || 'UNKNOWN'} · EDGE=${data.edge || 'UNPROVEN'}`;
+    $('#gptrader-panel').dataset.claimClass = claim;
+    $('#gptrader-detail').textContent =
+      `sample ${show(data.sample_count)} · days ${show(data.calendar_days)} · PAPER_ONLY · SIMULATION_ONLY · LIVE=NO`;
+  }
+
+  async function refreshGPTrader() {
+    try {
+      const payload = await getJSON('/api/gptrader/state');
+      renderGPTrader(payload);
+    } catch (error) {
+      renderGPTrader(null);
+      $('#gptrader-meta').textContent = `[UNKNOWN/STALE] GPTRADER STATE ERROR · ${error.message || error}`;
+    }
+  }
+
   window.__SENEX_DASHBOARD__ = Object.freeze({
     refreshContext,
     refreshScore,
     refreshPredictions,
     refreshPaper,
+    refreshGPTrader,
     renderScore,
     renderContext,
     renderPredictions,
     renderPaper,
+    renderGPTrader,
     paperView,
     state,
   });
@@ -507,9 +541,11 @@
   refreshScore();
   refreshPredictions();
   refreshPaper();
+  refreshGPTrader();
   setInterval(refreshContext, 2000);
   setInterval(refreshScore, 10000);
   setInterval(refreshPredictions, 60000);
   setInterval(refreshPaper, 5000);
+  setInterval(refreshGPTrader, 5000);
   setInterval(renderDomainHealth, 1000);
 })();

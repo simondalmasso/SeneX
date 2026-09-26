@@ -26,6 +26,11 @@ from .boros_market_adapter import get_boros_adapter
 from .kalshi_market_adapter import get_kalshi_adapter
 from .paper_lock import safety_projection
 from .paper_view import paper_state
+from .gptrader.gptrader_view import (
+    gptrader_public_state,
+    gptrader_public_trades,
+    gptrader_public_verdict,
+)
 from .polymarket_market_adapter import get_polymarket_adapter
 from .runtime_provenance import runtime_provenance
 from .readiness_contract import build_readiness_contract
@@ -436,3 +441,24 @@ async def public_paper_trades(limit: int = Query(default=20, ge=1, le=50)):
         "safety": payload.get("safety"),
         "trades": rows,
     }
+
+
+# ---------- ORDER086 GPTrader PAPER observability (GET-only) ----------
+
+
+@app.get("/api/gptrader/state")
+async def public_gptrader_state():
+    """Namespaced GPTrader PAPER/HYPOTHETICAL treatment state."""
+    return gptrader_public_state()
+
+
+@app.get("/api/gptrader/trades")
+async def public_gptrader_trades(limit: int = Query(default=20, ge=1, le=50)):
+    """Bounded GPTrader hypothetical trades; post-T0 answer fields are stripped."""
+    return gptrader_public_trades(limit=int(limit))
+
+
+@app.get("/api/gptrader/verdict")
+async def public_gptrader_verdict():
+    """Current preregistered GPTrader verdict; missing evidence stays insufficient."""
+    return gptrader_public_verdict()
