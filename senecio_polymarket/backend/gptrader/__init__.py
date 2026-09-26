@@ -9,7 +9,7 @@ from .paths import GPTraderPaths
 from .sealer import (
     OutcomeContaminationError,
     PacketSealer,
-    PacketSequenceError,
+    PacketSequenceError,\n    PacketSizeError,
     build_sealed_packet,
     canonical_json,
     seal_prediction_t0,
@@ -21,7 +21,7 @@ __all__ = [
     "OutcomeContaminationError",
     "PacketCursor",
     "PacketSealer",
-    "PacketSequenceError",
+    "PacketSequenceError",\n    "PacketSizeError",
     "build_sealed_packet",
     "canonical_json",
     "seal_prediction_t0",

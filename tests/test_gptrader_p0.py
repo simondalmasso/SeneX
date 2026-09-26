@@ -109,3 +109,96 @@ def test_oracle_runner_seals_after_local_prediction_persistence_before_remote_mi
     sealed = source.index("seal_prediction_t0")
     remote = source.index("from . import supabase_client")
     assert persisted < sealed < remote
+
+
+def _oversized_source():
+    source = _source()
+    source["_audit"]["decision_replay_v1"].update({
+        "captured_at": source["timestamp"],
+        "market": {
+            "ohlcv": [[i, i, i, i, i, i] for i in range(500)],
+            "orderbook": {
+                "bids": [[1, 2]] * 500,
+                "asks": [[2, 1]] * 500,
+            },
+        },
+        "runtime_provenance": {
+            "source_commit": "abc",
+            "source_tree": "def",
+            "exact": True,
+        },
+        "feature_source_identity": {
+            "symbol": "BTCUSDT",
+            "exchange_used": "binance",
+            "timeframe": "15m",
+        },
+        "snapshot_hash": "x" * 64,
+        "query_observed_at_epoch": 123.0,
+    })
+    source["_audit"]["external_markets_v1"] = {"blob": "x" * 12000}
+    return source
+
+
+def test_torn_final_tail_is_recovered_append_only_and_observable(tmp_path):
+    sealer = PacketSealer(root=tmp_path)
+    p1 = sealer.seal(_source("2026-09-26T12:00:00+00:00"))
+    with open(tmp_path / "sealed_packets.jsonl", "ab") as handle:
+        handle.write(b'{"packet_seq":2,"broken":')
+
+    restarted = PacketSealer(root=tmp_path)
+    p2 = restarted.seal(_source("2026-09-26T12:15:00+00:00"))
+    assert [p1["packet_seq"], p2["packet_seq"]] == [1, 2]
+    assert restarted.health()["log_status"] == "RECOVERED_TORN_TAIL"
+
+    restarted_again = PacketSealer(root=tmp_path)
+    p3 = restarted_again.seal(_source("2026-09-26T12:30:00+00:00"))
+    assert p3["packet_seq"] == 3
+    assert restarted_again.health()["recovered_torn_tails"] == 1
+
+
+def test_unmarked_middle_corruption_still_fails_closed(tmp_path):
+    from senecio_polymarket.backend.gptrader.sealer import PacketSequenceError
+
+    sealer = PacketSealer(root=tmp_path)
+    sealer.seal(_source())
+    path = tmp_path / "sealed_packets.jsonl"
+    with open(path, "ab") as handle:
+        handle.write(b"{bad-json}\n")
+        handle.write(
+            (
+                json.dumps(
+                    build_sealed_packet(_source("2026-09-26T12:15:00+00:00"), 2)
+                )
+                + "\n"
+            ).encode("utf-8")
+        )
+
+    with pytest.raises(PacketSequenceError):
+        PacketSealer(root=tmp_path).read_after(None)
+
+
+def test_oversized_real_shaped_packet_is_compacted_under_target_and_hard_limit():
+    packet = build_sealed_packet(_oversized_source(), packet_seq=1)
+    encoded = json.dumps(
+        packet,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    assert len(encoded) <= 4096
+    assert len(encoded) <= 8192
+    assert packet["prediction"] == "LONG"
+    assert packet["confidence"] == 0.61
+    assert packet["_audit"]["confidence_semantics_v1"]["semantics"] == "RAW_CONVICTION"
+    assert packet["_audit"]["provenance_v1"]["runtime_provenance"]["source_commit"] == "abc"
+    assert "decision_replay_v1" not in packet["_audit"]
+    assert "external_markets_v1" not in packet["_audit"]
+
+
+def test_uncompactable_required_payload_fails_closed_at_hard_limit():
+    from senecio_polymarket.backend.gptrader.sealer import PacketSizeError
+
+    oversized = _source()
+    oversized["_audit"]["confidence_semantics_v1"]["notes"] = "z" * 9000
+    with pytest.raises(PacketSizeError, match="exceeds hard limit"):
+        build_sealed_packet(oversized, packet_seq=1)
