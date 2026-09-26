@@ -6,9 +6,9 @@ REPO=https://github.com/simondalmasso/SeneX
 LIVE=https://h011-web--senecio-h011--wbjggn89fnf8.code.run/
 
 ## LAST_VERIFIED / BRANCH / HEAD
-LAST_VERIFIED=2026-09-26T00:40Z runtime evidence + 2026-09-25 remote repo/control-plane refresh  
+LAST_VERIFIED=ORDER084 canonical convergence phase
 BRANCH=main  
-HEAD_VERIFIED_BEFORE_CANON_WRITE=0cd8b6907f87e8fa178eb0c6c2c878087b22955e  
+ORDER084_START_MAIN=99ccac05a552d86d129a2675b6ab1c2604a2770f
 DEPLOYED_CORE=c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a  
 EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 
@@ -20,12 +20,12 @@ EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 - H011: https://h011-web--senecio-h011--wbjggn89fnf8.code.run/
 
 ## CURRENT STATE
-- Migration to GitHub is complete, but GitHub main is not the deployed runtime lineage.
+- GitHub main contains the deployed CORE c7 lineage through ORDER084 history-preserving convergence plus canonical GitHub CI/canon docs.
 - H011 currently reports exact CORE c7f7dca0..., READY, PAPER, orders disabled, live capital locked.
 - `migration/gitlab-core-c7` preserves deployed CORE; `migration/gitlab-edge-011` preserves the frozen 011 research head.
 - GitHub main is unprotected.
-- Issue #68 is VOID/closed; there is NO active implementation master order.
-- SOURCE-006 is HOLD; HYP008 is PAUSE; Gate B/C are not accepted.
+- Issue #68 is VOID/closed; ORDER084 Issue #69 is the current implementation authority.
+- SOURCE-006 remains unresolved for fresh post-011 investigation; HYP008 remains PAUSE; Gate B/C are not accepted.
 - 011: COLLECTING, PROGRESS_N=0, zero normal D1 reads before 2026-09-28T00:23:35Z.
 - EDGE=UNPROVEN; LIVE=NO; REAL_ORDERS=0; CAPITAL=0.
 
@@ -36,8 +36,8 @@ EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 - Bounded score readback proved existing audit persistence is sufficient.
 
 ## ACTIVE WORK
-NONE_AUTHORIZED_FOR_MUTATION.
-ARQ1 is the single future writer/executor once AUD issues the next order.
+ORDER084_ACTIVE; ARQ1 is the sole writer/implementer/integrator/deployer.
+H011 remains exact c7 during convergence/frozen 011; no deploy occurs in Phase 1/2.
 
 ## PENDING
 - Canonical reconciliation: GitHub main vs deployed c7.
@@ -102,4 +102,4 @@ STOP and return to AUD if:
 - work would require 011 D1 reads before 2026-09-28T00:23:35Z;
 - a historical order conflicts with current remote state.
 
-NEXT_EXACT_ACTION=Wait for AUD to finish main↔c7 reconciliation and issue the next correctly numbered implementation order; then execute only that order end-to-end.
+NEXT_EXACT_ACTION=Complete ORDER084 Phase 1/2 without deploy; then obey the frozen 011 time gate before any science read or runtime epoch change.
