@@ -15,6 +15,22 @@ from .sealer import (
     canonical_json,
     seal_prediction_t0,
 )
+from .baselines import (
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    RAW_SCORE_SEMANTICS,
+    BaselinePolicy,
+    PolicyDecision,
+    evaluate_baseline,
+)
+from .science import (
+    MIN_CALENDAR_DAYS,
+    MIN_INDEPENDENT_1H,
+    ResolvedSampleSummary,
+    SampleGate,
+    hour_cluster_id,
+    sample_gate,
+    summarize_resolved_sample,
+)
 
 __all__ = [
     "CursorError",
@@ -27,4 +43,16 @@ __all__ = [
     "build_sealed_packet",
     "canonical_json",
     "seal_prediction_t0",
+    "DEFAULT_CONFIDENCE_THRESHOLD",
+    "RAW_SCORE_SEMANTICS",
+    "BaselinePolicy",
+    "PolicyDecision",
+    "evaluate_baseline",
+    "MIN_CALENDAR_DAYS",
+    "MIN_INDEPENDENT_1H",
+    "ResolvedSampleSummary",
+    "SampleGate",
+    "hour_cluster_id",
+    "sample_gate",
+    "summarize_resolved_sample",
 ]
