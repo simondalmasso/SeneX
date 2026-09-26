@@ -1,0 +1,82 @@
+name: Mirror GitHub to GitLab
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: senex-github-to-gitlab-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLAB_MIRROR_SSH_KEY: ${{ secrets.GITLAB_MIRROR_SSH_KEY }}
+      GITLAB_REPOSITORY: git@gitlab.com:simondalmasso/SENEX.git
+    steps:
+      - name: Configure SENEX mirror credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$GITLAB_MIRROR_SSH_KEY"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$GITLAB_MIRROR_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -H gitlab.com >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          echo "MIRROR_CREDENTIAL=AVAILABLE"
+
+      - name: Mirror GitHub branches and tags to GitLab
+        shell: bash
+        env:
+          PUSH_EVENT_DELETED: ${{ github.event.deleted || false }}
+        run: |
+          set -euo pipefail
+          set +x
+
+          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" repo.git
+          cd repo.git
+          git remote add gitlab "$GITLAB_REPOSITORY"
+
+          # GitHub is authoritative. Update every GitHub branch/tag on GitLab.
+          # Deliberately do not globally prune GitLab: historical-only refs are preserved.
+          git push gitlab '+refs/heads/*:refs/heads/*'
+          git push gitlab '+refs/tags/*:refs/tags/*'
+
+          # Propagate only an explicit GitHub deletion for the exact pushed ref.
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$PUSH_EVENT_DELETED" = "true" ]; then
+            case "$GITHUB_REF" in
+              refs/heads/*|refs/tags/*)
+                git push gitlab ":${GITHUB_REF}"
+                ;;
+            esac
+          fi
+
+          github_main="$(git rev-parse refs/heads/main)"
+          gitlab_main="$(git ls-remote gitlab refs/heads/main | awk '{print $1}')"
+          test -n "$gitlab_main"
+          test "$github_main" = "$gitlab_main"
+
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$PUSH_EVENT_DELETED" != "true" ]; then
+            source_ref_sha="$(git rev-parse "$GITHUB_REF")"
+            mirror_ref_sha="$(git ls-remote gitlab "$GITHUB_REF" | awk '{print $1}')"
+            test -n "$mirror_ref_sha"
+            test "$source_ref_sha" = "$mirror_ref_sha"
+            echo "PUSHED_REF=${GITHUB_REF}"
+            echo "PUSHED_REF_SHA=${source_ref_sha}"
+          fi
+
+          echo "GITHUB_MAIN=${github_main}"
+          echo "GITLAB_MAIN=${gitlab_main}"
+          echo "GITHUB_GITLAB_MAIN_PARITY=PASS"
+          echo "MIRROR_POLICY=GITHUB_SOURCE_OF_TRUTH_NON_DESTRUCTIVE_LEGACY_PRESERVING"
