@@ -20,14 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
-      GITLAB_REPOSITORY: gitlab.com/simondalmasso/SENEX.git
+      GITLAB_MIRROR_SSH_KEY: ${{ secrets.GITLAB_MIRROR_SSH_KEY }}
+      GITLAB_REPOSITORY: git@gitlab.com:simondalmasso/SENEX.git
     steps:
-      - name: Require mirror credential
+      - name: Configure SENEX mirror credential
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$GITLAB_MIRROR_TOKEN"
+          set +x
+          test -n "$GITLAB_MIRROR_SSH_KEY"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$GITLAB_MIRROR_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -H gitlab.com >> "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
           echo "MIRROR_CREDENTIAL=AVAILABLE"
 
       - name: Mirror GitHub branches and tags to GitLab
@@ -40,17 +46,14 @@ jobs:
 
           git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" repo.git
           cd repo.git
-
-          gitlab_url="https://oauth2:${GITLAB_MIRROR_TOKEN}@${GITLAB_REPOSITORY}"
-          git remote add gitlab "$gitlab_url"
+          git remote add gitlab "$GITLAB_REPOSITORY"
 
           # GitHub is authoritative. Update every GitHub branch/tag on GitLab.
-          # Deliberately do not use --prune/--mirror here: GitLab contains
-          # historical-only refs that must not be deleted by this automation.
+          # Deliberately do not globally prune GitLab: historical-only refs are preserved.
           git push gitlab '+refs/heads/*:refs/heads/*'
           git push gitlab '+refs/tags/*:refs/tags/*'
 
-          # Propagate an explicit GitHub deletion only for the exact ref deleted.
+          # Propagate only an explicit GitHub deletion for the exact pushed ref.
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$PUSH_EVENT_DELETED" = "true" ]; then
             case "$GITHUB_REF" in
               refs/heads/*|refs/tags/*)
