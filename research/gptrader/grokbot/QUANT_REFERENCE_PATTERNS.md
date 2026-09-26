@@ -201,3 +201,41 @@ Review surface may use external current-market tools only after the decision is 
 | Alpha-combination framework | No | preserve as research candidate | actual signal combination/tuning |
 
 The objective is to increase scientific rigor without creating a second trading platform inside SENEX.
+
+
+---
+
+## 7. BeeBrain "the field" — external product pattern
+
+Page reviewed: https://beebrain.pro/trade/
+
+Use: **UX / experiment-pattern reference only**
+
+Observed concrete pattern:
+- real pools and real prices;
+- paper money only;
+- an AI classifier produces pass/watch/skip;
+- a random baseline participates in the same race;
+- prices are checked after a fixed forward horizon;
+- fees are included;
+- a visible "graduation" gate requires a minimum forward-tested sample;
+- real money is explicitly not wired in;
+- product states that the model is uncalibrated;
+- trade export to CSV is available.
+
+Patterns worth borrowing into GPTrader:
+1. side-by-side race: SENEX_NATIVE vs deterministic baseline vs GPTrader;
+2. explicit forward-test progress meter;
+3. visible graduation gate instead of vague "edge";
+4. clear `PAPER ONLY / REAL MONEY NOT WIRED` language;
+5. CSV export for replay/audit;
+6. random or trivial baseline displayed alongside the model.
+
+Do not import:
+- its model;
+- its scoring logic;
+- its data providers;
+- its runtime;
+- its live-pool universe.
+
+SENEX already has stricter T0 sealing/no-lookahead requirements and a stronger statistical gate. BeeBrain is useful as a simple product/experiment design reference, not as scientific authority.
