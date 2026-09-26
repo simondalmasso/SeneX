@@ -1,24 +1,25 @@
-# SENEX ORDER-070/R11D — production-topology Dockerfile
-FROM python:3.11-slim
+# SENEX B8.1 — provenance-first production topology
+# Internal identity is baked from copied runtime bytes + provider commit +
+# a Git-compatible tree SHA of the build context. OCI digest is NEVER
+# written as ENV and MUST NOT participate in internal exact=true.
+#
+# Northflank injects NF_GIT_SHA at build time as the commit being built:
+# https://northflank.com/docs/v1/application/secure/inject-secrets
+# That ARG is consumed here and discarded; it is not persisted as ENV.
 
+FROM python:3.11-slim AS source
+ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /source
+COPY . /source
+RUN PYTHONPATH=/source python -B -c "from pathlib import Path; from senecio_polymarket.backend.artifact_identity import git_tree_sha; print(git_tree_sha(Path('/source')))" > /source-tree.txt
+
+FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY senecio_polymarket/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
-
-ARG SENEX_SOURCE_COMMIT=unknown
-ARG SENEX_SOURCE_TREE=unknown
-ARG SENEX_IMAGE_DIGEST=unknown
-ARG SENEX_BUILD_DIGEST=unknown
-ENV SENEX_SOURCE_COMMIT=${SENEX_SOURCE_COMMIT}
-ENV SENEX_SOURCE_TREE=${SENEX_SOURCE_TREE}
-ENV SENEX_IMAGE_DIGEST=${SENEX_IMAGE_DIGEST}
-ENV SENEX_BUILD_DIGEST=${SENEX_BUILD_DIGEST}
-LABEL org.opencontainers.image.revision=${SENEX_SOURCE_COMMIT} \
-      org.senex.source-tree=${SENEX_SOURCE_TREE} \
-      org.senex.build-digest=${SENEX_BUILD_DIGEST}
 
 COPY senecio_polymarket/backend ./backend
 COPY senecio_polymarket/frontend ./frontend
@@ -27,6 +28,17 @@ COPY senecio_polymarket/oracle_runtime ./oracle_runtime
 COPY senecio_polymarket/start_single_authority.sh ./start_single_authority.sh
 COPY senecio_polymarket/start_single_authority.sh /app/start.sh
 COPY senecio_polymarket/start_single_authority.sh /start.sh
+
+ARG NF_GIT_SHA
+COPY --from=source /source-tree.txt /tmp/source-tree.txt
+RUN SOURCE_TREE="$(cat /tmp/source-tree.txt)" \
+ && python /app/backend/artifact_identity.py write \
+      --root /app \
+      --output /app/.senex-provenance/artifact-identity.json \
+      --source-commit "${NF_GIT_SHA}" \
+      --source-tree "${SOURCE_TREE}" \
+ && rm -f /tmp/source-tree.txt
+LABEL org.opencontainers.image.revision=${NF_GIT_SHA}
 
 RUN addgroup --system --gid 10001 senex \
     && adduser --system --uid 10001 --ingroup senex --home /app --no-create-home senex \

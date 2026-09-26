@@ -140,6 +140,40 @@
         </div>
       </div>
 
+      <div id="paper-exec-panel" class="panel" data-domain="context" data-claim-class="API_DERIVED">
+        <div class="panel-head"><h2>Paper execution · HYPOTHETICAL</h2><span id="paper-exec-meta" class="meta">[UNKNOWN/STALE] awaiting /api/paper/state</span></div>
+        <div class="risk-grid">
+          <div class="risk-cell"><div class="label">Bankroll · HYPOTHETICAL</div><div class="value" id="paper-bankroll">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Cash</div><div class="value" id="paper-cash">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Equity</div><div class="value" id="paper-equity">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Open positions</div><div class="value" id="paper-open">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Total orders</div><div class="value" id="paper-orders">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Fees paid</div><div class="value" id="paper-fees">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Realized PnL</div><div class="value" id="paper-pnl">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Hard paper lock</div><div class="value pos" id="paper-lock">UNKNOWN</div></div>
+        </div>
+        <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
+          <div id="paper-exec-detail" style="color:var(--text-dim)">—</div>
+        </div>
+      </div>
+
+      <div id="model-quality-panel" class="panel" data-domain="score" data-claim-class="API_DERIVED">
+        <div class="panel-head"><h2>Model quality · EDGE UNPROVEN</h2><span id="model-quality-meta" class="meta">[UNKNOWN/STALE] smoke sample · not evidence</span></div>
+        <div class="risk-grid">
+          <div class="risk-cell"><div class="label">Observations</div><div class="value" id="mq-observations">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Abstentions</div><div class="value" id="mq-abstentions">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Resolved outcomes</div><div class="value" id="mq-resolved">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Brier score</div><div class="value" id="mq-brier">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">p_market</div><div class="value" id="edge-p-market">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">p_senex</div><div class="value" id="edge-p-senex">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Incremental edge</div><div class="value" id="edge-incremental">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Edge status</div><div class="value neg" id="edge-status">UNPROVEN</div></div>
+        </div>
+        <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
+          <div id="model-quality-detail" style="color:var(--text-dim)">—</div>
+        </div>
+      </div>
+
       <div id="learning-panel" class="panel" data-domain="predictions" data-claim-class="DECISION_TIME_SNAPSHOT">
         <div class="panel-head"><h2>Learning loop</h2><span class="meta">[DECISION_TIME_SNAPSHOT] replay provenance · not authority N</span></div>
         <div class="risk-grid">

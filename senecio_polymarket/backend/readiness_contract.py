@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .paper_lock import safety_projection as _safety_projection
+
 
 def _obj_get(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
@@ -144,10 +146,6 @@ def build_readiness_contract(
         "generation": generation,
         "canonical_sha256": canonical_sha256,
         "provenance": provenance,
-        "safety": {
-            "trade_mode": "PAPER",
-            "orders_enabled": False,
-            "live_capital_locked": True,
-        },
+        "safety": _safety_projection(),
         **refresh,
     }

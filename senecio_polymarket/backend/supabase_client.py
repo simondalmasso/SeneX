@@ -18,6 +18,7 @@ from typing import Any, Optional
 import httpx
 
 from . import authority_seal as durable_seal
+from .artifact_identity import ArtifactIdentityError, internal_identity_projection
 
 log = logging.getLogger("senecio.supabase")
 
@@ -102,8 +103,69 @@ def _is_d1_quota_response(response: Any) -> bool:
     return status == 429 or any(marker in text for marker in markers)
 
 
+def _quota_breaker_file() -> Path:
+    return durable_seal.runtime_state_dir() / "d1-quota-breaker.json"
+
+
+def _quota_payload_hash(payload: dict[str, Any]) -> str:
+    unsigned = dict(payload)
+    unsigned.pop("state_hash", None)
+    return "sha256:" + hashlib.sha256(_canonical_json(unsigned)).hexdigest()
+
+
+def _persist_quota_breaker_state() -> None:
+    path = _quota_breaker_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "contract": "senex-d1-quota-breaker-v1",
+        "opened_at": _d1_quota_breaker.get("opened_at"),
+        "open_until": _d1_quota_breaker.get("open_until"),
+        "reason": _d1_quota_breaker.get("reason"),
+    }
+    payload["state_hash"] = _quota_payload_hash(payload)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _load_quota_breaker_state() -> None:
+    path = _quota_breaker_file()
+    if not path.exists():
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("contract") != "senex-d1-quota-breaker-v1":
+            raise ValueError("contract")
+        if str(payload.get("state_hash") or "") != _quota_payload_hash(payload):
+            raise ValueError("hash")
+        open_until = datetime.fromisoformat(str(payload.get("open_until") or ""))
+        if open_until.tzinfo is None:
+            raise ValueError("naive")
+        _d1_quota_breaker["opened_at"] = payload.get("opened_at")
+        _d1_quota_breaker["open_until"] = open_until.astimezone(timezone.utc).isoformat()
+        _d1_quota_breaker["reason"] = payload.get("reason") or "D1_QUOTA_EXCEEDED"
+    except Exception:
+        # Corrupt breaker evidence must never cause a retry storm. Suppress
+        # reads until the next known UTC quota reset, then self-clear.
+        current = _now_utc()
+        _d1_quota_breaker["opened_at"] = current.isoformat()
+        _d1_quota_breaker["open_until"] = _next_d1_reset(current).isoformat()
+        _d1_quota_breaker["reason"] = "D1_QUOTA_BREAKER_STATE_CORRUPT"
+        _persist_quota_breaker_state()
+
+
+def _clear_quota_breaker_state() -> None:
+    path = _quota_breaker_file()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _quota_breaker_status(now: datetime | None = None) -> dict[str, Any]:
     current = (now or _now_utc()).astimezone(timezone.utc)
+    if not _d1_quota_breaker.get("open_until"):
+        _load_quota_breaker_state()
     raw_until = _d1_quota_breaker.get("open_until")
     open_until = datetime.fromisoformat(raw_until) if isinstance(raw_until, str) and raw_until else None
     is_open = bool(open_until is not None and current < open_until)
@@ -111,6 +173,7 @@ def _quota_breaker_status(now: datetime | None = None) -> dict[str, Any]:
         _d1_quota_breaker["opened_at"] = None
         _d1_quota_breaker["open_until"] = None
         _d1_quota_breaker["reason"] = None
+        _clear_quota_breaker_state()
         open_until = None
     return {
         "open": is_open,
@@ -132,6 +195,7 @@ def _open_d1_quota_breaker(now: datetime | None = None) -> dict[str, Any]:
     _d1_quota_breaker["opened_at"] = current.isoformat()
     _d1_quota_breaker["open_until"] = reset.isoformat()
     _d1_quota_breaker["reason"] = "D1_QUOTA_EXCEEDED"
+    _persist_quota_breaker_state()
     return _quota_breaker_status(current)
 
 
@@ -171,8 +235,10 @@ async def insert_prediction(prediction: dict) -> Optional[dict]:
         if r.status_code in (200, 201):
             data = r.json()
             if isinstance(data, list) and data:
-                log.info("supabase insert OK id=%s", data[0].get("id"))
-                return data[0]
+                inserted = data[0]
+                log.info("supabase insert OK id=%s", inserted.get("id"))
+                persist_authority_row_local(inserted)
+                return inserted
             return data
         log.error("supabase insert failed: %s %s", r.status_code, r.text[:300])
         return None
@@ -182,12 +248,22 @@ async def insert_prediction(prediction: dict) -> Optional[dict]:
 
 
 async def fetch_predictions(limit: int = 50, symbol: Optional[str] = None) -> list[dict]:
-    """Bounded newest-first diagnostic/read-model query; never authority history."""
+    """Bounded newest-first HOT read model using the INTEGER PK only.
+
+    This compatibility path is deliberately capped at 50 and never requests
+    COLD audit hydration. Production authority/readiness no longer calls it.
+    """
     try:
         c = _get_client()
-        params = {"limit": str(limit), "order": "ts.desc"}
+        bounded = max(1, min(int(limit), 50))
+        params = {
+            "select": "id,ts,symbol,prediction,confidence,price_now,outcome,exchange_used",
+            "id": "gt.0",
+            "limit": str(bounded),
+            "order": "id.desc",
+        }
         if symbol:
-            params["symbol"] = f"eq.{symbol}"
+            params["symbol"] = f"eq.{_normalize_symbol(symbol)}"
         r = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
         if r.status_code == 200:
             data = r.json()
@@ -249,17 +325,12 @@ def _canonical_json(value: Any) -> bytes:
 
 
 def _runtime_identity() -> dict[str, str]:
-    identity = {
-        "source_commit": (os.environ.get("SENEX_SOURCE_COMMIT") or "").strip(),
-        "source_tree": (os.environ.get("SENEX_SOURCE_TREE") or "").strip(),
-        "image_digest": (os.environ.get("SENEX_IMAGE_DIGEST") or "").strip(),
-    }
-    if len(identity["source_commit"]) != 40 or len(identity["source_tree"]) != 40:
-        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_PROVENANCE_INCOMPLETE")
-    image = identity["image_digest"].removeprefix("sha256:")
-    if len(image) != 64:
-        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_IMAGE_DIGEST_INCOMPLETE")
-    return identity
+    """Return the one fail-closed internal artifact identity used by authority state."""
+    try:
+        identity = internal_identity_projection()
+    except ArtifactIdentityError as exc:
+        raise AuthorityHistoryIncompleteError("AUTHORITY_RUNTIME_PROVENANCE_INCOMPLETE") from exc
+    return {str(key): str(value) for key, value in identity.items()}
 
 
 def _cursor_tuple(value: Any) -> tuple[str, str] | None:
@@ -331,6 +402,101 @@ class ExactCountUnavailableError(RuntimeError):
 def _state_key(symbol: str | None) -> str:
     normalized = _normalize_symbol(symbol)
     return normalized or "*"
+
+
+def _identity_matches(payload: dict[str, Any], identity: dict[str, str]) -> bool:
+    return all(str(payload.get(key) or "") == str(identity.get(key) or "") for key in (
+        "source_commit", "source_tree", "build_digest"
+    ))
+
+
+def _ordered_rows(rows: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(rows.values(), key=lambda row: _cursor_order_key(_row_cursor(row)))
+
+
+def get_local_authority_rows(
+    symbol: str | None = None,
+    *,
+    require_current_identity: bool = False,
+) -> list[dict[str, Any]]:
+    """Read already-sealed authority locally; performs zero D1/network calls."""
+    identity = _runtime_identity()
+    scopes = [_state_key(symbol)] if symbol else sorted(
+        set(_authority_symbol_state) | set(durable_seal.list_authority_scopes())
+    )
+    combined: dict[str, dict[str, Any]] = {}
+    for scope in scopes:
+        state = _authority_symbol_state.get(scope)
+        if state is not None:
+            try:
+                _validate_state_metadata(scope, state)
+            except Exception:
+                if require_current_identity:
+                    continue
+            else:
+                for row_id, row in state["rows"].items():
+                    combined[str(row_id)] = dict(row)
+                continue
+        try:
+            persisted = durable_seal.load_authority_state(
+                scope,
+                identity=identity,
+                writer_contract=AUTHORITY_MUTATION_CONTRACT,
+                max_age_s=AUTHORITY_SEAL_MAX_AGE_S,
+            )
+        except durable_seal.AuthoritySealError:
+            continue
+        if require_current_identity and not _identity_matches(persisted, identity):
+            continue
+        for row in persisted.get("rows") or []:
+            if isinstance(row, dict) and row.get("id") is not None:
+                combined[str(row["id"])] = dict(row)
+    return json.loads(json.dumps(_ordered_rows(combined)))
+
+
+def persist_authority_row_local(row: dict[str, Any]) -> bool:
+    """Write-through an exact inserted/settled row into the non-D1 authority seal."""
+    identity = _runtime_identity()
+    scope = _state_key(row.get("symbol"))
+    state = _authority_symbol_state.get(scope)
+    if state is None:
+        try:
+            persisted = durable_seal.load_authority_state(
+                scope,
+                identity=identity,
+                writer_contract=AUTHORITY_MUTATION_CONTRACT,
+                max_age_s=AUTHORITY_SEAL_MAX_AGE_S,
+            )
+        except durable_seal.AuthoritySealError:
+            return False
+        if not _identity_matches(persisted, identity):
+            return False
+        rows = {str(item.get("id")): dict(item) for item in persisted["rows"]}
+        cursor = _cursor_tuple(persisted.get("cursor"))
+        state = {"rows": rows, "cursor": cursor, "created_at": persisted.get("created_at")}
+    projected = _authority_row_from_projection(dict(row))
+    key = _row_cursor(projected)
+    state["rows"][key[1]] = projected
+    if _cursor_gt(key, state.get("cursor")):
+        state["cursor"] = key
+    state["seal"] = _seal_state(scope, state["rows"], state.get("cursor"))
+    ordered = _ordered_rows(state["rows"])
+    try:
+        persisted = durable_seal.save_authority_state(
+            scope,
+            ordered,
+            _cursor_dict(state.get("cursor")),
+            identity=identity,
+            writer_contract=AUTHORITY_MUTATION_CONTRACT,
+            created_at=state.get("created_at"),
+        )
+    except durable_seal.AuthoritySealError:
+        return False
+    state["created_at"] = persisted["created_at"]
+    state["last_live_verification_at"] = persisted["verified_at"]
+    _authority_symbol_state[scope] = state
+    _r7b_diagnostics["durable_authority_writes"] += 1
+    return True
 
 
 def _seal_state(key: str, rows: dict[str, dict[str, Any]], cursor: tuple[str, str] | None) -> dict[str, Any]:
@@ -678,11 +844,22 @@ async def fetch_authority_history(
     if delta:
         state["cursor"] = _row_cursor(delta[-1])
 
+    # Refresh only the bounded mutable IDs already present in the sealed
+    # authority. The gateway projects origin/dual fields from HOT, so this path
+    # performs no COLD audit hydration and no COUNT(*) sidecar.
     mutable = _mutable_ids(state["rows"])
     refreshed = await _refresh_mutable_rows(symbol, mutable)
     for row in refreshed:
         row_id = _row_cursor(row)[1]
-        if state["rows"].get(row_id) != row:
+        existing = state["rows"].get(row_id)
+        if isinstance(existing, dict):
+            # id/ts are immutable identity fields. The gateway may reserialize
+            # the same UTC instant (Z vs +00:00); preserve the sealed text so a
+            # mutable refresh cannot invalidate the durable coverage cursor.
+            row = dict(row)
+            row["id"] = existing.get("id")
+            row["ts"] = existing.get("ts")
+        if existing != row:
             state["rows"][row_id] = row
             changed = True
 
@@ -970,6 +1147,68 @@ def get_pending_scan_diagnostics() -> dict[str, Any]:
     return dict(_pending_scan_diagnostics)
 
 
+def d1_rows_read_budget_projection(
+    *,
+    authority_refresh_s: int = 300,
+    oracle_cycle_s: int = 900,
+    physical_calibration: float = 2.0,
+) -> dict[str, Any]:
+    """Deterministic worst-cap steady-state rows-read model.
+
+    The 2.0 physical factor is deliberately conservative for the verified
+    index-seeking plans. Full-table COUNT/OFFSET/history scans are excluded
+    because the gateway hotfix makes them unreachable from steady-state GETs.
+    """
+    refreshes = max(1, (86400 + int(authority_refresh_s) - 1) // int(authority_refresh_s))
+    oracle_cycles = max(1, (86400 + int(oracle_cycle_s) - 1) // int(oracle_cycle_s))
+    delta_cap = AUTHORITY_DELTA_PAGE_SIZE_MAX * AUTHORITY_DELTA_MAX_PAGES
+    mutable_cap = AUTHORITY_MUTABLE_ID_MAX
+    pending_cap = PENDING_SCAN_PAGE_SIZE_MAX * PENDING_SCAN_MAX_PAGES
+
+    # 5m BTC authority capture: append delta + exact-count PK delta + bounded
+    # mutable exact-ID refresh.
+    authority_rows = refreshes * (delta_cap + delta_cap + mutable_cap)
+    # 15m directional stats need one non-BTC authority scope from D1; BTC
+    # reuses the already captured local authority snapshot.
+    directional_rows = oracle_cycles * (delta_cap + mutable_cap)
+    # Primary verifier candidates are discovered locally. Conservatively allow
+    # four index-seeking rows per candidate (pre-read + gateway PATCH read +
+    # COLD audit row + COLD existence check).
+    verifier_rows = oracle_cycles * pending_cap * 4
+    # Legacy missing-dual repair is also discovered locally. PATCH of a known ID
+    # costs at most HOT exact row + COLD audit row + COLD existence row.
+    reconciler_rows = oracle_cycles * 200 * 3
+    # Two predictions per 15m cycle; MAX(id) + COLD existence read per insert.
+    writer_rows = oracle_cycles * 2 * 2
+
+    logical = authority_rows + directional_rows + verifier_rows + reconciler_rows + writer_rows
+    calibrated = int((logical * float(physical_calibration)) + 0.999999)
+    stress = calibrated * 2
+    return {
+        "authority_refreshes_day": refreshes,
+        "oracle_cycles_day": oracle_cycles,
+        "authority_delta_cap_rows": delta_cap,
+        "mutable_refresh_cap_rows": mutable_cap,
+        "pending_candidate_cap_rows": pending_cap,
+        "full_table_count_rows_day": 0,
+        "offset_history_scan_rows_day": 0,
+        "pending_d1_scan_rows_day": 0,
+        "dual_backlog_d1_scan_rows_day": 0,
+        "cold_batch_hydration_rows_day": 0,
+        "authority_rows_read_day_cap": authority_rows,
+        "directional_rows_read_day_cap": directional_rows,
+        "verifier_rows_read_day_cap": verifier_rows,
+        "reconciler_rows_read_day_cap": reconciler_rows,
+        "writer_rows_read_day_cap": writer_rows,
+        "logical_rows_read_day_cap": logical,
+        "physical_calibration": float(physical_calibration),
+        "projected_rows_read_day": calibrated,
+        "stress_2x_rows_read_day": stress,
+        "normal_budget_pass": calibrated <= 1_000_000,
+        "stress_budget_pass": stress <= 2_000_000,
+    }
+
+
 def get_r7b_quota_diagnostics() -> dict[str, Any]:
     """Local/test observability only; exposes counters, never credentials."""
     return {
@@ -978,6 +1217,7 @@ def get_r7b_quota_diagnostics() -> dict[str, Any]:
         "exact_count_value": _exact_count_state.get("count"),
         "exact_count_cursor": _cursor_dict(_exact_count_state.get("cursor")),
         "authority_symbols_loaded": sorted(_authority_symbol_state),
+        "quota_budget": d1_rows_read_budget_projection(),
     }
 
 
@@ -994,6 +1234,7 @@ def reset_r7b_incremental_state_for_tests() -> None:
         "network_calls": 0,
         "suppressed_calls": 0,
     })
+    _clear_quota_breaker_state()
     reset_pending_scan_cursor()
 
 
@@ -1003,7 +1244,11 @@ async def fetch_pending_outcomes(
     *,
     max_pages: int = PENDING_SCAN_MAX_PAGES,
 ) -> list[dict]:
-    """Bounded NULL-outcome scan; deliberately no recurrent exact-count metric."""
+    """Return mature pending rows from the verified durable authority surface.
+
+    Steady-state D1 rows-read is exactly zero: the authority snapshot already
+    paid for a bounded append delta, so the verifier must not re-scan HOT/COLD.
+    """
     global _pending_scan_diagnostics
     try:
         from datetime import timedelta
@@ -1011,69 +1256,42 @@ async def fetch_pending_outcomes(
         bounded_limit = max(1, min(int(limit), PENDING_SCAN_PAGE_SIZE_MAX))
         bounded_pages = max(1, min(int(max_pages), PENDING_SCAN_MAX_PAGES))
         fairness_bound_rows = bounded_limit * bounded_pages
-        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)).isoformat()
-        c = _get_client()
-        base_params = {
-            "select": "id,ts,symbol,prediction,confidence,price_now,exchange_used,audit",
-            "outcome": "is.null",
-            "prediction": "in.(LONG,SHORT)",
-            "ts": f"lte.{cutoff}",
-            "order": "ts.asc,id.asc",
-        }
-        oldest_params = {
-            "select": "id,ts,symbol,prediction",
-            "outcome": "is.null",
-            "prediction": "in.(LONG,SHORT)",
-            "ts": f"lte.{cutoff}",
-            "order": "ts.asc,id.asc",
-            "limit": "1",
-        }
-        oldest = None
-        oldest_resp = await _d1_get(c, f"/{SUPABASE_TABLE}", params=oldest_params)
-        if oldest_resp.status_code == 200:
-            oldest_rows = oldest_resp.json() or []
-            if isinstance(oldest_rows, list) and oldest_rows and isinstance(oldest_rows[0], dict):
-                oldest = oldest_rows[0]
-
-        collected: list[dict] = []
-        cursor: tuple[str, str] | None = None
-        pages_scanned = 0
-        pass_complete = False
-        error = None
-        for _ in range(bounded_pages):
-            params = dict(base_params)
-            params["limit"] = str(bounded_limit)
-            if cursor is not None:
-                params["or"] = f"(ts.gt.{cursor[0]},and(ts.eq.{cursor[0]},id.gt.{cursor[1]}))"
-            r = await _d1_get(c, f"/{SUPABASE_TABLE}", params=params)
-            if r.status_code != 200:
-                log.error("supabase fetch_pending_outcomes failed: %s %s", r.status_code, r.text[:200])
-                error = f"HTTP_{r.status_code}"
-                break
-            page = r.json() or []
-            page = page if isinstance(page, list) else []
-            pages_scanned += 1
-            collected.extend(page)
-            if len(page) < bounded_limit:
-                pass_complete = True
-                break
-            cursor = _row_cursor(page[-1])
-
-        scan_cap_hit = (not pass_complete and error is None and pages_scanned >= bounded_pages)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        rows = get_local_authority_rows()
+        eligible: list[dict[str, Any]] = []
+        for row in rows:
+            if row.get("outcome") is not None:
+                continue
+            if str(row.get("prediction") or "").upper() not in {"LONG", "SHORT"}:
+                continue
+            try:
+                ts = datetime.fromisoformat(str(row.get("ts") or "").replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts.astimezone(timezone.utc) <= cutoff:
+                eligible.append(dict(row))
+        eligible.sort(key=lambda row: _cursor_order_key(_row_cursor(row)))
+        collected = eligible[:fairness_bound_rows]
+        oldest = eligible[0] if eligible else None
+        scan_cap_hit = len(eligible) > fairness_bound_rows
         _pending_scan_diagnostics = {
-            "eligible_directional_pending_count": None,
+            "eligible_directional_pending_count": len(eligible),
             "oldest_eligible_directional_pending_id": (oldest or {}).get("id"),
             "oldest_eligible_directional_pending_ts": (oldest or {}).get("ts"),
-            "rows_scanned_last_pass": len(collected),
-            "pages_scanned_last_pass": pages_scanned,
+            "rows_scanned_last_pass": 0,
+            "d1_rows_scanned_last_pass": 0,
+            "local_rows_considered": len(rows),
+            "pages_scanned_last_pass": 0,
             "scan_cap_hit": scan_cap_hit,
             "cursor_before": None,
-            "cursor_after": cursor,
-            "pass_complete": pass_complete,
+            "cursor_after": _row_cursor(collected[-1]) if collected else None,
+            "pass_complete": not scan_cap_hit,
             "restart_safe_stateless": True,
             "fairness_bound_rows_per_invocation": fairness_bound_rows,
-            "fairness_scope": "RESTART_SAFE_PREFIX_ONLY_COUNT_NOT_QUERIED",
-            "error": error,
+            "fairness_scope": "DURABLE_AUTHORITY_LOCAL_ZERO_D1_ROWS_READ",
+            "error": None,
         }
         return collected
     except Exception as e:
@@ -1081,10 +1299,11 @@ async def fetch_pending_outcomes(
         _pending_scan_diagnostics = {
             "error": type(e).__name__,
             "rows_scanned_last_pass": 0,
+            "d1_rows_scanned_last_pass": 0,
             "pages_scanned_last_pass": 0,
             "restart_safe_stateless": True,
             "fairness_bound_rows_per_invocation": PENDING_SCAN_PAGE_SIZE_MAX * PENDING_SCAN_MAX_PAGES,
-            "fairness_scope": "FAIL_CLOSED_ERROR",
+            "fairness_scope": "FAIL_CLOSED_LOCAL_AUTHORITY_ERROR",
         }
         return []
 
@@ -1225,7 +1444,14 @@ async def update_outcome_dual(
             body = r.json() if getattr(r, "content", b"") else []
         except Exception:
             body = []
-        return isinstance(body, list) and len(body) > 0
+        success = isinstance(body, list) and len(body) > 0
+        if success:
+            updated = dict(existing)
+            updated["outcome"] = outcome_1h
+            updated["price_15m_later"] = float(price_15m_later)
+            updated["audit"] = merged_audit
+            persist_authority_row_local(updated)
+        return success
     except Exception as e:
         log.error("supabase update_outcome_dual error: %s", e)
         return False

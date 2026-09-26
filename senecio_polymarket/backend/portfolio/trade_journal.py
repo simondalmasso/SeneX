@@ -63,6 +63,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from .persistence_paths import resolve_path
+
 log = logging.getLogger("senecio.trade_journal")
 
 
@@ -85,11 +87,11 @@ class TradeJournal:
 
     def __init__(
         self,
-        path: str = DEFAULT_JOURNAL_PATH,
+        path: Optional[str] = None,
         supabase_mirror: bool = False,
         supabase_table: str = "oracle_trades",
     ):
-        self.path = Path(path)
+        self.path = Path(resolve_path("trades.jsonl", DEFAULT_JOURNAL_PATH, explicit=path, env_key="SENEX_JOURNAL_PATH"))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.supabase_mirror = supabase_mirror
         self.supabase_table = supabase_table
@@ -344,7 +346,7 @@ class TradeJournal:
             "win_rate_pct": round(len(wins) / len(rows) * 100, 2) if rows else 0.0,
             "total_pnl_usd": round(total_pnl, 2),
             "total_fees_usd": round(total_fees, 2),
-            "net_pnl_usd": round(total_pnl - total_fees, 2),
+            "net_pnl_usd": round(total_pnl, 2),  # realized_pnl_usd is already net of entry+exit fees
             "avg_holding_time_s": round(
                 sum(r.get("holding_time_s", 0) for r in rows) / len(rows), 1
             ) if rows else 0,

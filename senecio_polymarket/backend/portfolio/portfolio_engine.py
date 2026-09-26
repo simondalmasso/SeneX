@@ -269,7 +269,7 @@ class PortfolioEngine:
                 # Extract context for the labeler
                 regime_4h = (prediction.get("_audit") or {}).get("regime_4h") or "NEUTRAL"
                 spread_bps = (prediction.get("_audit") or {}).get("spread_bps", 0.0) or 0.0
-                ev_bps = abs(ev) * 10_000  # ev is a fraction; convert to bps
+                ev_bps = ev * 10_000  # preserve economic sign when converting to bps
                 meta_label = self.meta_labeler.evaluate(
                     direction=direction,
                     conviction=confidence,
@@ -394,7 +394,7 @@ class PortfolioEngine:
                 continue
             open_count += 1
             qty = float(p.get("qty", 0))
-            entry = float(p.get("entry_price", 0))
+            entry = float(p.get("avg_entry_price", p.get("entry_price", 0)))
             direction = p.get("direction", "LONG").upper()
             last = last_prices.get(sym, entry)
             notional = qty * last
@@ -402,11 +402,12 @@ class PortfolioEngine:
             net += notional if direction == "LONG" else -notional
             risk_usd = float(p.get("risk_usd", 0))
             heat += risk_usd / max(starting_equity, 1.0)
-            # mark-to-market equity contribution
+            # Cash already carries the entry notional. Add the marked
+            # asset value (LONG) or subtract the marked liability (SHORT).
             if direction == "LONG":
-                equity += (last - entry) * qty
+                equity += last * qty
             else:
-                equity += (entry - last) * qty
+                equity -= last * qty
             clean_positions[sym] = p
 
         return PortfolioState(

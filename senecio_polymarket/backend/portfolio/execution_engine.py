@@ -52,6 +52,8 @@ from typing import Any, Optional
 
 log = logging.getLogger("senecio.execution_engine")
 
+from ..paper_lock import assert_paper_locked, hard_paper_lock_active
+
 
 # -------------------- config --------------------
 
@@ -122,6 +124,8 @@ class Order:
     last_update_at: str = ""
     proposal_id: Optional[str | int] = None
     audit_trail: list[dict] = field(default_factory=list)
+    total_fees: float = 0.0
+    risk_usd: float = 0.0
 
     def remaining_qty(self) -> float:
         return max(0.0, self.ordered_qty - self.filled_qty)
@@ -167,6 +171,7 @@ class Position:
     exit_reason: str = ""
     realized_pnl: float = 0.0
     fees_paid: float = 0.0
+    risk_usd: float = 0.0
     # MAE/MFE (Maximum Adverse/Favorable Excursion)
     mae_price: float = 0.0             # worst price against the position while open
     mfe_price: float = 0.0             # best price for the position while open
@@ -264,6 +269,12 @@ class ExecutionEngine:
             raise RuntimeError(
                 "allow_live=True requires explicit LIVE_GATE unlock + adapter wiring"
             )
+        # B8.1 candidate HARD PAPER LOCK: even a smuggled cfg mutation cannot
+        # route live here — no broker adapter exists and the lock is structural.
+        if hard_paper_lock_active() and self.cfg["trade_mode"] == "LIVE":
+            raise RuntimeError(
+                "HARD_PAPER_LOCK: refusing paper engine with LIVE trade_mode"
+            )
 
         p = proposal.to_dict() if hasattr(proposal, "to_dict") else dict(proposal)
         d = decision.to_dict() if hasattr(decision, "to_dict") else dict(decision)
@@ -298,6 +309,7 @@ class ExecutionEngine:
             created_at=datetime.now(timezone.utc).isoformat(),
             last_update_at=datetime.now(timezone.utc).isoformat(),
             proposal_id=p.get("prediction_id"),
+            risk_usd=float(p.get("risk_usd", 0.0)) * size_scale,
             audit_trail=[{
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "event": "NEW",
@@ -368,6 +380,8 @@ class ExecutionEngine:
 
             fee_bps = self.cfg["taker_fee_bps"] if self.cfg["use_taker_by_default"] else self.cfg["maker_fee_bps"]
             fee_usd = fill_qty * fill_price * fee_bps / 10_000
+            order.total_fees += fee_usd
+            self.cash -= fee_usd
 
             # Update order's VWAP
             old_qty = order.filled_qty
@@ -484,6 +498,8 @@ class ExecutionEngine:
 
         # Apply the simulated fill
         fill_qty = estimate.expected_qty
+        order.total_fees += estimate.expected_fee_usd
+        self.cash -= estimate.expected_fee_usd
         old_qty = order.filled_qty
         new_qty = old_qty + fill_qty
         order.avg_fill_price = (
@@ -641,13 +657,17 @@ class ExecutionEngine:
             stop_price=0.0,                # populated by caller via set_stop_target
             target_price=0.0,
             time_stop_minutes=self.cfg["default_time_stop_minutes"],
-            fees_paid=0.0,
+            fees_paid=order.total_fees,
+            risk_usd=(order.risk_usd * order.filled_qty / order.ordered_qty) if order.ordered_qty > 0 else 0.0,
             proposal_id=order.proposal_id,
             order_ids=[order.order_id],
             audit_trail=list(order.audit_trail),
         )
         self.positions[order.symbol] = pos
-        self.cash -= pos.qty * pos.avg_entry_price
+        if pos.direction == "SHORT":
+            self.cash += pos.qty * pos.avg_entry_price
+        else:
+            self.cash -= pos.qty * pos.avg_entry_price
         self._emit_audit({
             "event": "POSITION_OPEN",
             "position": pos.to_dict(),
@@ -753,14 +773,13 @@ class ExecutionEngine:
         pos.realized_pnl = round(realized_pnl, 2)
         pos.fees_paid = round(pos.fees_paid + exit_fee, 4)
 
-        # Cash adjustment: position returned to cash
+        # Cash adjustment: close at exit price and pay the exit fee.
         if pos.direction == "LONG":
             self.cash += pos.qty * exit_price
         else:
-            # SHORT: we sold at entry, bought back at exit
-            # entry: cash += qty * entry ; exit: cash -= qty * exit
-            # Net effect on cash = qty * (entry - exit) - fees
-            self.cash += pos.qty * (pos.avg_entry_price - exit_price)
+            # SHORT sale proceeds were credited at open; buy back at exit.
+            self.cash -= pos.qty * exit_price
+        self.cash -= exit_fee
 
         exit_event = {
             "event": "POSITION_EXIT",
@@ -802,7 +821,7 @@ class ExecutionEngine:
             if pos.direction == "LONG":
                 eq += pos.qty * last
             else:
-                eq += pos.qty * (2 * pos.avg_entry_price - last)  # SHORT MTM
+                eq -= pos.qty * last  # SHORT liability marked at current price
         return round(eq, 2)
 
     def stats(self) -> dict[str, Any]:
@@ -819,6 +838,23 @@ class ExecutionEngine:
         }
 
     def update_config(self, **overrides: Any) -> None:
+        # B8.1 candidate HARD PAPER LOCK: refuse any config-level attempt to
+        # flip the capital mode. Safety keys are not configurable here.
+        if hard_paper_lock_active():
+            forbidden = {
+                key: value for key, value in overrides.items()
+                if key in {"allow_live", "trade_mode", "live_capital_locked"}
+                and not (
+                    key == "trade_mode" and value == "PAPER"
+                )
+            }
+            if forbidden.get("allow_live") or (
+                forbidden.get("trade_mode") not in (None, "PAPER")
+            ) or forbidden.get("live_capital_locked") is False:
+                raise RuntimeError(
+                    "HARD_PAPER_LOCK: refusing config override(s): "
+                    + ",".join(sorted(forbidden))
+                )
         self.cfg.update(overrides)
         log.info("ExecutionEngine config updated: %s", overrides)
 
@@ -830,15 +866,11 @@ class ExecutionEngine:
         Per ACT-XXV LIVE_GATE: only callable when all 6 unlock conditions
         are met. The LIVE_GATE evaluator (in main.py wiring layer) is the
         only caller; it sets this after verifying the gate.
+
+        B8.1 candidate: structurally refused by the HARD PAPER LOCK.
         """
+        assert_paper_locked(f"enable_live_mode(unlocked_by={unlocked_by!r})")
         self.cfg["allow_live"] = True
-        self.cfg["trade_mode"] = "LIVE"
-        log.warning("LIVE MODE ENABLED by %s — real orders will be placed", unlocked_by)
-        self._emit_audit({
-            "event": "LIVE_MODE_ENABLED",
-            "unlocked_by": unlocked_by,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        })
 
     # -------- helpers --------
 

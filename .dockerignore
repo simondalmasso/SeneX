@@ -1,0 +1,14 @@
+.git
+**/.git
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.senex-provenance
+**/senecio_output
+oracle/senecio_output
+*.egg-info
+.venv
+venv
+data
+**/data

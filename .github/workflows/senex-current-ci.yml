@@ -1,10 +1,13 @@
 name: SENEX Canonical CI
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - migration/github-cutover-015
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,20 +16,21 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
-  CANONICAL_MAIN_PARENT: "cc7c9d2ebe933f3696723f2512d508232fbc2895"
-  CANONICAL_MAIN_TREE: "d8463395b383e3ece6289890ad3d426d777b016b"
-  LEGACY_ARCHIVE_SHA: "43c8023d3a4623381e45da02d9efa8e9b5888f47"
+  EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   CORE_C7_SHA: "c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a"
+  CONVERGENCE_BASE_SHA: "92e5b5073ffef83e55eee5c735ff15460defdc37"
+  LEGACY_ARCHIVE_SHA: "43c8023d3a4623381e45da02d9efa8e9b5888f47"
   EDGE_011_SHA: "9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c"
 
 jobs:
   canonical-ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
-      - name: Checkout canonical candidate
+      - name: Checkout exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -35,96 +39,108 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify canonical lineage and preserved refs
+      - name: Verify exact checkout and canonical lineage
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse "$CANONICAL_MAIN_PARENT^{tree}")" = "$CANONICAL_MAIN_TREE"
-          test "$(git merge-base "$GITHUB_SHA" "$CANONICAL_MAIN_PARENT")" = "$CANONICAL_MAIN_PARENT"
-
-          if [ "$GITHUB_REF_NAME" = "migration/github-cutover-015" ]; then
-            test "$(git rev-parse HEAD^)" = "$CANONICAL_MAIN_PARENT"
-            changed="$(git diff --name-only "$CANONICAL_MAIN_PARENT" "$GITHUB_SHA")"
-            test "$changed" = ".github/workflows/senex-current-ci.yml"
-          fi
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          candidate_tree="$(git rev-parse "$EXPECTED_SHA^{tree}")"
+          test -n "$candidate_tree"
+          test "$(git merge-base "$EXPECTED_SHA" "$CORE_C7_SHA")" = "$CORE_C7_SHA"
+          git diff --quiet "$CORE_C7_SHA" "$CONVERGENCE_BASE_SHA" -- senecio_polymarket cloudflare tests
 
           remote_sha() {
             git ls-remote origin "$1" | awk '{print $1}'
           }
 
           test "$(remote_sha refs/heads/archive/github-main-pre-gitlab-20260924)" = "$LEGACY_ARCHIVE_SHA"
-          test "$(remote_sha refs/heads/migration/gitlab-main-20260924)" = "$CANONICAL_MAIN_PARENT"
           test "$(remote_sha refs/heads/migration/gitlab-core-c7)" = "$CORE_C7_SHA"
           test "$(remote_sha refs/heads/migration/gitlab-edge-011)" = "$EDGE_011_SHA"
 
           workflow_files="$(find .github/workflows -maxdepth 1 -type f -printf '%P\n' | sort)"
           test "$workflow_files" = "senex-current-ci.yml"
 
-          echo "CANONICAL_LINEAGE=PASS"
-          echo "LEGACY_ARCHIVE_PRESERVED=PASS"
-          echo "CORE_C7_REF_PRESERVED=PASS"
-          echo "EDGE_011_REF_PRESERVED=PASS"
-          echo "WORKFLOW_SURFACE=PASS"
+          test ! -d edge_lab
+          test ! -e research/arq2_top2_prospective_011_manifest.json
+          test ! -e research/arq2_top2_prospective_011_progress.json
+          test ! -e research/arq2_top2_prospective_011_rows.jsonl
 
-      - name: Install canonical dependencies
+          echo "EXACT_SHA=$EXPECTED_SHA"
+          echo "EXACT_TREE=$candidate_tree"
+          echo "CORE_C7_ANCESTRY=PASS"
+          echo "CONVERGENCE_PRODUCT_DELTA=ZERO"
+          echo "PRESERVED_REFS=PASS"
+          echo "WORKFLOW_SURFACE=PASS"
+          echo "EDGE_011_NOT_MIXED=PASS"
+
+      - name: Install locked product dependencies
         shell: bash
         run: |
           set -euo pipefail
           python --version
-          node --version
           python -m pip install --require-hashes -r senecio_polymarket/requirements.lock
+          python -m pip install "pytest==8.3.5"
 
-      - name: Canonical PAPER and capability gates
+      - name: Focused authority and readiness tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pytest -q \
+            tests/test_health_readiness.py \
+            tests/test_authority_cross_build_rehydration.py \
+            tests/test_b81_provenance.py \
+            tests/test_d1_cold_hydration_hotfix.py \
+            tests/test_d1_quota_hotfix.py
+
+      - name: Full product regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pytest -q tests
+
+      - name: Focused PAPER and network safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pytest -q \
+            tests/test_paper_hard_lock.py \
+            tests/test_network_write_safety.py \
+            tests/test_paper_execution_realism.py \
+            tests/test_shadow_live_fail_closed.py
+
+      - name: Frontend truth tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pytest -q tests/test_frontend_truth.py
+
+      - name: Runtime safety boundary and public OpenAPI
         shell: bash
         run: |
           set -euo pipefail
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
           python - <<'PY'
           from pathlib import Path
-          from types import SimpleNamespace
           import re
           import subprocess
 
-          from senecio_polymarket.backend.readiness_contract import build_readiness_contract
+          from senecio_polymarket.backend.main_real import app, SAFE_PUBLIC_METHODS
+          from senecio_polymarket.backend.paper_lock import safety_projection
 
-          snap = SimpleNamespace(
-              authority_history_complete=True,
-              exact_count_complete=True,
-              provenance={"exact": True},
-              live_gate={
-                  "trade_mode": "PAPER",
-                  "orders_enabled": False,
-                  "live_capital_locked": True,
-              },
-              snapshot_id="ci",
-              generation=1,
-              canonical_sha256="ci",
-          )
-          ready = build_readiness_contract(
-              snap,
-              {"snapshot_stale": False, "last_refresh_error": None},
-              oracle_started=True,
-              adapters={},
-          )
-          assert ready["status"] == "ready"
-          assert ready["safety"] == {
-              "trade_mode": "PAPER",
-              "orders_enabled": False,
-              "live_capital_locked": True,
-          }
-          assert ready["checks"]["paper_lock"] is True
-          assert ready["checks"]["orders_disabled"] is True
+          safety = safety_projection()
+          assert safety["trade_mode"] == "PAPER"
+          assert safety["orders_enabled"] is False
+          assert safety["live_capital_locked"] is True
+          assert safety["hard_paper_lock"] is True
           print("PAPER_INVARIANTS=PASS")
 
           runtime = Path("senecio_polymarket/backend/oracle_runner.py").read_text(encoding="utf-8")
-          for forbidden in (
-              "place_market_order",
-              "create_market_order",
-              "create_order",
-              "fetch_balance",
-              "withdraw",
-          ):
-              assert forbidden not in runtime, f"private order capability entered runtime: {forbidden}"
+          for forbidden in ("place_market_order", "create_market_order", "create_order", "fetch_balance", "withdraw"):
+              assert forbidden not in runtime, f"private order capability entered oracle_runner: {forbidden}"
 
           connector = Path("senecio_polymarket/oracle/exchange_connector.py").read_text(encoding="utf-8")
           if ".create_market_order(" in connector:
@@ -140,14 +156,14 @@ jobs:
               assert "BINANCE_SECRET" not in connector
           print("ORDER_CAPABILITY_BOUNDARY=PASS")
 
-          for forbidden_path in (
-              "edge_lab",
-              "research/arq2_top2_prospective_011_manifest.json",
-              "research/arq2_top2_prospective_011_progress.json",
-              "research/arq2_top2_prospective_011_rows.jsonl",
-          ):
-              assert not Path(forbidden_path).exists(), f"011/EDGE mixed into canonical main: {forbidden_path}"
-          print("EDGE_011_NOT_MIXED=PASS")
+          schema = app.openapi()
+          unsafe = []
+          for route, methods in schema.get("paths", {}).items():
+              for method in methods:
+                  if method.upper() not in SAFE_PUBLIC_METHODS:
+                      unsafe.append(f"{method.upper()} {route}")
+          assert not unsafe, "public mutation routes: " + ", ".join(unsafe)
+          print("PUBLIC_MUTATION_ROUTES=0")
 
           patterns = {
               "private-key-header": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -155,10 +171,17 @@ jobs:
               "github-pat": re.compile(r"ghp_[A-Za-z0-9]{20,}"),
               "openai-project-key": re.compile(r"sk-proj-[A-Za-z0-9_-]{20,}"),
           }
+          detector_probes = {
+              "private-key-header": "-----BEGIN " + "PRIVATE KEY-----",
+              "gitlab-pat": "glpat-" + "ABCDEFGHIJKLMNOPQRST",
+              "github-pat": "ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+              "openai-project-key": "sk-" + "proj-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+          }
+          for name, pattern in patterns.items():
+              assert pattern.search(detector_probes[name]), f"secret detector self-test failed: {name}"
+
           hits = []
-          tracked = subprocess.run(
-              ["git", "ls-files"], check=True, capture_output=True, text=True
-          ).stdout.splitlines()
+          tracked = subprocess.run(["git", "ls-files"], check=True, capture_output=True, text=True).stdout.splitlines()
           for name in tracked:
               path = Path(name)
               if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".zip", ".pdf"}:
@@ -174,12 +197,80 @@ jobs:
           print("SECRET_SCAN=CLEAN")
           PY
 
-          python -m compileall -q senecio_polymarket
-          echo "COMPILEALL=PASS"
-
-      - name: Canonical static diff ratchet
+      - name: Compile and new-delta static check
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check "$CANONICAL_MAIN_PARENT" "$GITHUB_SHA"
+          python -m compileall -q senecio_polymarket tests
+          git diff --check "$CONVERGENCE_BASE_SHA" "$EXPECTED_SHA"
+          echo "COMPILEALL=PASS"
           echo "NEW_DELTA_DIFF_CHECK=PASS"
+
+      - name: Build canonical Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg "NF_GIT_SHA=$EXPECTED_SHA" \
+            --tag "senex-ci:$EXPECTED_SHA" \
+            .
+          test "$(docker image inspect --format '{{.Config.User}}' "senex-ci:$EXPECTED_SHA")" = "senex:senex"
+          echo "DOCKER_BUILD=PASS"
+          echo "NONROOT=PASS"
+
+      - name: Container fail-closed smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="senex-ci:$EXPECTED_SHA"
+          name="senex-ci-${GITHUB_RUN_ID}"
+          cleanup() {
+            docker logs "$name" > /tmp/senex-container.log 2>&1 || true
+            docker rm -f "$name" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d \
+            --network none \
+            --name "$name" \
+            -e SUPABASE_URL=http://127.0.0.1:9 \
+            -e SUPABASE_KEY=ci-fake-not-a-secret \
+            -e SENEX_RECONCILER_HEALTH_GRACE_SEC=300 \
+            -e SENEX_RECONCILER_HEALTH_STALE_SEC=1200 \
+            "$image" >/dev/null
+
+          healthy=0
+          for _ in $(seq 1 60); do
+            if docker exec "$name" curl --silent --fail http://127.0.0.1:8080/healthz >/tmp/health.json; then
+              healthy=1
+              break
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$name" | grep -qx true; then
+              docker logs "$name"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$healthy" = "1"
+
+          python - <<'PY'
+          import json
+          h = json.load(open("/tmp/health.json", encoding="utf-8"))
+          assert h["status"] == "alive"
+          s = h["safety"]
+          assert s["trade_mode"] == "PAPER"
+          assert s["orders_enabled"] is False
+          assert s["live_capital_locked"] is True
+          assert s["hard_paper_lock"] is True
+          print("CONTAINER_HEALTHZ=PASS")
+          PY
+
+          ready_code="$(docker exec "$name" curl --silent --output /tmp/ready.json --write-out '%{http_code}' http://127.0.0.1:8080/readyz)"
+          test "$ready_code" = "503"
+
+          mutation_code="$(docker exec "$name" curl --silent --output /tmp/mutation.txt --write-out '%{http_code}' -X POST http://127.0.0.1:8080/api/oracle/state)"
+          test "$mutation_code" = "405"
+
+          echo "CONTAINER_READYZ_FAIL_CLOSED=PASS"
+          echo "CONTAINER_PUBLIC_MUTATION_DENIED=PASS"
+          echo "CONTAINER_SMOKE=PASS"

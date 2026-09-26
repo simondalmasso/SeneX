@@ -40,6 +40,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
+from .persistence_paths import resolve_path
+
 log = logging.getLogger("senecio.shadow_live")
 
 
@@ -113,7 +115,10 @@ class ShadowLive:
     """
 
     def __init__(self, config: Optional[dict[str, Any]] = None):
-        self.cfg = {**DEFAULTS, **(config or {})}
+        supplied = config or {}
+        self.cfg = {**DEFAULTS, **supplied}
+        self.cfg["output_path"] = resolve_path("shadow_trades.jsonl", DEFAULTS["output_path"], explicit=supplied.get("output_path"), env_key="SENEX_SHADOW_OUTPUT_PATH")
+        self.cfg["report_path"] = resolve_path("shadow_report.json", DEFAULTS["report_path"], explicit=supplied.get("report_path"), env_key="SENEX_SHADOW_REPORT_PATH")
         self.path = Path(self.cfg["output_path"])
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.report_path = Path(self.cfg["report_path"])
@@ -182,13 +187,15 @@ class ShadowLive:
         real_spread_bps = real_book.get("spread_bps", 0.0)
         real_latency = real_book.get("fetch_latency_ms", 0)
 
-        # Estimate the "real" fill price = best ask (for BUY) or best bid (for SELL)
-        if side == "BUY":
-            real_estimated_fill_price = real_ask or real_mid or expected_price
-            real_estimated_fill_qty = min(expected_qty, real_depth / max(real_ask, 1e-9)) if real_depth > 0 else expected_qty
+        # Real-book evidence is mandatory: never substitute PAPER price/qty.
+        executable_quote = real_ask if side == "BUY" else real_bid
+        book_valid = bool(real_mid > 0 and executable_quote > 0 and real_depth > 0)
+        if book_valid:
+            real_estimated_fill_price = executable_quote
+            real_estimated_fill_qty = min(expected_qty, real_depth / executable_quote)
         else:
-            real_estimated_fill_price = real_bid or real_mid or expected_price
-            real_estimated_fill_qty = min(expected_qty, real_depth / max(real_bid, 1e-9)) if real_depth > 0 else expected_qty
+            real_estimated_fill_price = 0.0
+            real_estimated_fill_qty = 0.0
 
         # Assume taker fee on real side too
         real_fee_usd = real_estimated_fill_qty * real_estimated_fill_price * 5 / 10_000  # 5 bps taker
@@ -202,7 +209,8 @@ class ShadowLive:
         # Check pass/fail vs thresholds
         th = self.cfg["thresholds"]
         fill_match = (
-            abs(slippage_diff) <= th["max_slippage_diff_bps"]
+            book_valid
+            and abs(slippage_diff) <= th["max_slippage_diff_bps"]
             and fee_diff_pct <= th["max_fee_diff_pct"]
             and abs(latency_diff) <= th["max_latency_diff_ms"]
         )

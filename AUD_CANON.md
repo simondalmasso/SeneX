@@ -6,9 +6,9 @@ REPO=https://github.com/simondalmasso/SeneX
 LIVE=https://h011-web--senecio-h011--wbjggn89fnf8.code.run/
 
 ## LAST_VERIFIED / BRANCH / HEAD
-LAST_VERIFIED=2026-09-26T00:40Z runtime evidence + 2026-09-25 remote repo/control-plane refresh  
+LAST_VERIFIED=ORDER084 canonical convergence phase
 BRANCH=main  
-HEAD_VERIFIED_BEFORE_CANON_WRITE=0cd8b6907f87e8fa178eb0c6c2c878087b22955e  
+ORDER084_START_MAIN=99ccac05a552d86d129a2675b6ab1c2604a2770f
 GITLAB_MAIN=cc7c9d2ebe933f3696723f2512d508232fbc2895  
 DEPLOYED_CORE=c7f7dca0e7b9f9bc3a4bf8371ae17b4eb2a65e8a  
 EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
@@ -23,17 +23,17 @@ EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 
 ## CURRENT STATE
 - GitHub migration/cutover is closed; GitHub is declared CODE/CI authority.
-- GitHub main is cc7c9d2e + one canonical CI commit; it is NOT runtime-equivalent to deployed H011.
+- GitHub main contains the deployed CORE c7 lineage through ORDER084 history-preserving convergence plus canonical GitHub CI/canon docs.
 - H011 current evidence reports source_commit=c7f7dca0..., provenance exact=true, READY, PAPER, orders disabled, live capital locked.
-- Therefore CANON_DIVERGENCE=YES: deployed CORE c7 is preserved on GitHub as `migration/gitlab-core-c7`, not incorporated into main.
+- H011 still runs exact c7f7dca0... until ORDER084 later authorizes a deliberate final exact-head deploy.
 - GitHub main branch protection is currently off.
-- `SENEX-GITHUB-CUTOVER-015` is complete. GitHub Issue #68 is VOID/closed and MUST NOT be executed.
-- Drive historical numbering reaches ORDER083; no ORDER084/085 was found in the checked Drive/GitLab canon.
+- GitHub Issue #68 is VOID/closed; ORDER084 Issue #69 is the current master order.
+- Historical Drive/GitLab evidence remains preserved; implementation authority is ORDER084 Issue #69 on GitHub.
 - SCORE-READBACK-004 proved existing persisted audit is sufficient for score/outcome discrimination; no new score ledger is justified.
 - TOP2 retrospective 010 was INCONCLUSIVE.
 - TOP2-PROSPECTIVE-011 is COLLECTING/FROZEN with PROGRESS_N=0 and NO_EARLY_LOOK.
 - HYP008=PAUSE; READY_FOR_REARM=false.
-- ARQ1-HYP008-SOURCE-006=HOLD, not executed; do not apply its schema patch unless AUD re-authorizes after current evidence review.
+- SOURCE-006 remains unresolved and must be freshly reinvestigated after frozen 011 terminalization under ORDER084.
 - Gate B on c7 was superseded/not accepted; Gate C remains pending.
 - EDGE=UNPROVEN; LIVE=NO; REAL_ORDERS=0; CAPITAL=0.
 
@@ -46,8 +46,8 @@ EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 - PAPER safety locks remain the governing operating mode.
 
 ## ACTIVE WORK
-- No implementation order is currently authorized.
-- Single-ARQ operating model: ARQ1 is the sole future implementation/execution owner.
+- ORDER084 is actively authorized; ARQ1 is the sole writer/implementer/integrator/deployer.
+- Phase 1/2 convergence is non-deploying; H011 remains exact c7 and 011 remains frozen.
 - 011 remains frozen until its preregistered read gate.
 
 ## PENDING
@@ -75,7 +75,7 @@ EDGE_011=9ad2c160f2ade19299a1d7dc2f0cfcbe6c13233c
 - Do not execute VOID Issue #68.
 
 ## AUTHORITIES / GATES
-CODE_CI_AUTHORITY=GitHub, subject to canon divergence above  
+CODE_CI_AUTHORITY=GitHub
 DEPLOYED_RUNTIME_AUTHORITY=H011@c7f7dca0... until deliberately reconciled  
 HISTORICAL_CONTROL_EVIDENCE=GitLab Work Item #7 + Drive canon  
 PAPER_ONLY=true  
@@ -86,4 +86,4 @@ READY_FOR_REARM=false
 011_GATE_NOT_BEFORE=2026-09-28T00:23:35Z
 
 ## NEXT EXACT ACTION
-AUD: compare GitHub main `0cd8b690...` against deployed CORE `c7f7dca0...` commit/tree semantics, identify the smallest non-deploying canonical convergence plan, re-verify the next free order number, then issue one new order to ARQ1. No implementation/deploy before that decision.
+NEXT_EXACT_ACTION=ARQ1: complete ORDER084 Phase 1/2 PR, current-head CI and main protection without deploy; then obey the frozen 011 time gate.

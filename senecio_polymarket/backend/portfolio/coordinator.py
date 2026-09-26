@@ -91,7 +91,7 @@ class PortfolioCoordinator:
         self.risk_kernel = risk_kernel or RiskKernel(config=self.cfg)
         self.execution_engine = execution_engine or ExecutionEngine(config=self.cfg)
         self.trade_journal = trade_journal or TradeJournal(
-            path=self.cfg.get("journal_path", "data/journal/trades.jsonl"),
+            path=self.cfg.get("journal_path"),
             supabase_mirror=self.cfg.get("supabase_mirror", False),
         )
         self.portfolio_analytics = portfolio_analytics or PortfolioAnalytics(config=self.cfg)
@@ -249,6 +249,11 @@ class PortfolioCoordinator:
         except Exception as e:
             log.debug("microstructure evaluate failed: %s", e)
 
+        # Keep RiskKernel volatility regime synchronized with the same observed
+        # volatility input used for proposal sizing.
+        if vol_pct is not None:
+            self.risk_kernel.update_vol_regime(float(vol_pct))
+
         # Refresh portfolio state from ExecutionEngine's open positions
         self._refresh_portfolio_state()
 
@@ -296,8 +301,9 @@ class PortfolioCoordinator:
             toxic_flow_score=toxic_score,
         )
 
-        # 4) If filled, attach stop/target from the proposal
-        if order.status == "FILLED" and order.filled_qty > 0:
+        # 4) Any executed quantity creates exposure, including partial fills
+        # whose residual is canceled. Protect every non-zero filled position.
+        if order.filled_qty > 0:
             self.execution_engine.set_stop_target(
                 symbol=symbol,
                 stop_price=proposal.stop_price,
