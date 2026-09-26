@@ -168,6 +168,7 @@ class GPTraderPaperBook:
         decision: dict[str, Any],
         *,
         run_id: str,
+        persist_decision: bool = True,
     ) -> dict[str, Any]:
         action = self._validate_decision(packet, decision)
         packet_id = str(packet["packet_id"])
@@ -184,7 +185,8 @@ class GPTraderPaperBook:
                 "primary_size_scale": 1.0,
                 "exploratory_size_scale": exploratory_scale,
             }
-            self._record_decision(run_id, packet, decision, result)
+            if persist_decision:
+                self._record_decision(run_id, packet, decision, result)
             self._persist()
             return result
 
@@ -200,7 +202,8 @@ class GPTraderPaperBook:
                 "primary_size_scale": risk.size_scale,
                 "exploratory_size_scale": exploratory_scale,
             }
-            self._record_decision(run_id, packet, decision, result)
+            if persist_decision:
+                self._record_decision(run_id, packet, decision, result)
             self._persist()
             return result
 
@@ -230,7 +233,8 @@ class GPTraderPaperBook:
             "primary_size_scale": risk.size_scale,
             "exploratory_size_scale": exploratory_scale,
         }
-        self._record_decision(run_id, packet, decision, result)
+        if persist_decision:
+            self._record_decision(run_id, packet, decision, result)
         self._persist()
         return result
 
