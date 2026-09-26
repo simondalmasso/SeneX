@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+COPY senex_admin_mcp/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY senex_admin_mcp /app/senex_admin_mcp
+
+RUN addgroup --system --gid 10002 senex-admin \
+    && adduser --system --uid 10002 --ingroup senex-admin --home /app --no-create-home senex-admin \
+    && chown -R senex-admin:senex-admin /app
+
+USER senex-admin:senex-admin
+EXPOSE 8080
+
+CMD ["python", "-m", "senex_admin_mcp.server"]
