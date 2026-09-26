@@ -40,6 +40,8 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..paper_lock import hard_paper_lock_active
+
 log = logging.getLogger("senecio.live_gate")
 
 
@@ -163,6 +165,12 @@ class LiveGate:
                 )
 
         unlocked = len(failed) == 0
+        # B8.1 candidate HARD PAPER LOCK: conditions remain diagnostic, but the
+        # gate can never unlock live capital in this candidate. This overrides
+        # any combination of passing conditions by construction.
+        hard_locked = hard_paper_lock_active()
+        if hard_locked:
+            unlocked = False
         status = GateStatus(
             unlocked=unlocked,
             trade_mode="LIVE" if unlocked else "PAPER",
@@ -171,6 +179,11 @@ class LiveGate:
             failed_reasons=failed,
             evaluated_at=datetime.now(timezone.utc).isoformat(),
         )
+        if hard_locked and len(failed) == 0:
+            status.failed_reasons = ["HARD_PAPER_LOCK:STRUCTURAL_OVERRIDE"]
+            log.info(
+                "LIVE_GATE conditions pass but HARD PAPER LOCK holds the gate closed (PAPER)",
+            )
         if unlocked:
             log.warning("LIVE_GATE UNLOCKED — all 6 conditions pass")
         else:

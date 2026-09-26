@@ -1,0 +1,17 @@
+{
+  "name": "senex-order072-d1-gateway",
+  "main": "src/gateway_order074.js",
+  "workers_dev": true,
+  "preview_urls": true,
+  "compatibility_date": "2026-08-28",
+  "d1_databases": [
+    {
+      "binding": "COLD",
+      "database_id": "6fa518dd-db4b-44c8-ac85-1ea0132d5954"
+    },
+    {
+      "binding": "HOT",
+      "database_id": "75c5a538-5092-4e87-9858-67276411a7ea"
+    }
+  ]
+}

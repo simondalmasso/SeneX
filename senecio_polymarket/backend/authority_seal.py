@@ -130,11 +130,23 @@ def _cursor_for_rows(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _identity_fields(identity: dict[str, Any]) -> dict[str, str]:
+    """Return producer identity fields recorded with the durable data seal."""
     return {
         "source_commit": str(identity.get("source_commit") or ""),
         "source_tree": str(identity.get("source_tree") or ""),
-        "image_digest": str(identity.get("image_digest") or ""),
+        "build_digest": str(identity.get("build_digest") or ""),
     }
+
+
+def _validate_identity_fields(identity: dict[str, Any], *, prefix: str) -> dict[str, str]:
+    fields = _identity_fields(identity)
+    if re.fullmatch(r"[0-9a-f]{40}", fields["source_commit"]) is None:
+        raise AuthoritySealCorruptError(f"{prefix}_SOURCE_COMMIT_INVALID")
+    if re.fullmatch(r"[0-9a-f]{40}", fields["source_tree"]) is None:
+        raise AuthoritySealCorruptError(f"{prefix}_SOURCE_TREE_INVALID")
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", fields["build_digest"]) is None:
+        raise AuthoritySealCorruptError(f"{prefix}_BUILD_DIGEST_INVALID")
+    return fields
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -181,9 +193,10 @@ def save_authority_state(
     if cursor != expected_cursor:
         raise AuthoritySealCorruptError("AUTHORITY_SEAL_CURSOR_NOT_LAST_ROW")
     now = _utcnow()
+    producer_identity = _validate_identity_fields(identity, prefix="AUTHORITY_SEAL_IDENTITY")
     payload: dict[str, Any] = {
         "contract": SEAL_CONTRACT,
-        **_identity_fields(identity),
+        **producer_identity,
         "scope": str(scope),
         "writer_contract": str(writer_contract),
         "cursor": cursor,
@@ -217,9 +230,8 @@ def load_authority_state(
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_CONTRACT_INVALID")
     if payload.get("scope") != str(scope):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_SCOPE_MISMATCH")
-    for key, value in _identity_fields(identity).items():
-        if payload.get(key) != value:
-            raise AuthoritySealCorruptError(f"AUTHORITY_DURABLE_SEAL_{key.upper()}_MISMATCH")
+    _validate_identity_fields(identity, prefix="AUTHORITY_DURABLE_CONSUMER")
+    _validate_identity_fields(payload, prefix="AUTHORITY_DURABLE_SEAL_PRODUCER")
     if payload.get("writer_contract") != str(writer_contract):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_SEAL_WRITER_CONTRACT_MISMATCH")
     rows = payload.get("rows")
@@ -253,9 +265,10 @@ def save_count_state(
     verified_at: str | None = None,
 ) -> dict[str, Any]:
     now = _utcnow()
+    producer_identity = _validate_identity_fields(identity, prefix="AUTHORITY_COUNT_IDENTITY")
     payload: dict[str, Any] = {
         "contract": COUNT_CONTRACT,
-        **_identity_fields(identity),
+        **producer_identity,
         "scope": "GLOBAL_EXACT_COUNT",
         "writer_contract": str(writer_contract),
         "cursor": cursor,
@@ -286,9 +299,8 @@ def load_count_state(
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_JSON_INVALID") from exc
     if not isinstance(payload, dict) or payload.get("contract") != COUNT_CONTRACT:
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_CONTRACT_INVALID")
-    for key, value in _identity_fields(identity).items():
-        if payload.get(key) != value:
-            raise AuthoritySealCorruptError(f"AUTHORITY_DURABLE_COUNT_{key.upper()}_MISMATCH")
+    _validate_identity_fields(identity, prefix="AUTHORITY_DURABLE_CONSUMER")
+    _validate_identity_fields(payload, prefix="AUTHORITY_DURABLE_COUNT_PRODUCER")
     if payload.get("writer_contract") != str(writer_contract):
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_WRITER_CONTRACT_MISMATCH")
     try:
@@ -304,6 +316,29 @@ def load_count_state(
         raise AuthoritySealCorruptError("AUTHORITY_DURABLE_COUNT_HASH_MISMATCH")
     _validate_time_window(payload, now=now, max_age_s=max_age_s)
     return payload
+
+
+def list_authority_scopes() -> list[str]:
+    """Return locally persisted authority scopes without any D1/network I/O."""
+    root = _root()
+    if not root.exists():
+        return []
+    scopes: set[str] = set()
+    for path in root.glob("authority-*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict) and payload.get("contract") == SEAL_CONTRACT:
+            scope = str(payload.get("scope") or "").strip()
+            if scope:
+                scopes.add(scope)
+    return sorted(scopes)
+
+
+def runtime_state_dir() -> Path:
+    """Public local-state directory for bounded companion cursors."""
+    return _root()
 
 
 def bootstrap_enabled() -> bool:

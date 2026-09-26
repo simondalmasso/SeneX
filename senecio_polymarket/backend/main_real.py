@@ -24,6 +24,8 @@ from .authority_snapshot import STORE as authority_store, normalize_symbol
 from .authoritative_score import build_authoritative_score
 from .boros_market_adapter import get_boros_adapter
 from .kalshi_market_adapter import get_kalshi_adapter
+from .paper_lock import safety_projection
+from .paper_view import paper_state
 from .polymarket_market_adapter import get_polymarket_adapter
 from .runtime_provenance import runtime_provenance
 from .readiness_contract import build_readiness_contract
@@ -240,11 +242,7 @@ def _authority_observation_payload(snap, refresh: dict[str, Any], payload: dict[
         "authority_generation": snap.generation,
         "authority_canonical_sha256": snap.canonical_sha256,
         "provenance": dict(snap.provenance),
-        "safety": {
-            "trade_mode": "PAPER",
-            "orders_enabled": False,
-            "live_capital_locked": True,
-        },
+        "safety": safety_projection(),
     }
 
 
@@ -296,11 +294,7 @@ async def public_authority_snapshot(symbol: str = Query(default="BTCUSDT")):
     payload["degraded"] = bool(refresh.get("snapshot_stale") or refresh.get("last_refresh_error") is not None)
     payload["fresh"] = not payload["degraded"]
     payload["upstream_error_class"] = _authority_observation_payload(snap, refresh, {}).get("upstream_error_class")
-    payload["safety"] = {
-        "trade_mode": "PAPER",
-        "orders_enabled": False,
-        "live_capital_locked": True,
-    }
+    payload["safety"] = safety_projection()
     return payload
 
 
@@ -335,9 +329,7 @@ async def healthz():
     return {
         "status": "alive",
         "probe": "liveness",
-        "trade_mode": "PAPER",
-        "orders_enabled": False,
-        "live_capital_locked": True,
+        "safety": safety_projection(),
         "provenance": runtime_provenance(),
     }
 
@@ -380,6 +372,7 @@ async def readyz(symbol: str = Query(default="BTCUSDT")):
                 "status": "not_ready", "probe": "readiness",
                 "reason": "NO_VALID_AUTHORITY_GENERATION",
                 "authority_snapshot_id": None, "generation": None, "canonical_sha256": None,
+                "safety": safety_projection(),
                 **refresh,
             },
             status_code=503,
@@ -406,14 +399,40 @@ async def market_context(symbol: str = Query(default="BTCUSDT")):
             "score_status": snap.score.get("score_status"),
         },
         "safety": {
-            "trade_mode": "PAPER",
+            **safety_projection(),
             "allow_live": False,
-            "orders_enabled": False,
-            "live_capital_locked": True,
             "read_only_market_adapters": True,
         },
     }
     observed = _authority_observation_payload(snap, refresh, payload)
-    observed["safety"]["allow_live"] = False
-    observed["safety"]["read_only_market_adapters"] = True
+    observed["safety"] = {
+        **safety_projection(),
+        "allow_live": False,
+        "read_only_market_adapters": True,
+    }
     return observed
+
+
+# ---------- B8.1 PAPER execution view (observational, read-only) ----------
+
+
+@app.get("/api/paper/state")
+async def public_paper_state():
+    """Hypothetical PAPER execution + model-quality view. No I/O, no mutation."""
+    return paper_state()
+
+
+@app.get("/api/paper/trades")
+async def public_paper_trades(limit: int = Query(default=20, ge=1, le=50)):
+    """Bounded recent paper trades from the shared portfolio journal."""
+    payload = paper_state()
+    rows = payload.get("recent_trades", {}).get("rows", [])[: int(limit)]
+    return {
+        "source": "paper_portfolio_journal",
+        "bounded": True,
+        "limit": int(limit),
+        "count": len(rows),
+        "hypothetical": True,
+        "safety": payload.get("safety"),
+        "trades": rows,
+    }

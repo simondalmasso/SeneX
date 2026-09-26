@@ -146,6 +146,46 @@
     };
   }
 
+
+  function paperView(payload) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const execution = source.execution && typeof source.execution === 'object' ? source.execution : {};
+    const edge = source.edge && typeof source.edge === 'object' ? source.edge : {};
+    const quality = source.model_quality && typeof source.model_quality === 'object' ? source.model_quality : {};
+    const analytics = source.analytics && typeof source.analytics === 'object' ? source.analytics : {};
+    const analyticsValue = analytics.value && typeof analytics.value === 'object' ? analytics.value : {};
+    const money = (value) => (value === null || value === undefined) ? 'UNKNOWN'
+      : `$${Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+    const num = (value) => (value === null || value === undefined) ? 'UNKNOWN' : String(value);
+    const prob = (value) => (value === null || value === undefined) ? 'UNKNOWN'
+      : `${(Number(value) * 100).toFixed(2)}%`;
+    return {
+      status: source.status || 'UNKNOWN',
+      hypothetical: source.hypothetical === true,
+      bankroll: money(execution.starting_cash),
+      cash: money(execution.cash),
+      equity: money(source.equity),
+      open: num(execution.open_positions),
+      orders: num(execution.total_orders),
+      fees: money(analyticsValue.total_fees ?? null),
+      pnl: money(analyticsValue.realized_pnl ?? analyticsValue.total_pnl ?? null),
+      lock: source.safety && source.safety.hard_paper_lock === true ? 'ENGAGED' : 'UNKNOWN',
+      drawdown: analyticsValue.max_drawdown_pct != null ? `${Number(analyticsValue.max_drawdown_pct).toFixed(2)}%` : 'UNKNOWN',
+      takerFeeBps: num(execution.taker_fee_bps),
+      observations: num(quality.observation_count),
+      abstentions: num(quality.abstentions),
+      resolved: num(quality.resolved),
+      brier: quality.brier_score === 'NOT_COMPUTED_UNTIL_OUTCOMES_RESOLVE' ? 'NOT COMPUTED' : (quality.brier_score ?? 'UNKNOWN'),
+      pMarket: prob(edge.p_market),
+      pMarketSource: edge.p_market_source || 'UNAVAILABLE',
+      pSenex: prob(edge.p_senex),
+      incremental: edge.incremental_edge != null
+        ? `${(Number(edge.incremental_edge) * 100).toFixed(2)}pp` : 'UNKNOWN',
+      edgeStatus: edge.status || 'UNPROVEN',
+      note: edge.note || '',
+    };
+  }
+
   return Object.freeze({
     CLAIM_CLASSES,
     scoreView,
@@ -155,5 +195,6 @@
     domainFailure,
     domainLabel,
     safetyView,
+    paperView,
   });
 });

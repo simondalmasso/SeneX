@@ -294,17 +294,20 @@ class AuthoritySnapshotStore:
     ) -> _CapturedAuthority:
         captured_at = _utcnow()
         captured_monotonic = time.monotonic()
-        history_result, count_result, recent_result = await asyncio.gather(
+        history_result, count_result = await asyncio.gather(
             supabase_client.fetch_authority_history(symbol=symbol),
             supabase_client.count_predictions_exact(),
-            supabase_client.fetch_predictions(limit=50, symbol=symbol),
             return_exceptions=True,
         )
         failures: list[str] = []
         if isinstance(history_result, BaseException):
-            failures.append(f"AUTHORITY_HISTORY:{type(history_result).__name__}")
+            detail = str(history_result) or type(history_result).__name__
+            failures.append(
+                f"AUTHORITY_HISTORY:{type(history_result).__name__}:{detail}"
+            )
         if isinstance(count_result, BaseException):
-            failures.append(f"EXACT_COUNT:{type(count_result).__name__}")
+            detail = str(count_result) or type(count_result).__name__
+            failures.append(f"EXACT_COUNT:{type(count_result).__name__}:{detail}")
         if failures:
             raise AuthoritySnapshotRefreshError(";".join(failures))
         if not isinstance(history_result, list):
@@ -313,12 +316,9 @@ class AuthoritySnapshotStore:
             raise AuthoritySnapshotRefreshError("EXACT_COUNT:RESPONSE_NOT_INT")
 
         rows = _canonical_rows(history_result)
-        # Preserve the rich dashboard decision context with one bounded query; it
-        # is explicitly excluded from authority identity and never expands with DB size.
-        if isinstance(recent_result, list):
-            recent_predictions = tuple(copy.deepcopy(recent_result[:50]))
-        else:
-            recent_predictions = tuple(copy.deepcopy(list(reversed(rows[-50:]))))
+        # Reuse the exact captured authority rows for dashboard recency. A
+        # second D1 newest-50 query used to trigger a gateway COUNT(*) sidecar.
+        recent_predictions = tuple(copy.deepcopy(list(reversed(rows[-50:]))))
         exact_total = int(count_result)
         score = build_authoritative_score(rows, symbol=symbol)
         score["authority_history_complete"] = True
