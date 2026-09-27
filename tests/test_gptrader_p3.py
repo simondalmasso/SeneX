@@ -149,3 +149,23 @@ def test_dashboard_has_control_treatment_separation() -> None:
     assert "GPTrader PAPER/HYPOTHETICAL — TREATMENT" in html
     assert "/api/gptrader/state" in js
     assert "gptrader-verdict" in html
+
+
+def test_public_counts_dedupe_identical_legacy_decisions_first_occurrence(tmp_path: Path) -> None:
+    first = {
+        "ts": "2026-09-27T11:00:00+00:00",
+        "run_id": "run-first",
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-public-dedupe",
+        "action": "TAKE",
+        "idempotency_key": "idem-public-dedupe",
+        "decision_hash": "a" * 64,
+        "classification": "TAKE_ACCEPTED",
+    }
+    retry = {**first, "ts": "2026-09-27T11:05:00+00:00", "run_id": "run-retry"}
+    _write_jsonl(tmp_path / "decisions.jsonl", [first, retry])
+
+    state = gptrader_public_state(tmp_path)
+    assert state["take_count"] == 1
+    assert state["abstain_count"] == 0
+    assert state["kernel_reject_count"] == 0
