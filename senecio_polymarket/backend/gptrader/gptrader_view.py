@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import GPTraderPaths
+from .store import GPTraderStore
 
 _PUBLIC_FUTURE_KEYS = frozenset(
     {
@@ -116,7 +117,12 @@ def gptrader_public_trades(
 def gptrader_public_state(root: str | Path | None = None) -> dict[str, Any]:
     paths = GPTraderPaths.from_root(root)
     paper = _read_json(paths.root / "paper_state.json")
-    decisions = _read_jsonl(paths.decisions)
+    try:
+        decisions = GPTraderStore(paths.root).read_decisions()
+        decision_log_status = "OK"
+    except Exception:
+        decisions = None
+        decision_log_status = "QUARANTINED"
     packets = _read_jsonl(paths.sealed_packets)
     trades = _read_jsonl(paths.trades)
     verdict = _public_verdict(paths)
@@ -175,6 +181,7 @@ def gptrader_public_state(root: str | Path | None = None) -> dict[str, Any]:
         "take_count": takes,
         "abstain_count": abstains,
         "kernel_reject_count": rejects,
+        "decision_log_status": decision_log_status,
         "open_hypothetical_positions": open_count,
         "closed_hypothetical_positions": closed_count,
         "normalized_realized_return_pct": normalized_return,
