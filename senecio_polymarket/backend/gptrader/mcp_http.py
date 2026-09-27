@@ -174,7 +174,8 @@ async def _read_bounded_json(request: Request) -> Any:
         raise HTTPException(status_code=400, detail="INVALID_INGEST_REQUEST") from exc
 
 
-def build_mcp_app(    service: DecisionService,
+def build_mcp_app(
+    service: DecisionService,
     *,
     token: str,
     ingest_token: str | None = None,

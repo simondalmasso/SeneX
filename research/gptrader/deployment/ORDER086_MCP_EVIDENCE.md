@@ -21,7 +21,7 @@ This document records only verified preflight and code evidence. It does not cla
 - Parent H2 implementation SHA: `2f5d5e6000ab589306225e1aae7a9fb90e0470ae`
 - Parent canonical CI: `36301491015` PASS, full product regression 203 passed, Docker build PASS, compileall PASS.
 - Parent mirror: `36301489106` PASS.
-- This commit adds an HTTP streaming body bound for `/ingest/t0`; exact-head CI/mirror must pass before deployment.
+- The ORDER086 forward-fix series adds an HTTP streaming body bound for `/ingest/t0`; exact-head CI/mirror must pass before deployment.
 - PR #76 remains DRAFT and unmerged.
 
 ## Northflank preflight
