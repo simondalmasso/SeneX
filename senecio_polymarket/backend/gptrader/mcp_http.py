@@ -195,6 +195,16 @@ def build_mcp_app(
         openapi_url=None,
     )
 
+    @app.get("/healthz")
+    async def healthz():
+        return {
+            "status": "ok",
+            "service": "senex-gptrader-decision",
+            "paper_only": True,
+            "simulation_only": True,
+            "live": False,
+        }
+
     if ingest_token is not None:
         @app.post("/ingest/t0")
         async def ingest_t0(request: Request):
