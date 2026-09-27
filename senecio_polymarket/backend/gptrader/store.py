@@ -60,13 +60,35 @@ class GPTraderStore:
         return rows
 
     def _decision_index(self) -> dict[str, dict[str, Any]]:
-        if not self.paths.decisions_index.exists():
-            return {}
-        try:
-            value = json.loads(self.paths.decisions_index.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
-        return value if isinstance(value, dict) else {}
+        index: dict[str, dict[str, Any]] = {}
+        if self.paths.decisions_index.exists():
+            try:
+                value = json.loads(self.paths.decisions_index.read_text(encoding="utf-8"))
+                if isinstance(value, dict):
+                    index = value
+            except (OSError, json.JSONDecodeError):
+                index = {}
+
+        authoritative: dict[str, dict[str, Any]] = {}
+        for row in self._read_jsonl(self.paths.decisions):
+            policy_id = str(row.get("policy_id") or "")
+            packet_id = str(row.get("packet_id") or "")
+            if not policy_id or not packet_id:
+                continue
+            key = self._decision_key(policy_id, packet_id)
+            meta = {
+                "decision_hash": row.get("decision_hash"),
+                "action": row.get("action"),
+                "idempotency_key": row.get("idempotency_key"),
+            }
+            prior = authoritative.get(key)
+            if prior is not None:
+                raise ValueError("duplicate decision in durable log")
+            authoritative[key] = meta
+
+        if authoritative != index:
+            self._atomic_json(self.paths.decisions_index, authoritative)
+        return authoritative
 
     @staticmethod
     def _decision_key(policy_id: str, packet_id: str) -> str:
