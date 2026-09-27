@@ -192,6 +192,16 @@ def build_sealed_packet(source: dict[str, Any], packet_seq: int) -> dict[str, An
     return packet
 
 
+def _fsync_parent(path: Path) -> None:
+    if os.name == "nt":
+        return
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")
@@ -200,6 +210,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
+    _fsync_parent(path)
 
 
 def _recovery_marker(raw_tail: bytes, line_no: int) -> dict[str, Any]:
@@ -376,10 +387,13 @@ class PacketSealer:
             next_seq = log_seq + 1
             packet = build_sealed_packet(source, packet_seq=next_seq)
             encoded = _canonical_bytes(packet) + b"\n"
+            created = not self.paths.sealed_packets.exists()
             with open(self.paths.sealed_packets, "ab") as handle:
                 handle.write(encoded)
                 handle.flush()
                 os.fsync(handle.fileno())
+            if created:
+                _fsync_parent(self.paths.sealed_packets)
             _atomic_write_text(self.paths.packet_seq, f"{next_seq}\n")
             return packet
 
@@ -455,10 +469,13 @@ class PacketSealer:
                 )
 
             encoded = _canonical_bytes(packet) + b"\n"
+            created = not self.paths.sealed_packets.exists()
             with open(self.paths.sealed_packets, "ab") as handle:
                 handle.write(encoded)
                 handle.flush()
                 os.fsync(handle.fileno())
+            if created:
+                _fsync_parent(self.paths.sealed_packets)
             _atomic_write_text(self.paths.packet_seq, f"{seq}\n")
             return copy.deepcopy(packet)
 
