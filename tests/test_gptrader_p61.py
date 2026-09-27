@@ -180,3 +180,32 @@ def test_runtime_root_has_exactly_one_process_owner(tmp_path) -> None:
 
     assert second_result[0] == "refused"
     assert "OWN" in second_result[-1].upper() or "LOCK" in second_result[-1].upper()
+
+
+def test_incident_quarantine_excludes_three_predictions_from_science() -> None:
+    rows = [
+        {
+            "id": 6868,
+            "timestamp": "2026-09-27T21:30:00Z",
+            "resolved": True,
+        },
+        {
+            "id": 6870,
+            "timestamp": "2026-09-27T21:31:00Z",
+            "resolved": True,
+        },
+        {
+            "id": 6872,
+            "timestamp": "2026-09-27T21:32:00Z",
+            "resolved": True,
+        },
+        {
+            "id": 7000,
+            "timestamp": "2026-09-27T23:00:00Z",
+            "resolved": True,
+        },
+    ]
+    summary = summarize_resolved_sample(rows)
+    assert summary.raw_resolved_rows == 1
+    assert summary.independent_1h == 1
+    assert summary.calendar_days == 1
