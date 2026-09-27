@@ -57,6 +57,7 @@ class GPTraderPaperBook:
         self.execution_engine.set_audit_listener(self.trade_journal.on_audit_event)
         self._last_prices: dict[str, float] = {}
         self._last_run_id: str | None = None
+        self._applied_decisions: dict[str, dict[str, Any]] = {}
         self._restore()
 
     def _resolve_starting_equity(self) -> float:
@@ -92,6 +93,7 @@ class GPTraderPaperBook:
             for symbol, price in (state.get("last_prices") or {}).items()
         }
         self._last_run_id = state.get("last_run_id")
+        self._applied_decisions = {str(k): dict(v) for k, v in (state.get("applied_decisions") or {}).items() if isinstance(v, dict)}
         for position in self.execution_engine.positions.values():
             self.trade_journal.on_audit_event(
                 {"event": "POSITION_OPEN", "position": position.to_dict()}
@@ -115,6 +117,7 @@ class GPTraderPaperBook:
                 "risk_state": self.risk_kernel.state.to_dict(),
                 "last_prices": dict(self._last_prices),
                 "last_run_id": self._last_run_id,
+                "applied_decisions": dict(self._applied_decisions),
             }
         )
 
@@ -174,6 +177,10 @@ class GPTraderPaperBook:
         packet_id = str(packet["packet_id"])
         policy_id = str(decision.get("policy_id") or "GPTRADER")
         exploratory_scale = decision.get("size_scale")
+        apply_key = f"{policy_id}|{packet_id}"
+        prior_result = self._applied_decisions.get(apply_key)
+        if prior_result is not None:
+            return dict(prior_result)
         self._last_run_id = str(run_id)
 
         if action == "ABSTAIN":
@@ -187,6 +194,7 @@ class GPTraderPaperBook:
             }
             if persist_decision:
                 self._record_decision(run_id, packet, decision, result)
+            self._applied_decisions[apply_key] = dict(result)
             self._persist()
             return result
 
@@ -204,6 +212,7 @@ class GPTraderPaperBook:
             }
             if persist_decision:
                 self._record_decision(run_id, packet, decision, result)
+            self._applied_decisions[apply_key] = dict(result)
             self._persist()
             return result
 
@@ -235,6 +244,7 @@ class GPTraderPaperBook:
         }
         if persist_decision:
             self._record_decision(run_id, packet, decision, result)
+        self._applied_decisions[apply_key] = dict(result)
         self._persist()
         return result
 
