@@ -45,18 +45,34 @@ class GPTraderStore:
         os.replace(tmp, path)
 
     @staticmethod
-    def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    def _read_jsonl(
+        path: Path,
+        *,
+        recover_torn_tail: bool = False,
+    ) -> list[dict[str, Any]]:
         if not path.exists():
             return []
         rows: list[dict[str, Any]] = []
-        with open(path, "r", encoding="utf-8") as handle:
-            for raw in handle:
-                raw = raw.strip()
-                if not raw:
-                    continue
-                value = json.loads(raw)
-                if isinstance(value, dict):
-                    rows.append(value)
+        raw_lines = path.read_bytes().splitlines(keepends=True)
+        valid_bytes = 0
+        for index, raw in enumerate(raw_lines):
+            stripped = raw.strip()
+            if not stripped:
+                valid_bytes += len(raw)
+                continue
+            try:
+                value = json.loads(stripped)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                if recover_torn_tail and index == len(raw_lines) - 1:
+                    with open(path, "r+b") as handle:
+                        handle.truncate(valid_bytes)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    break
+                raise
+            if isinstance(value, dict):
+                rows.append(value)
+            valid_bytes += len(raw)
         return rows
 
     def _decision_index(self) -> dict[str, dict[str, Any]]:
@@ -70,7 +86,7 @@ class GPTraderStore:
                 index = {}
 
         authoritative: dict[str, dict[str, Any]] = {}
-        for row in self._read_jsonl(self.paths.decisions):
+        for row in self._read_jsonl(self.paths.decisions, recover_torn_tail=True):
             policy_id = str(row.get("policy_id") or "")
             packet_id = str(row.get("packet_id") or "")
             if not policy_id or not packet_id:
@@ -83,7 +99,9 @@ class GPTraderStore:
             }
             prior = authoritative.get(key)
             if prior is not None:
-                raise ValueError("duplicate decision in durable log")
+                if prior == meta:
+                    continue
+                raise ValueError("conflicting duplicate decision in durable log")
             authoritative[key] = meta
 
         if authoritative != index:
@@ -114,7 +132,7 @@ class GPTraderStore:
 
     def read_decisions(self) -> list[dict[str, Any]]:
         with self._lock:
-            return self._read_jsonl(self.paths.decisions)
+            return self._read_jsonl(self.paths.decisions, recover_torn_tail=True)
 
     def find_decision(self, policy_id: str, packet_id: str) -> dict[str, Any] | None:
         key = self._decision_key(policy_id, packet_id)
@@ -122,7 +140,7 @@ class GPTraderStore:
             meta = self._decision_index().get(key)
             if meta is None:
                 return None
-            for row in reversed(self._read_jsonl(self.paths.decisions)):
+            for row in reversed(self._read_jsonl(self.paths.decisions, recover_torn_tail=True)):
                 if (
                     row.get("policy_id") == policy_id
                     and row.get("packet_id") == packet_id
