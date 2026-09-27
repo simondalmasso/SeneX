@@ -117,12 +117,16 @@ def gptrader_public_trades(
 def gptrader_public_state(root: str | Path | None = None) -> dict[str, Any]:
     paths = GPTraderPaths.from_root(root)
     paper = _read_json(paths.root / "paper_state.json")
-    try:
-        decisions = GPTraderStore(paths.root).read_decisions()
-        decision_log_status = "OK"
-    except Exception:
+    if not paths.decisions.exists():
         decisions = None
-        decision_log_status = "QUARANTINED"
+        decision_log_status = "MISSING"
+    else:
+        try:
+            decisions = GPTraderStore(paths.root).read_decisions()
+            decision_log_status = "OK"
+        except Exception:
+            decisions = None
+            decision_log_status = "QUARANTINED"
     packets = _read_jsonl(paths.sealed_packets)
     trades = _read_jsonl(paths.trades)
     verdict = _public_verdict(paths)
