@@ -515,3 +515,40 @@ def test_missing_paper_state_with_durable_decision_fails_closed(tmp_path: Path) 
 
     with pytest.raises(RuntimeError, match="PAPER_STATE"):
         DecisionService(GPTraderStore(tmp_path))
+
+
+def test_conflicting_legacy_decision_is_visible_in_health_quarantine(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    first = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-health-conflict",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-health-conflict",
+        "decision_hash": "1" * 64,
+    }
+    conflict = {**first, "decision_hash": "2" * 64}
+    store._append_jsonl(store.paths.decisions, first)
+    store._append_jsonl(store.paths.decisions, conflict)
+    service = DecisionService(store, paper_book=FakeBook())
+
+    health = service.get_gptrader_health()
+    assert health["ready"] is False
+    assert health["decision_log_health"]["status"] == "QUARANTINED"
+    assert health["decision_log_health"]["reason"] == "CONFLICTING_DUPLICATE_DECISION"
+    assert health["decision_log_health"]["key"] == "GPTRADER_CHAT_V1|packet-health-conflict"
+    assert store.decision_quarantine_path.exists()
+
+
+def test_corrupt_cursor_is_distinct_from_missing_and_visible_in_health(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    service = DecisionService(store, paper_book=FakeBook())
+    missing = service.get_gptrader_health()
+    assert missing["cursor_ready"] is True
+    assert missing["cursor_status"] == "MISSING"
+
+    store.paths.cursor.write_text("{broken", encoding="utf-8")
+    corrupt = service.get_gptrader_health()
+    assert corrupt["ready"] is False
+    assert corrupt["cursor_ready"] is False
+    assert corrupt["cursor_status"] == "CORRUPT"
+    assert corrupt["cursor"] is None
