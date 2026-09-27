@@ -14,11 +14,13 @@ from .decisions import (
     DecisionService,
     DecisionValidationError,
 )
+from .sealer import PACKET_HARD_MAX_BYTES
 from .store import GPTraderStore
 
 PROTOCOL_VERSION = "2025-06-18"
 TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
 INGEST_TOKEN_ENV = "SENEX_GPTRADER_INGEST_TOKEN"
+INGEST_REQUEST_MAX_BYTES = PACKET_HARD_MAX_BYTES + 1024
 
 
 def _tools() -> list[dict[str, Any]]:
@@ -160,8 +162,19 @@ async def _call_tool(
     raise DecisionValidationError("UNKNOWN_TOOL")
 
 
-def build_mcp_app(
-    service: DecisionService,
+async def _read_bounded_json(request: Request) -> Any:
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > INGEST_REQUEST_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="INGEST_REQUEST_TOO_LARGE")
+        body.extend(chunk)
+    try:
+        return json.loads(bytes(body))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="INVALID_INGEST_REQUEST") from exc
+
+
+def build_mcp_app(    service: DecisionService,
     *,
     token: str,
     ingest_token: str | None = None,
@@ -189,7 +202,7 @@ def build_mcp_app(
             if not hmac.compare_digest(authorization, expected):
                 raise HTTPException(status_code=401, detail="INGEST_AUTH_REQUIRED")
 
-            payload = await request.json()
+            payload = await _read_bounded_json(request)
             if not isinstance(payload, dict) or set(payload) != {"packet"}:
                 raise HTTPException(status_code=400, detail="INVALID_INGEST_REQUEST")
             try:

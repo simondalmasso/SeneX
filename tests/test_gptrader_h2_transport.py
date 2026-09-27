@@ -199,3 +199,21 @@ def test_transport_surface_has_no_d1_current_price_or_outcome_fetch() -> None:
         "os.system",
     ):
         assert forbidden not in text
+
+
+def test_http_ingest_rejects_oversized_request_before_mutation(tmp_path: Path) -> None:
+    mcp_token = "m" * 32
+    ingest_token = "i" * 32
+    app = build_mcp_app(service(tmp_path), token=mcp_token, ingest_token=ingest_token)
+    client = TestClient(app)
+    packet = build_sealed_packet(source(), 1)
+    packet["extra"] = "x" * 20000
+
+    response = client.post(
+        "/ingest/t0",
+        headers={"Authorization": f"Bearer {ingest_token}"},
+        json={"packet": packet},
+    )
+
+    assert response.status_code == 413
+    assert PacketSealer(root=tmp_path).read_after(None) == []
