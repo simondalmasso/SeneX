@@ -132,6 +132,41 @@ def test_duplicate_retry_is_one_durable_decision_and_one_fill(tmp_path: Path) ->
     assert store.cursor_seq() == 1
 
 
+def test_decision_log_repairs_missing_corrupt_or_stale_index_after_crash(tmp_path: Path, monkeypatch) -> None:
+    store = GPTraderStore(tmp_path)
+    row = {
+        "ts": "2026-09-27T21:30:00+00:00",
+        "run_id": "run-index-crash",
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-index-crash",
+        "action": "ABSTAIN",
+        "reason_codes": ["TEST"],
+        "idempotency_key": "idem-index-crash",
+        "decision_hash": "d" * 64,
+    }
+    original_atomic = store._atomic_json
+
+    def crash_before_index_commit(path: Path, value) -> None:
+        if path == store.paths.decisions_index:
+            raise RuntimeError("synthetic index crash")
+        original_atomic(path, value)
+
+    monkeypatch.setattr(store, "_atomic_json", crash_before_index_commit)
+    with pytest.raises(RuntimeError, match="synthetic index crash"):
+        store.append_decision(row)
+    assert len(store.read_decisions()) == 1
+
+    for index_payload in (None, "{broken", "{}"):
+        if index_payload is None:
+            store.paths.decisions_index.unlink(missing_ok=True)
+        else:
+            store.paths.decisions_index.write_text(index_payload, encoding="utf-8")
+        restarted = GPTraderStore(tmp_path)
+        assert restarted.find_decision("GPTRADER_CHAT_V1", "packet-index-crash") == row
+        with pytest.raises(ValueError, match="decision already exists"):
+            restarted.append_decision(row)
+
+
 def test_conflicting_retry_fails_closed(tmp_path: Path) -> None:
     store, packets, _, svc = setup_service(tmp_path, count=1)
     cursor = svc.cursor_for_seq(0)
