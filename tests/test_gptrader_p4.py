@@ -290,3 +290,19 @@ def test_gptrader_p4_has_no_d1_broker_wallet_or_shell_dispatch(tmp_path: Path) -
         "exec(",
     ):
         assert forbidden not in text
+
+
+def test_mcp_healthz_is_minimal_and_paper_only(tmp_path: Path) -> None:
+    _, _, _, svc = setup_service(tmp_path, count=1)
+    app = build_mcp_app(svc, token="x" * 32)
+    client = TestClient(app)
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "status": "ok",
+        "service": "senex-gptrader-decision",
+        "paper_only": True,
+        "simulation_only": True,
+        "live": False,
+    }
