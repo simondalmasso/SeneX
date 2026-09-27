@@ -13,6 +13,24 @@ LIVE=false
 REAL_ORDERS=0
 CAPITAL=0
 
+
+## Runtime ownership gate
+
+The Decision MCP is valid only with all of these exact deployment invariants:
+
+- instances=1
+- autoscaling=off
+- uvicorn workers=1
+- one persistent GPTrader state root
+- exclusive GPTrader root lease acquired at startup
+
+If the root lease cannot be acquired, the runtime must refuse startup. Do not run a second worker or rolling instance against the same state root.
+
+MCP_RUNTIME=FROZEN until exact-head CI and independent review clear activation.
+PERSISTENCE=NO until persistent-volume restart proof passes.
+TASK_CONNECTED=NO.
+READY_FOR_SCHEDULE=NO.
+
 ## Tool surface
 
 The scheduled decision task may use only these Decision MCP tools:
