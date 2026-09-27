@@ -445,3 +445,73 @@ def test_mcp_raw_body_is_bounded_and_malformed_fails_closed(tmp_path: Path) -> N
     )
     assert client.post("/mcp", headers=headers, content=oversized).status_code == 413
     assert client.post("/mcp", headers=headers, content=b'{"jsonrpc":').status_code == 400
+
+
+def test_newline_terminated_corrupt_final_decision_fails_closed_without_truncate(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    store.paths.decisions.write_bytes(
+        b'{"policy_id":"GPTRADER_CHAT_V1","packet_id":"committed-but-corrupt"\n'
+    )
+    before = store.paths.decisions.read_bytes()
+
+    with pytest.raises(Exception):
+        store.read_decisions()
+
+    assert store.paths.decisions.read_bytes() == before
+
+    replacement = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "committed-but-corrupt",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-replacement",
+        "decision_hash": "e" * 64,
+    }
+    with pytest.raises(Exception):
+        store.append_decision(replacement)
+    assert store.paths.decisions.read_bytes() == before
+
+
+def test_first_durable_duplicate_commit_is_authoritative(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    first = {
+        "ts": "2026-09-27T10:00:00+00:00",
+        "run_id": "run-first",
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-first-wins",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-first-wins",
+        "decision_hash": "f" * 64,
+    }
+    retry = {
+        **first,
+        "ts": "2026-09-27T10:05:00+00:00",
+        "run_id": "run-retry",
+    }
+    store._append_jsonl(store.paths.decisions, first)
+    store._append_jsonl(store.paths.decisions, retry)
+
+    found = GPTraderStore(tmp_path).find_decision(
+        "GPTRADER_CHAT_V1",
+        "packet-first-wins",
+    )
+    assert found is not None
+    assert found["run_id"] == "run-first"
+    assert found["ts"] == "2026-09-27T10:00:00+00:00"
+
+
+def test_missing_paper_state_with_durable_decision_fails_closed(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    packet = PacketSealer(root=tmp_path).seal(row("2026-09-27T23:00:00+00:00"))
+    service = DecisionService(store)
+    asyncio.run(
+        service.submit_paper_decisions(
+            "run-before-state-loss",
+            service.cursor_for_seq(0),
+            [decision(packet["packet_id"], "TAKE")],
+        )
+    )
+    assert store.load_paper_state() is not None
+    store.paper_state_path.unlink()
+
+    with pytest.raises(RuntimeError, match="PAPER_STATE"):
+        DecisionService(GPTraderStore(tmp_path))
