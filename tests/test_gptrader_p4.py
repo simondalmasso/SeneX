@@ -378,3 +378,70 @@ def test_mcp_healthz_is_minimal_and_paper_only(tmp_path: Path) -> None:
         "simulation_only": True,
         "live": False,
     }
+
+
+def test_decision_log_recovers_torn_final_line(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    first = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-torn-1",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-torn-1",
+        "decision_hash": "a" * 64,
+    }
+    store.append_decision(first)
+    with open(store.paths.decisions, "ab") as handle:
+        handle.write(b'{"policy_id":"GPTRADER_CHAT_V1"')
+
+    restarted = GPTraderStore(tmp_path)
+    assert restarted.find_decision("GPTRADER_CHAT_V1", "packet-torn-1") == first
+
+    second = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-torn-2",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-torn-2",
+        "decision_hash": "b" * 64,
+    }
+    restarted.append_decision(second)
+    assert [row["packet_id"] for row in restarted.read_decisions()] == [
+        "packet-torn-1",
+        "packet-torn-2",
+    ]
+
+
+def test_legacy_identical_duplicate_is_safe_but_conflict_fails_closed(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    row = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-legacy",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-legacy",
+        "decision_hash": "c" * 64,
+    }
+    store._append_jsonl(store.paths.decisions, row)
+    store._append_jsonl(store.paths.decisions, dict(row))
+
+    restarted = GPTraderStore(tmp_path)
+    assert restarted.find_decision("GPTRADER_CHAT_V1", "packet-legacy") == row
+
+    conflict = dict(row)
+    conflict["decision_hash"] = "d" * 64
+    store._append_jsonl(store.paths.decisions, conflict)
+    with pytest.raises(ValueError, match="conflicting duplicate"):
+        GPTraderStore(tmp_path).find_decision("GPTRADER_CHAT_V1", "packet-legacy")
+
+
+def test_mcp_raw_body_is_bounded_and_malformed_fails_closed(tmp_path: Path) -> None:
+    _, _, _, svc = setup_service(tmp_path, count=1)
+    app = build_mcp_app(svc, token="x" * 32)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer " + "x" * 32}
+
+    oversized = (
+        b'{"jsonrpc":"2.0","id":1,"method":"initialize","x":"'
+        + b"x" * (70 * 1024)
+        + b'"}'
+    )
+    assert client.post("/mcp", headers=headers, content=oversized).status_code == 413
+    assert client.post("/mcp", headers=headers, content=b'{"jsonrpc":').status_code == 400
