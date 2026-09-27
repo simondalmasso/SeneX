@@ -10,6 +10,28 @@ MIN_INDEPENDENT_1H = 600
 MIN_CALENDAR_DAYS = 14
 MAX_INDEPENDENT_1H_PER_DAY = 24
 
+ORDER086_INCIDENT_PREDICTION_IDS = frozenset({"6868", "6870", "6872"})
+ORDER086_INCIDENT_START = datetime(2026, 9, 27, 21, 29, 53, tzinfo=timezone.utc)
+ORDER086_INCIDENT_END = datetime(2026, 9, 27, 22, 10, 23, tzinfo=timezone.utc)
+
+
+def is_order086_incident_quarantined(row: dict[str, Any]) -> bool:
+    for key in ("id", "prediction_id", "source_prediction_id"):
+        value = row.get(key)
+        if value is not None and str(value) in ORDER086_INCIDENT_PREDICTION_IDS:
+            return True
+
+    if row.get("packet_id"):
+        timestamp = row.get("timestamp", row.get("ts"))
+        if timestamp:
+            try:
+                dt = _parse_timestamp(timestamp)
+            except (TypeError, ValueError):
+                return False
+            if ORDER086_INCIDENT_START <= dt < ORDER086_INCIDENT_END:
+                return True
+    return False
+
 
 def _parse_timestamp(value: Any) -> datetime:
     if not isinstance(value, str) or not value.strip():
@@ -51,7 +73,12 @@ def summarize_resolved_sample(rows: Iterable[dict[str, Any]]) -> ResolvedSampleS
     days: set[str] = set()
     raw = 0
     logical_rows = logical_decision_rows(
-        [row for row in rows if isinstance(row, dict)]
+        [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and not is_order086_incident_quarantined(row)
+        ]
     )
     for row in logical_rows:
         if row.get("resolved") is not True:
