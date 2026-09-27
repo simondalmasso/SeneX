@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 MIN_INDEPENDENT_1H = 600
 MIN_CALENDAR_DAYS = 14
+MAX_INDEPENDENT_1H_PER_DAY = 24
 
 
 def _parse_timestamp(value: Any) -> datetime:
@@ -39,6 +40,10 @@ class SampleGate:
     verdict: str
 
 
+def geometry_is_possible(independent_1h: int, calendar_days: int) -> bool:
+    return independent_1h <= MAX_INDEPENDENT_1H_PER_DAY * calendar_days
+
+
 def summarize_resolved_sample(rows: Iterable[dict[str, Any]]) -> ResolvedSampleSummary:
     clusters: set[str] = set()
     days: set[str] = set()
@@ -51,12 +56,15 @@ def summarize_resolved_sample(rows: Iterable[dict[str, Any]]) -> ResolvedSampleS
         clusters.add(cluster)
         days.add(cluster[:10])
     ordered = tuple(sorted(clusters))
-    return ResolvedSampleSummary(
+    summary = ResolvedSampleSummary(
         raw_resolved_rows=raw,
         independent_1h=len(ordered),
         calendar_days=len(days),
         cluster_ids=ordered,
     )
+    if not geometry_is_possible(summary.independent_1h, summary.calendar_days):
+        raise AssertionError("summarized sample violates hourly geometry")
+    return summary
 
 
 def sample_gate(independent_1h: int, calendar_days: int) -> SampleGate:
@@ -64,6 +72,13 @@ def sample_gate(independent_1h: int, calendar_days: int) -> SampleGate:
         raise ValueError("independent_1h must be a non-negative integer")
     if isinstance(calendar_days, bool) or not isinstance(calendar_days, int) or calendar_days < 0:
         raise ValueError("calendar_days must be a non-negative integer")
+    if not geometry_is_possible(independent_1h, calendar_days):
+        return SampleGate(
+            independent_1h=independent_1h,
+            calendar_days=calendar_days,
+            passed=False,
+            verdict="IMPOSSIBLE_SAMPLE_GEOMETRY",
+        )
     passed = independent_1h >= MIN_INDEPENDENT_1H and calendar_days >= MIN_CALENDAR_DAYS
     return SampleGate(
         independent_1h=independent_1h,

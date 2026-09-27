@@ -89,7 +89,8 @@ def test_raw_resolved_rows_do_not_inflate_independent_n():
 
 
 def test_sample_gate_exact_boundaries_and_failures():
-    assert sample_gate(600, 14).passed is True
-    assert sample_gate(600, 14).verdict == "GATE_OPEN"
-    assert sample_gate(599, 14).verdict == "INSUFFICIENT_DATA"
-    assert sample_gate(600, 13).verdict == "INSUFFICIENT_DATA"
+    assert sample_gate(600, 25).passed is True
+    assert sample_gate(600, 25).verdict == "GATE_OPEN"
+    assert sample_gate(599, 25).verdict == "INSUFFICIENT_DATA"
+    assert sample_gate(312, 13).verdict == "INSUFFICIENT_DATA"
+    assert sample_gate(600, 14).verdict == "IMPOSSIBLE_SAMPLE_GEOMETRY"

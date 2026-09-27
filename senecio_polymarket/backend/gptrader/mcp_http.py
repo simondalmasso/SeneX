@@ -86,11 +86,6 @@ def _tools() -> list[dict[str, Any]]:
                                     "minLength": 1,
                                     "maxLength": 160,
                                 },
-                                "size_scale": {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0,
-                                    "maximum": 10,
-                                },
                             },
                             "additionalProperties": False,
                         },
@@ -165,8 +160,8 @@ async def _call_tool(
 
 
 def build_mcp_app(service: DecisionService, *, token: str) -> FastAPI:
-    if not isinstance(token, str) or len(token) < 6:
-        raise ValueError("a nontrivial bearer token is required")
+    if not isinstance(token, str) or len(token) < 32:
+        raise ValueError("bearer token must be at least 32 characters")
 
     app = FastAPI(
         title="SENEX GPTrader Decision MCP",

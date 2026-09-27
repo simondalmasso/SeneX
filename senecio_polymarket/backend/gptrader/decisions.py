@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import math
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -15,7 +14,7 @@ from .store import GPTraderStore
 POLICY_ID = "GPTRADER_CHAT_V1"
 MAX_BATCH = 16
 _ALLOWED_DECISION_KEYS = frozenset(
-    {"packet_id", "action", "reason_codes", "idempotency_key", "size_scale"}
+    {"packet_id", "action", "reason_codes", "idempotency_key"}
 )
 
 
@@ -111,14 +110,6 @@ class DecisionService:
             "reason_codes": clean_reasons,
             "idempotency_key": idem,
         }
-        if "size_scale" in value:
-            try:
-                scale = float(value["size_scale"])
-            except (TypeError, ValueError) as exc:
-                raise DecisionValidationError("size_scale must be numeric") from exc
-            if not math.isfinite(scale) or not 0.0 < scale <= 10.0:
-                raise DecisionValidationError("size_scale must be finite in (0,10]")
-            normalized["size_scale"] = scale
         return normalized
 
     def _decision_hash(self, normalized: dict[str, Any]) -> str:
@@ -205,8 +196,6 @@ class DecisionService:
             "simulation_only": True,
             "live": False,
             "orders_enabled": False,
-            "cash": raw.get("cash"),
-            "equity": raw.get("equity"),
             "open_count": raw.get("open_count"),
             "kill_switch_active": risk.get("kill_switch_active"),
             "last_run_id": raw.get("last_run_id"),

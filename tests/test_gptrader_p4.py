@@ -104,11 +104,19 @@ def test_decision_safe_state_has_no_recent_results(tmp_path: Path) -> None:
     state = svc.get_gptrader_state()
     assert state["paper_only"] is True
     assert state["live"] is False
-    assert state["cash"] == 9999.0
-    assert state["equity"] == 10001.0
     assert state["open_count"] == 1
     encoded = repr(state).lower()
-    for forbidden in ("outcome", "realized_pnl", "price_1h_later", "trades"):
+    for forbidden in (
+        "cash",
+        "equity",
+        "outcome",
+        "realized_pnl",
+        "return",
+        "win",
+        "loss",
+        "price_1h_later",
+        "trades",
+    ):
         assert forbidden not in encoded
 
 
@@ -159,6 +167,7 @@ def test_cursor_mismatch_and_nonprefix_batch_apply_zero(tmp_path: Path) -> None:
         {"d1": "query"},
         {"url": "https://example.com"},
         {"shell": "echo nope"},
+        {"size_scale": 2.0},
     ],
 )
 def test_forbidden_decision_fields_fail_closed(tmp_path: Path, extra: dict) -> None:
@@ -248,12 +257,13 @@ def test_settlement_read_requires_durable_decision(tmp_path: Path) -> None:
 
 def test_mcp_http_requires_auth_and_exposes_only_four_tools(tmp_path: Path) -> None:
     _, _, _, svc = setup_service(tmp_path, count=1)
-    app = build_mcp_app(svc, token="secret")
+    token = "x" * 32
+    app = build_mcp_app(svc, token=token)
     client = TestClient(app)
     assert client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).status_code == 401
     response = client.post(
         "/mcp",
-        headers={"Authorization": "Bearer secret"},
+        headers={"Authorization": f"Bearer {token}"},
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
     )
     assert response.status_code == 200

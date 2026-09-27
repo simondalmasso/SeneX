@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .paths import GPTraderPaths
-from .science import MIN_CALENDAR_DAYS, MIN_INDEPENDENT_1H
+from .science import MIN_CALENDAR_DAYS, MIN_INDEPENDENT_1H, geometry_is_possible
 
 
 class Verdict(str, Enum):
@@ -72,6 +72,14 @@ def evaluate_verdict(metrics: dict[str, Any]) -> VerdictResult:
         "independent_1h",
     )
     calendar_days = _nonnegative_int(metrics.get("calendar_days", 0), "calendar_days")
+
+    if not geometry_is_possible(independent_1h, calendar_days):
+        return VerdictResult(
+            Verdict.INDETERMINATE,
+            ("IMPOSSIBLE_SAMPLE_GEOMETRY",),
+            independent_1h,
+            calendar_days,
+        )
 
     if independent_1h < MIN_INDEPENDENT_1H or calendar_days < MIN_CALENDAR_DAYS:
         return VerdictResult(

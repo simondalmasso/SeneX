@@ -14,7 +14,7 @@ from senecio_polymarket.backend.gptrader.verdict import (
 
 COMMON = {
     "independent_1h": 600,
-    "calendar_days": 14,
+    "calendar_days": 25,
     "cost_stress_2x_sign_stable": True,
 }
 
@@ -39,7 +39,7 @@ def test_exact_verdict_enum() -> None:
 
 def test_sample_gate_precedes_all_other_claims() -> None:
     assert verdict(independent_1h=599, signal_evidence=True) is Verdict.INSUFFICIENT_DATA
-    assert verdict(calendar_days=13, signal_evidence=True) is Verdict.INSUFFICIENT_DATA
+    assert verdict(independent_1h=312, calendar_days=13, signal_evidence=True) is Verdict.INSUFFICIENT_DATA
 
 
 def test_every_preregistered_verdict_path() -> None:
@@ -123,7 +123,7 @@ def test_persisted_verdict_contains_gate_and_provenance(tmp_path) -> None:
     assert result.verdict is Verdict.SENEX_SIGNAL_USEFUL_EVIDENCE
     assert payload["verdict"] == "SENEX_SIGNAL_USEFUL_EVIDENCE"
     assert payload["independent_1h"] == 600
-    assert payload["calendar_days"] == 14
+    assert payload["calendar_days"] == 25
     assert payload["provenance"]["head_sha"] == "abc123"
 
 
