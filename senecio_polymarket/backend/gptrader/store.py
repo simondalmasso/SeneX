@@ -337,6 +337,15 @@ class GPTraderStore:
         try:
             self._decision_index()
         except DecisionLogError as exc:
+            if self.decision_quarantine_path.exists():
+                try:
+                    marker = json.loads(
+                        self.decision_quarantine_path.read_text(encoding="utf-8")
+                    )
+                    if isinstance(marker, dict):
+                        return {"ok": False, **marker}
+                except (OSError, json.JSONDecodeError):
+                    pass
             return {"ok": False, "status": "QUARANTINED", "reason": type(exc).__name__}
         return {"ok": True, "status": "OK"}
 
