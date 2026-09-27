@@ -257,6 +257,43 @@ def test_crash_after_decision_commit_recovers_without_duplicate_fill(tmp_path: P
     assert store.cursor_seq() == 1
 
 
+def test_crash_after_paper_apply_before_cursor_does_not_reapply_execution(tmp_path: Path) -> None:
+    store = GPTraderStore(tmp_path)
+    packet = PacketSealer(root=tmp_path).seal(row("2026-09-27T22:00:00+00:00"))
+    fired = {"value": False}
+
+    def crash_once(event: str) -> None:
+        if event == "after_paper_apply_before_cursor" and not fired["value"]:
+            fired["value"] = True
+            raise RuntimeError("synthetic post-paper crash")
+
+    crashing = DecisionService(store, fault_hook=crash_once)
+    cursor = crashing.cursor_for_seq(0)
+    payload = [decision(packet["packet_id"], "TAKE")]
+    with pytest.raises(RuntimeError, match="synthetic post-paper crash"):
+        asyncio.run(crashing.submit_paper_decisions("run-crash", cursor, payload))
+
+    assert store.cursor_seq() == 0
+    state_after_crash = store.load_paper_state()
+    assert state_after_crash is not None
+    assert state_after_crash["positions"]
+    assert state_after_crash["risk_state"]["proposals_evaluated"] == 1
+
+    restarted_store = GPTraderStore(tmp_path)
+    restarted = DecisionService(restarted_store)
+    result = asyncio.run(
+        restarted.submit_paper_decisions("run-recover", cursor, payload)
+    )
+    state_after_retry = restarted_store.load_paper_state()
+
+    assert result["recovered"] is True
+    assert restarted_store.cursor_seq() == 1
+    assert state_after_retry is not None
+    assert state_after_retry["cash"] == state_after_crash["cash"]
+    assert state_after_retry["positions"] == state_after_crash["positions"]
+    assert state_after_retry["risk_state"] == state_after_crash["risk_state"]
+
+
 def test_crash_before_decision_commit_leaves_zero_mutation(tmp_path: Path) -> None:
     store, packets, book, _ = setup_service(tmp_path, count=1)
 
