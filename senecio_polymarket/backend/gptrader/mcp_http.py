@@ -316,8 +316,16 @@ def create_app_from_env() -> FastAPI:
     if len(ingest_token) < 32:
         raise ValueError("ingest bearer token must be at least 32 characters")
 
-    return build_mcp_app(
-        DecisionService(GPTraderStore()),
-        token=token,
-        ingest_token=ingest_token,
-    )
+    store = GPTraderStore()
+    lease = store.acquire_runtime_lease()
+    try:
+        app = build_mcp_app(
+            DecisionService(store),
+            token=token,
+            ingest_token=ingest_token,
+        )
+    except Exception:
+        lease.close()
+        raise
+    app.state.gptrader_root_lease = lease
+    return app
