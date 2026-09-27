@@ -131,18 +131,29 @@ class DecisionService:
         except Exception as exc:
             seal_health = {"ok": False, "log_status": "ERROR", "error": type(exc).__name__}
             seal_ok = False
+        cursor_state = self.store.cursor_state()
+        cursor_ok = cursor_state.get("status") != "CORRUPT"
+        decision_health = self.store.decision_log_health()
+        decision_ok = bool(decision_health.get("ok"))
+        cursor_seq = cursor_state.get("packet_seq")
         result = {
-            "ready": seal_ok,
+            "ready": seal_ok and cursor_ok and decision_ok,
             "paper_only": True,
             "simulation_only": True,
             "live": False,
             "schema_version": "gptrader.decision.v1",
             "policy_id": self.policy_id,
             "volume_ready": self.store.paths.root.is_dir(),
-            "cursor_ready": True,
-            "cursor": self.cursor_for_seq(self.store.cursor_seq()),
+            "cursor_ready": cursor_ok,
+            "cursor_status": cursor_state.get("status"),
+            "cursor": (
+                self.cursor_for_seq(int(cursor_seq))
+                if isinstance(cursor_seq, int)
+                else None
+            ),
             "packet_count": len(self.store.read_packets()),
             "seal_health": seal_health,
+            "decision_log_health": decision_health,
         }
         self._audit("get_gptrader_health", ready=result["ready"])
         return result
