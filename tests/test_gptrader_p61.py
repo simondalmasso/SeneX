@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +12,19 @@ from senecio_polymarket.backend.gptrader.mcp_http import build_mcp_app, create_a
 from senecio_polymarket.backend.gptrader.science import sample_gate, summarize_resolved_sample
 from senecio_polymarket.backend.gptrader.store import GPTraderStore
 from senecio_polymarket.backend.gptrader.verdict import Verdict, evaluate_verdict
+
+
+def _lease_worker(root: str, gate, out) -> None:
+    os.environ["SENEX_RESULTS_DIR"] = root
+    os.environ["SENEX_GPTRADER_MCP_TOKEN"] = "m" * 32
+    os.environ["SENEX_GPTRADER_INGEST_TOKEN"] = "i" * 32
+    try:
+        app = create_app_from_env()
+        out.put(("owner", os.getpid()))
+        gate.wait(5)
+        _ = app
+    except Exception as exc:
+        out.put(("refused", type(exc).__name__, str(exc)))
 
 
 class BlindBook:
@@ -124,3 +139,44 @@ def test_decision_mcp_schema_has_no_size_scale(tmp_path) -> None:
     submit=next(tool for tool in tools if tool["name"]=="submit_paper_decisions")
     properties=submit["inputSchema"]["properties"]["decisions"]["items"]["properties"]
     assert "size_scale" not in properties
+
+
+def test_science_summary_dedupes_identical_legacy_decisions() -> None:
+    first = {
+        "timestamp": "2026-09-27T12:00:00Z",
+        "resolved": True,
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-science-dedupe",
+    }
+    retry = {**first, "run_id": "retry"}
+    summary = summarize_resolved_sample([first, retry])
+    assert summary.raw_resolved_rows == 1
+    assert summary.independent_1h == 1
+    assert summary.calendar_days == 1
+
+
+def test_runtime_root_has_exactly_one_process_owner(tmp_path) -> None:
+    ctx = multiprocessing.get_context("spawn")
+    gate = ctx.Event()
+    out = ctx.Queue()
+    root = str(tmp_path / "shared")
+
+    first = ctx.Process(target=_lease_worker, args=(root, gate, out))
+    first.start()
+    first_result = out.get(timeout=15)
+    assert first_result[0] == "owner"
+
+    second = ctx.Process(target=_lease_worker, args=(root, gate, out))
+    second.start()
+    second_result = out.get(timeout=15)
+
+    gate.set()
+    first.join(timeout=15)
+    second.join(timeout=15)
+    if first.is_alive():
+        first.terminate()
+    if second.is_alive():
+        second.terminate()
+
+    assert second_result[0] == "refused"
+    assert "OWN" in second_result[-1].upper() or "LOCK" in second_result[-1].upper()
