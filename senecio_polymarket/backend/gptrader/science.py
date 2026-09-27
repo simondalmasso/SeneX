@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
+from .store import logical_decision_rows
+
 MIN_INDEPENDENT_1H = 600
 MIN_CALENDAR_DAYS = 14
 MAX_INDEPENDENT_1H_PER_DAY = 24
@@ -48,8 +50,11 @@ def summarize_resolved_sample(rows: Iterable[dict[str, Any]]) -> ResolvedSampleS
     clusters: set[str] = set()
     days: set[str] = set()
     raw = 0
-    for row in rows:
-        if not isinstance(row, dict) or row.get("resolved") is not True:
+    logical_rows = logical_decision_rows(
+        [row for row in rows if isinstance(row, dict)]
+    )
+    for row in logical_rows:
+        if row.get("resolved") is not True:
             continue
         raw += 1
         cluster = hour_cluster_id(str(row.get("timestamp") or ""))
