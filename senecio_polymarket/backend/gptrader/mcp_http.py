@@ -21,6 +21,7 @@ PROTOCOL_VERSION = "2025-06-18"
 TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
 INGEST_TOKEN_ENV = "SENEX_GPTRADER_INGEST_TOKEN"
 INGEST_REQUEST_MAX_BYTES = PACKET_HARD_MAX_BYTES + 1024
+MCP_REQUEST_MAX_BYTES = 64 * 1024
 
 
 def _tools() -> list[dict[str, Any]]:
@@ -162,16 +163,22 @@ async def _call_tool(
     raise DecisionValidationError("UNKNOWN_TOOL")
 
 
-async def _read_bounded_json(request: Request) -> Any:
+async def _read_bounded_json(
+    request: Request,
+    *,
+    max_bytes: int = INGEST_REQUEST_MAX_BYTES,
+    too_large: str = "INGEST_REQUEST_TOO_LARGE",
+    invalid: str = "INVALID_INGEST_REQUEST",
+) -> Any:
     body = bytearray()
     async for chunk in request.stream():
-        if len(body) + len(chunk) > INGEST_REQUEST_MAX_BYTES:
-            raise HTTPException(status_code=413, detail="INGEST_REQUEST_TOO_LARGE")
+        if len(body) + len(chunk) > max_bytes:
+            raise HTTPException(status_code=413, detail=too_large)
         body.extend(chunk)
     try:
         return json.loads(bytes(body))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="INVALID_INGEST_REQUEST") from exc
+        raise HTTPException(status_code=400, detail=invalid) from exc
 
 
 def build_mcp_app(
@@ -236,7 +243,12 @@ def build_mcp_app(
         if not hmac.compare_digest(authorization, expected):
             raise HTTPException(status_code=401, detail="MCP_AUTH_REQUIRED")
 
-        payload = await request.json()
+        payload = await _read_bounded_json(
+            request,
+            max_bytes=MCP_REQUEST_MAX_BYTES,
+            too_large="MCP_REQUEST_TOO_LARGE",
+            invalid="INVALID_MCP_REQUEST",
+        )
         if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
             return JSONResponse(
                 _jsonrpc_error(payload.get("id") if isinstance(payload, dict) else None, -32600, "Invalid Request")
