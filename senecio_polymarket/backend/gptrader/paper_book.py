@@ -70,8 +70,13 @@ class GPTraderPaperBook:
 
     def _restore(self) -> None:
         state = self.store.load_paper_state()
+        durable_decisions = self.store.read_decisions()
         if not state:
+            if durable_decisions:
+                raise RuntimeError("PAPER_STATE_MISSING_WITH_DURABLE_DECISIONS")
             return
+        if durable_decisions and "applied_decisions" not in state:
+            raise RuntimeError("PAPER_STATE_APPLIED_LEDGER_MISSING")
         if state.get("scale_label") != self.scale_label:
             raise ValueError("paper state scale mismatch")
         self.execution_engine.cash = float(state.get("cash", self.starting_equity))
