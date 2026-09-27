@@ -243,6 +243,15 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             await asyncio.to_thread(seal_prediction_t0, prediction)
         except Exception as seal_err:
             log.warning("gptrader T0 sealing failed (continuing): %s", seal_err)
+        else:
+            try:
+                from .gptrader.transport import replicate_pending_t0
+                await asyncio.to_thread(replicate_pending_t0)
+            except Exception as replication_err:
+                log.warning(
+                    "gptrader T0 replication failed (continuing): %s",
+                    replication_err,
+                )
 
         # Dual-write to Supabase (best-effort — failure doesn't block the cycle)
         try:

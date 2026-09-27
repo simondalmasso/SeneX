@@ -18,6 +18,7 @@ from .store import GPTraderStore
 
 PROTOCOL_VERSION = "2025-06-18"
 TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
+INGEST_TOKEN_ENV = "SENEX_GPTRADER_INGEST_TOKEN"
 
 
 def _tools() -> list[dict[str, Any]]:
@@ -159,9 +160,18 @@ async def _call_tool(
     raise DecisionValidationError("UNKNOWN_TOOL")
 
 
-def build_mcp_app(service: DecisionService, *, token: str) -> FastAPI:
+def build_mcp_app(
+    service: DecisionService,
+    *,
+    token: str,
+    ingest_token: str | None = None,
+) -> FastAPI:
     if not isinstance(token, str) or len(token) < 32:
         raise ValueError("bearer token must be at least 32 characters")
+    if ingest_token is not None and (
+        not isinstance(ingest_token, str) or len(ingest_token) < 32
+    ):
+        raise ValueError("ingest bearer token must be at least 32 characters")
 
     app = FastAPI(
         title="SENEX GPTrader Decision MCP",
@@ -170,6 +180,30 @@ def build_mcp_app(service: DecisionService, *, token: str) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+
+    if ingest_token is not None:
+        @app.post("/ingest/t0")
+        async def ingest_t0(request: Request):
+            authorization = request.headers.get("authorization") or ""
+            expected = f"Bearer {ingest_token}"
+            if not hmac.compare_digest(authorization, expected):
+                raise HTTPException(status_code=401, detail="INGEST_AUTH_REQUIRED")
+
+            payload = await request.json()
+            if not isinstance(payload, dict) or set(payload) != {"packet"}:
+                raise HTTPException(status_code=400, detail="INVALID_INGEST_REQUEST")
+            try:
+                accepted = service.sealer.ingest(payload["packet"])
+            except (ValueError, RuntimeError, TypeError) as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail=type(exc).__name__,
+                ) from exc
+            return {
+                "packet_id": accepted["packet_id"],
+                "packet_seq": accepted["packet_seq"],
+                "packet_hash": accepted["packet_hash"],
+            }
 
     @app.post("/mcp")
     async def mcp(request: Request):
@@ -237,4 +271,17 @@ def create_app_from_env() -> FastAPI:
     token = os.environ.get(TOKEN_ENV)
     if not token:
         raise RuntimeError(f"{TOKEN_ENV} is required")
-    return build_mcp_app(DecisionService(GPTraderStore()), token=token)
+    if len(token) < 32:
+        raise ValueError("bearer token must be at least 32 characters")
+
+    ingest_token = os.environ.get(INGEST_TOKEN_ENV)
+    if not ingest_token:
+        raise RuntimeError(f"{INGEST_TOKEN_ENV} is required")
+    if len(ingest_token) < 32:
+        raise ValueError("ingest bearer token must be at least 32 characters")
+
+    return build_mcp_app(
+        DecisionService(GPTraderStore()),
+        token=token,
+        ingest_token=ingest_token,
+    )

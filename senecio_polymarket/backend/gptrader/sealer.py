@@ -383,6 +383,85 @@ class PacketSealer:
             _atomic_write_text(self.paths.packet_seq, f"{next_seq}\n")
             return packet
 
+
+    def ingest(self, packet: dict[str, Any]) -> dict[str, Any]:
+        """Durably accept one already-sealed T0 packet from the canonical producer."""
+
+        if not isinstance(packet, dict):
+            raise PacketSequenceError("replicated packet must be an object")
+        size = len(_canonical_bytes(packet))
+        if size > PACKET_HARD_MAX_BYTES:
+            raise PacketSizeError(
+                f"replicated packet exceeds hard limit: {size}>{PACKET_HARD_MAX_BYTES}"
+            )
+
+        contaminated = _find_contamination(packet)
+        if contaminated is not None:
+            location = ".".join(contaminated)
+            raise OutcomeContaminationError(
+                f"{OutcomeContaminationError.code}: {location}"
+            )
+
+        seq = packet.get("packet_seq")
+        packet_id = packet.get("packet_id")
+        packet_hash = packet.get("packet_hash")
+        if packet.get("schema_version") != SCHEMA_VERSION:
+            raise PacketSequenceError("replicated packet schema mismatch")
+        if isinstance(seq, bool) or not isinstance(seq, int) or seq <= 0:
+            raise PacketSequenceError("replicated packet_seq must be a positive integer")
+        if not isinstance(packet_id, str) or not packet_id:
+            raise PacketSequenceError("replicated packet_id is required")
+        if not isinstance(packet_hash, str) or len(packet_hash) != 64:
+            raise PacketSequenceError("replicated packet hash is invalid")
+
+        metadata = {"schema_version", "packet_seq", "packet_id", "packet_hash"}
+        payload = {key: copy.deepcopy(value) for key, value in packet.items() if key not in metadata}
+        expected = _packet_from_payload(payload, seq)
+        if expected["packet_hash"] != packet_hash or expected["packet_id"] != packet_id:
+            raise PacketSequenceError("replicated packet hash/id mismatch")
+
+        with self._lock:
+            by_id, log_seq, pending = self._scan()
+            checkpoint_seq = self._checkpoint_seq()
+            if checkpoint_seq > log_seq:
+                raise PacketSequenceError(
+                    f"packet_seq checkpoint {checkpoint_seq} is ahead of durable log {log_seq}"
+                )
+
+            existing = by_id.get(packet_id)
+            if existing is not None:
+                if (
+                    existing.get("packet_hash") != packet_hash
+                    or existing.get("packet_seq") != seq
+                    or existing != packet
+                ):
+                    raise PacketSequenceError(
+                        f"replicated packet conflict for packet_id {packet_id}"
+                    )
+                if checkpoint_seq < log_seq:
+                    _atomic_write_text(self.paths.packet_seq, f"{log_seq}\n")
+                return copy.deepcopy(existing)
+
+            if pending is not None:
+                self._append_torn_tail_marker(pending)
+                by_id, log_seq, pending = self._scan()
+                if pending is not None:
+                    raise PacketSequenceError("torn-tail recovery did not converge")
+
+            expected_seq = log_seq + 1
+            if seq != expected_seq:
+                raise PacketSequenceError(
+                    f"replicated packet sequence gap: expected {expected_seq}, found {seq}"
+                )
+
+            encoded = _canonical_bytes(packet) + b"\n"
+            with open(self.paths.sealed_packets, "ab") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            _atomic_write_text(self.paths.packet_seq, f"{seq}\n")
+            return copy.deepcopy(packet)
+
     def read_after(self, cursor: PacketCursor | str | None, limit: int = 16) -> list[dict[str, Any]]:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 16:
             raise ValueError("limit must be between 1 and 16")
