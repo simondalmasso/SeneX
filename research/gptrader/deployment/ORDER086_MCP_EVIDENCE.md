@@ -1,126 +1,144 @@
-# ORDER086 Decision MCP deployment evidence
+# ORDER086 Decision MCP evidence
 
 Updated: 2026-09-27
 Branch: `order086/gptrader-paper-mcp`
 
-This document records only verified preflight and code evidence. It does not claim that the Decision MCP is deployed or schedule-ready.
+This evidence is fail-closed. It does not claim runtime persistence, schedule readiness, merge readiness, or live capability.
 
-## Safety authority
+## Safety
 
 - PAPER_ONLY=true
 - SIMULATION_ONLY=true
 - LIVE=NO
 - REAL_ORDERS=0
 - CAPITAL=0
-- DIRECT_GP_TRADER_D1_READS=0
-- DIRECT_GP_TRADER_D1_WRITES=0
-- Existing GPTrader task must remain disconnected until runtime smoke, legitimate producer proof, persistence proof, and ORDER087 clearance all pass.
+- DIRECT_GPTRADER_D1_READS=0
+- DIRECT_GPTRADER_D1_WRITES=0
+- Existing `GPTrader Hourly PAPER` remains disconnected.
+- H011 remains restored to canonical c7 and is outside this branch's deployment path.
+- H011 auto-deploy remains disarmed.
+- MCP runtime activation remains frozen pending independent exact-head clearance.
 
-## GitHub code state
+## Incident quarantine
 
-- Parent H2 implementation SHA: `2f5d5e6000ab589306225e1aae7a9fb90e0470ae`
-- Parent canonical CI: `36301491015` PASS, full product regression 203 passed, Docker build PASS, compileall PASS.
-- Parent mirror: `36301489106` PASS.
-- The ORDER086 forward-fix series adds an HTTP streaming body bound for `/ingest/t0`; exact-head CI/mirror must pass before deployment.
-- PR #76 remains DRAFT and unmerged.
+Canonical incident manifest:
 
-## Northflank preflight
+`research/gptrader/deployment/ORDER086_INCIDENT_QUARANTINE.json`
 
-- Team: `simondalmassos-team`
-- Project: `seneciobot`
-- Authenticated team-scoped Northflank API/CLI context: PASS.
-- Service-create permission `ps_services_general_create`: PASS.
-- Existing services: `seneciobot`, `senecio-h011`.
-- Target service `senex-gptrader-mcp`: NOT CREATED.
-- Developer Sandbox documented service allowance: 2 services; the project already has 2.
-- Billing usage/invoice endpoints for the current account return `403 Feature disabled for your account`.
-- Smallest listed deployment plan: `nf-compute-10` (0.1 vCPU, 256 MiB), account-reported $0.004/hour and $2.70/month.
-- Local Decision MCP startup/auth-boundary smoke: PASS.
-- PaaS persistent-volume minimum: 6 GB.
-- Preferred volume: `nvme`, `ReadWriteOnce`, 6144 MiB, mounted at `/app/polymarket/results`.
-- Published disk rate: $0.15/GB/month; 6 GB adds $0.90/month.
-- Verified steady-state infrastructure floor: $3.60/month for `nf-compute-10` + 6 GB persistent volume, before usage-dependent build/network charges.
-- COST_POLICY=BLOCK_REAL_COST until owner explicitly authorizes Northflank cost.
+Quarantined prediction IDs:
 
-## Producer topology
+`6868, 6870, 6872`
 
-H1 shared storage is rejected for the existing H011 volume:
+Incident epoch:
 
-- Existing `h011-results-vol` is `ReadWriteOnce`.
-- It is attached to `senecio-h011`.
-- It must not be simultaneously attached to an unrelated Decision MCP workload.
+`[2026-09-27T21:29:53Z, 2026-09-27T22:10:23Z)`
 
-H2 one-way T0 replication is the selected topology:
+Rules:
 
-- Existing SENEX oracle/sealer remains the sole canonical packet producer.
-- Consumer endpoint: authenticated `POST /ingest/t0`.
-- Replicated packet id/hash/seq are revalidated by the consumer.
-- Identical duplicate is a no-op.
-- Conflicting id/hash, sequence gap, bad hash, oversized packet, and future/outcome contamination fail closed.
-- Consumer journal/checkpoint are durable before acknowledgement.
-- Producer replication cursor advances only after an exact acknowledgement.
-- Request body is streaming-bounded before JSON decoding.
-- Decision MCP tool surface remains exactly four tools; ingest is not an MCP tool.
-- No D1/current-price/outcome lookup is added by the transport.
+- preserve incident rows/packets for forensics;
+- do not delete or rewrite them;
+- exclude the three prediction rows and any derived settlement/science contribution from canonical evaluation;
+- quarantine any sealed T0 packet whose packet/payload timestamp falls inside the incident epoch;
+- incident PAPER mutations independently observed: 0.
 
-H2 code is not runtime-active yet. The current H011 deployment is sourced from legacy GitLab and would need a PAPER-only ORDER086 producer deployment before real packets can replicate. That deployment requires the separate authorization gate in ORDER086 if not otherwise authorized.
+## Decision-log durability and migration
 
-## Intended Decision MCP service
+The durable decision log now enforces:
 
-Source repository: `https://github.com/simondalmasso/SeneX`
+- only a genuinely torn, non-newline final JSON fragment may be auto-truncated;
+- malformed newline-terminated or non-tail corruption fails closed and writes an explicit local quarantine marker;
+- identical legacy duplicates are logically deduplicated by `(policy_id, packet_id)`;
+- first durable occurrence remains authoritative for provenance;
+- conflicting duplicates fail closed and surface through Decision MCP health;
+- public/science logical counts use first-occurrence dedupe;
+- corrupt cursor is distinct from missing cursor and makes Decision MCP health not-ready;
+- missing `paper_state.json` with durable decisions fails closed;
+- a durable decision history with no applied-decision ledger fails closed.
 
-Source branch: `order086/gptrader-paper-mcp`
+## Runtime ownership invariant
 
-Dockerfile: `/Dockerfile`
+Hard deployment invariant:
 
-Workdir: `/`
+- instances=1
+- autoscaling=off
+- uvicorn workers=1
+- one GPTrader state root per runtime
+- startup must hold the exclusive OS-level GPTrader root lease
+- a second process sharing the same root must refuse startup
 
-Runtime command:
+Required runtime command:
 
 ```text
 uvicorn backend.gptrader.mcp_http:create_app_from_env --factory --host 0.0.0.0 --port 8080 --workers 1 --no-access-log
 ```
 
-Runtime variables required for H2:
+The runtime factory owns the root lease for the lifetime of the FastAPI application. This is the code enforcement behind the one-instance/one-worker contract.
 
-- `SENEX_GPTRADER_MCP_TOKEN` — secret, >=32 chars; never persist value.
-- `SENEX_GPTRADER_INGEST_TOKEN` — separate producer-ingest secret, >=32 chars; never persist value.
-- `SENEX_RESULTS_DIR=/app/polymarket/results`
-- H011 producer additionally needs the ingest URL and ingest token only when activation is authorized.
+## Persistence claim boundary
 
-Forbidden in Decision MCP runtime:
+Local filesystem durability has been hardened:
 
-- Supabase/D1 credentials
+- decision/log appends flush + `fsync`;
+- atomic JSON replacement flushes the file and fsyncs the parent directory on POSIX;
+- sealed packet first-create and checkpoint replacement fsync the parent directory on POSIX;
+- TradeJournal appends flush + `fsync`, with parent-directory fsync on first create on POSIX.
+
+This does not prove provider-level power-loss durability. A provider may still have storage/cache semantics outside the process's control.
+
+Therefore:
+
+```text
+N7_DURABILITY_CLAIM=BOUNDED_LOCAL_POSIX_FSYNC_ONLY
+PERSISTENCE=NO
+```
+
+`PERSISTENCE` may become PASS only after the accepted exact SHA runs against the intended persistent volume and survives a deliberate restart with unchanged cursor, decisions, PAPER state, packet log, and logical counts.
+
+## H2 transport
+
+H2 remains the selected topology:
+
+- sole canonical SENEX producer;
+- authenticated `POST /ingest/t0`;
+- packet id/hash/seq revalidation;
+- identical resend no-op;
+- conflicts, gaps, bad hash, oversize, and future/outcome contamination fail closed;
+- consumer durable before ACK;
+- producer cursor advances only after exact ACK;
+- no D1/current-price/outcome lookup.
+
+No H2 activation is authorized while MCP is frozen.
+
+## Decision MCP tool boundary
+
+Exactly four MCP tools:
+
+1. `get_gptrader_health`
+2. `get_prediction_batch`
+3. `get_gptrader_state`
+4. `submit_paper_decisions`
+
+`/ingest/t0` is not an MCP tool.
+
+Authenticated `/mcp` raw request body is bounded before JSON decode. The ingest body is also streaming-bounded before JSON decode.
+
+Forbidden runtime capabilities/credentials:
+
+- D1/Supabase credentials
 - exchange credentials
 - wallet credentials
 - broker credentials
-- private keys
+- signer/private keys
+- arbitrary shell dispatch
 
-Port: internal HTTP 8080. Public Decision MCP exposure, if created, must use Northflank HTTPS/TLS. Producer transport should use the narrowest authenticated route available; no arbitrary fetch endpoint is permitted.
+## Current activation status
 
-## Runtime proof status
+```text
+MCP_RUNTIME=FROZEN
+PERSISTENCE=NO
+TASK_CONNECTED=NO
+READY_FOR_SCHEDULE=NO
+MERGE=BLOCKED
+```
 
-- MCP_SOURCE_SHA=NOT_DEPLOYED
-- MCP_HTTPS=NOT_CREATED
-- MCP_AUTH=NOT_PROVISIONED
-- MCP_RUNTIME_SMOKE=NOT_RUN
-- MCP_RESTART_PERSISTENCE=NOT_RUN
-- SEALED_PACKET_PRODUCER=CODE_DEFINED_RUNTIME_NOT_PROVEN
-- SEALED_PACKET_COUNT=NOT_PROVEN
-- READY_FOR_SCHEDULE=NO
-- EXISTING_GPTRADER_TASK_CONNECTED=NO
-- No TAKE is required or permitted solely to test deployment.
-
-## Rollback
-
-Before connecting the existing GPTrader Hourly PAPER task, rollback is defined as:
-
-1. Disable the existing GPTrader Hourly PAPER task.
-2. Stop or pause the dedicated Decision MCP service.
-3. Retain the persistent volume and deployment evidence.
-4. Do not delete GPTrader journals.
-5. Do not mutate SENEX control PAPER state.
-6. Preserve logs and checkpoint evidence.
-7. Restore the last verified source SHA if source rollback is needed.
-
-Rollback is non-destructive.
+Manual exact-SHA deployment may only reopen after exact-head canonical CI PASS plus independent ORDER087/GLM and ARENA clearance. Any later deployment must read back the exact deployed SHA and preserve the single-instance/single-worker invariant.
