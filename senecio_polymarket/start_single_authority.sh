@@ -27,6 +27,12 @@ if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_KEY:-}" ]; then
   exit 78
 fi
 
+echo "[start_single_authority.sh] verifying deployment eligibility..."
+if ! python -m backend.deployment_gate verify; then
+  echo "[start_single_authority.sh] FATAL: deployment gate denied runtime boot" >&2
+  exit 78
+fi
+
 rm -f "$HEARTBEAT_FILE"
 
 echo "[start_single_authority.sh] launching settlement authority + reconciliation guard..."
