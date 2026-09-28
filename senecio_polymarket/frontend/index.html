@@ -165,6 +165,8 @@
           <div class="risk-cell"><div class="label">TAKE</div><div class="value" id="gptrader-take">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">ABSTAIN</div><div class="value" id="gptrader-abstain">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Kernel rejects</div><div class="value" id="gptrader-rejects">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Decision log</div><div class="value" id="gptrader-decision-log">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Last run</div><div class="value compact-value" id="gptrader-last-run">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Open hypothetical</div><div class="value" id="gptrader-open">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Closed hypothetical</div><div class="value" id="gptrader-closed">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Normalized return</div><div class="value" id="gptrader-return">UNKNOWN</div></div>
@@ -173,6 +175,16 @@
         </div>
         <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
           <div id="gptrader-detail" style="color:var(--text-dim)">EDGE=UNPROVEN · PAPER_ONLY · SIMULATION_ONLY</div>
+        </div>
+      </div>
+
+      <div id="gptrader-trades-panel" class="panel" data-domain="score" data-claim-class="API_DERIVED">
+        <div class="panel-head"><h2>GPTrader PAPER trade tape</h2><span id="gptrader-trades-meta" class="meta">[UNKNOWN/STALE] read-only MCP-derived ledger</span></div>
+        <div class="table-wrap">
+          <table id="gptrader-trades-table" class="table">
+            <thead><tr><th scope="col">EXIT</th><th scope="col">SYM</th><th scope="col">DIR</th><th scope="col">NOTIONAL</th><th scope="col">ENTRY</th><th scope="col">EXIT PX</th><th scope="col">PNL</th><th scope="col">REASON</th></tr></thead>
+            <tbody id="gptrader-trades-body"><tr><td colspan="8" class="placeholder">No closed PAPER trades yet</td></tr></tbody>
+          </table>
         </div>
       </div>
 

@@ -499,6 +499,8 @@
     $('#gptrader-take').textContent = show(data.take_count);
     $('#gptrader-abstain').textContent = show(data.abstain_count);
     $('#gptrader-rejects').textContent = show(data.kernel_reject_count);
+    $('#gptrader-decision-log').textContent = show(data.decision_log_status);
+    $('#gptrader-last-run').textContent = show(data.last_run_id);
     $('#gptrader-open').textContent = show(data.open_hypothetical_positions);
     $('#gptrader-closed').textContent = show(data.closed_hypothetical_positions);
     $('#gptrader-return').textContent = percent(data.normalized_realized_return_pct);
@@ -521,17 +523,60 @@
     }
   }
 
+  function renderGPTraderTrades(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const rows = Array.isArray(data.trades) ? data.trades : [];
+    const body = $('#gptrader-trades-body');
+    const meta = $('#gptrader-trades-meta');
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="8" class="placeholder">No closed PAPER trades yet ? waiting for MCP-driven TAKE settlements</td></tr>';
+      meta.textContent = '[API_DERIVED] ' + (data.count == null ? '0' : data.count) + ' closed ? PAPER_ONLY ? read-only';
+      return;
+    }
+    body.innerHTML = rows.slice().reverse().map((row) => {
+      const pnlMissing = row.realized_pnl_usd == null;
+      const pnl = pnlMissing ? NaN : Number(row.realized_pnl_usd);
+      const pnlClass = Number.isFinite(pnl) ? (pnl > 0 ? 'pnl-pos' : (pnl < 0 ? 'pnl-neg' : 'pnl-flat')) : 'pnl-flat';
+      const pnlText = Number.isFinite(pnl) ? money(pnl, 2) : 'UNKNOWN';
+      return '<tr>' +
+        '<td>' + clock(row.exit_ts || row.created_at || row.entry_ts) + '</td>' +
+        '<td class="sym">' + esc(row.symbol || '?') + '</td>' +
+        '<td>' + esc(row.direction || '?') + '</td>' +
+        '<td class="num">' + (row.notional_usd == null ? '?' : money(row.notional_usd, 2)) + '</td>' +
+        '<td class="num">' + (row.entry_price == null ? '?' : money(row.entry_price, 2)) + '</td>' +
+        '<td class="num">' + (row.exit_price == null ? '?' : money(row.exit_price, 2)) + '</td>' +
+        '<td class="num ' + pnlClass + '">' + pnlText + '</td>' +
+        '<td>' + esc(row.exit_reason || '?') + '</td>' +
+      '</tr>';
+    }).join('');
+    meta.textContent = '[API_DERIVED] ' + (data.count ?? rows.length) + ' closed ? refreshed 5s ? PAPER_ONLY ? LIVE=NO';
+  }
+
+  async function refreshGPTraderTrades() {
+    try {
+      const payload = await getJSON('/api/gptrader/trades?limit=20');
+      renderGPTraderTrades(payload);
+      $('#gptrader-trades-panel').dataset.claimClass = 'API_DERIVED';
+    } catch (error) {
+      $('#gptrader-trades-body').innerHTML = '<tr><td colspan="8" class="placeholder">GPTrader trade tape unavailable</td></tr>';
+      $('#gptrader-trades-meta').textContent = '[UNKNOWN/STALE] TRADE TAPE ERROR ? ' + (error.message || error);
+      $('#gptrader-trades-panel').dataset.claimClass = 'UNKNOWN/STALE';
+    }
+  }
+
   window.__SENEX_DASHBOARD__ = Object.freeze({
     refreshContext,
     refreshScore,
     refreshPredictions,
     refreshPaper,
     refreshGPTrader,
+    refreshGPTraderTrades,
     renderScore,
     renderContext,
     renderPredictions,
     renderPaper,
     renderGPTrader,
+    renderGPTraderTrades,
     paperView,
     state,
   });
@@ -542,10 +587,12 @@
   refreshPredictions();
   refreshPaper();
   refreshGPTrader();
+  refreshGPTraderTrades();
   setInterval(refreshContext, 2000);
   setInterval(refreshScore, 10000);
   setInterval(refreshPredictions, 60000);
   setInterval(refreshPaper, 5000);
   setInterval(refreshGPTrader, 5000);
+  setInterval(refreshGPTraderTrades, 5000);
   setInterval(renderDomainHealth, 1000);
 })();
