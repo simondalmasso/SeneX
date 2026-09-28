@@ -534,7 +534,8 @@
       return;
     }
     body.innerHTML = rows.slice().reverse().map((row) => {
-      const pnl = Number(row.realized_pnl_usd);
+      const pnlMissing = row.realized_pnl_usd == null;
+      const pnl = pnlMissing ? NaN : Number(row.realized_pnl_usd);
       const pnlClass = Number.isFinite(pnl) ? (pnl > 0 ? 'pnl-pos' : (pnl < 0 ? 'pnl-neg' : 'pnl-flat')) : 'pnl-flat';
       const pnlText = Number.isFinite(pnl) ? money(pnl, 2) : 'UNKNOWN';
       return '<tr>' +
