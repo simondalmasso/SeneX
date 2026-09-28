@@ -71,6 +71,16 @@ log = logging.getLogger("senecio.trade_journal")
 DEFAULT_JOURNAL_PATH = "data/journal/trades.jsonl"
 
 
+def _fsync_parent(path: Path) -> None:
+    if os.name == "nt":
+        return
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class TradeJournal:
     """Append-only ledger of closed trades.
 
@@ -250,8 +260,14 @@ class TradeJournal:
 
     def _append(self, record: dict) -> None:
         try:
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, default=str) + "\n")
+            created = not self.path.exists()
+            encoded = (json.dumps(record, default=str) + "\n").encode("utf-8")
+            with open(self.path, "ab", buffering=0) as f:
+                f.write(encoded)
+                f.flush()
+                os.fsync(f.fileno())
+            if created:
+                _fsync_parent(self.path)
             log.info(
                 "journal record written: %s %s pnl=$%.2f reason=%s holding=%ds",
                 record.get("symbol"), record.get("direction"),

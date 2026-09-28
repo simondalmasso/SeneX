@@ -141,7 +141,7 @@
       </div>
 
       <div id="paper-exec-panel" class="panel" data-domain="context" data-claim-class="API_DERIVED">
-        <div class="panel-head"><h2>Paper execution · HYPOTHETICAL</h2><span id="paper-exec-meta" class="meta">[UNKNOWN/STALE] awaiting /api/paper/state</span></div>
+        <div class="panel-head"><h2>SENEX native PAPER — CONTROL</h2><span id="paper-exec-meta" class="meta">[UNKNOWN/STALE] awaiting /api/paper/state</span></div>
         <div class="risk-grid">
           <div class="risk-cell"><div class="label">Bankroll · HYPOTHETICAL</div><div class="value" id="paper-bankroll">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Cash</div><div class="value" id="paper-cash">UNKNOWN</div></div>
@@ -154,6 +154,25 @@
         </div>
         <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
           <div id="paper-exec-detail" style="color:var(--text-dim)">—</div>
+        </div>
+      </div>
+
+      <div id="gptrader-panel" class="panel" data-domain="score" data-claim-class="API_DERIVED">
+        <div class="panel-head"><h2>GPTrader PAPER/HYPOTHETICAL — TREATMENT</h2><span id="gptrader-meta" class="meta">[UNKNOWN/STALE] awaiting /api/gptrader/state</span></div>
+        <div class="risk-grid">
+          <div class="risk-cell"><div class="label">Status</div><div class="value" id="gptrader-status">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Sealed packets</div><div class="value" id="gptrader-packets">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">TAKE</div><div class="value" id="gptrader-take">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">ABSTAIN</div><div class="value" id="gptrader-abstain">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Kernel rejects</div><div class="value" id="gptrader-rejects">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Open hypothetical</div><div class="value" id="gptrader-open">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Closed hypothetical</div><div class="value" id="gptrader-closed">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Normalized return</div><div class="value" id="gptrader-return">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Max drawdown</div><div class="value" id="gptrader-drawdown">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Verdict</div><div class="value" id="gptrader-verdict">INSUFFICIENT_DATA</div></div>
+        </div>
+        <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
+          <div id="gptrader-detail" style="color:var(--text-dim)">EDGE=UNPROVEN · PAPER_ONLY · SIMULATION_ONLY</div>
         </div>
       </div>
 
