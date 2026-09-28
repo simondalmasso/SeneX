@@ -204,8 +204,13 @@ class GPTraderStore:
                     line_no=index + 1,
                     raw=raw,
                 ) from exc
-            if isinstance(value, dict):
-                rows.append(value)
+            if not isinstance(value, dict):
+                raise DecisionLogCorruptionError(
+                    f"non-object JSONL record at line {index + 1}",
+                    line_no=index + 1,
+                    raw=raw,
+                )
+            rows.append(value)
             valid_bytes += len(raw)
         return rows
 
