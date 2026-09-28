@@ -169,3 +169,58 @@ def test_public_counts_dedupe_identical_legacy_decisions_first_occurrence(tmp_pa
     assert state["take_count"] == 1
     assert state["abstain_count"] == 0
     assert state["kernel_reject_count"] == 0
+
+
+def test_view_root_env_points_dashboard_at_consumer_state(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    producer = tmp_path / "producer"
+    consumer = tmp_path / "consumer"
+    _write_jsonl(producer / "sealed_packets.jsonl", [{"packet_id": "producer-only"}])
+    _write_jsonl(
+        consumer / "sealed_packets.jsonl",
+        [{"packet_id": "consumer-1"}, {"packet_id": "consumer-2"}],
+    )
+    monkeypatch.setenv("SENEX_GPTRADER_VIEW_ROOT", str(consumer))
+
+    state = gptrader_public_state()
+
+    assert state["packet_count"] == 2
+
+
+def test_mcp_root_env_is_separate_from_producer_results_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from senecio_polymarket.backend.gptrader.mcp_http import create_app_from_env
+
+    producer_base = tmp_path / "producer-base"
+    consumer = tmp_path / "consumer"
+    monkeypatch.setenv("SENEX_RESULTS_DIR", str(producer_base))
+    monkeypatch.setenv("SENEX_GPTRADER_MCP_ROOT", str(consumer))
+    monkeypatch.setenv("SENEX_GPTRADER_MCP_TOKEN", "m" * 32)
+    monkeypatch.setenv("SENEX_GPTRADER_INGEST_TOKEN", "i" * 32)
+
+    app = create_app_from_env()
+    try:
+        lease_path = app.state.gptrader_root_lease.path
+        assert lease_path.parent == consumer
+        assert not (producer_base / "gptrader" / ".gptrader.owner.lock").exists()
+    finally:
+        app.state.gptrader_root_lease.close()
+
+
+def test_launcher_supports_isolated_single_worker_mcp_runtime() -> None:
+    launcher = (
+        Path(__file__).resolve().parents[1]
+        / "senecio_polymarket"
+        / "start_single_authority.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "SENEX_GPTRADER_MCP_PORT" in launcher
+    assert "SENEX_GPTRADER_MCP_ROOT" in launcher
+    assert "SENEX_GPTRADER_VIEW_ROOT" in launcher
+    assert "backend.gptrader.mcp_http:create_app_from_env" in launcher
+    assert "--workers 1" in launcher
+    assert "partial GPTrader MCP auth configuration" in launcher
