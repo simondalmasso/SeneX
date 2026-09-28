@@ -1,0 +1,211 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from senecio_polymarket.backend.gptrader.external_client import (
+    DecisionOutputError,
+    ExternalDecisionClient,
+    MCPJSONRPCClient,
+    MCPUnavailable,
+    OpenAICompatibleDecisionAdapter,
+    normalize_decisions,
+)
+
+
+def _health(**overrides):
+    value = {
+        "ready": True,
+        "paper_only": True,
+        "simulation_only": True,
+        "live": False,
+    }
+    value.update(overrides)
+    return value
+
+
+def _packets():
+    return [
+        {"packet_id": "pkt-1", "packet_seq": 1, "prediction": "LONG", "confidence": 0.61},
+        {"packet_id": "pkt-2", "packet_seq": 2, "prediction": "SHORT", "confidence": 0.57},
+    ]
+
+
+def _abstain_output():
+    return {
+        "decisions": [
+            {"packet_id": "pkt-1", "action": "ABSTAIN", "reason_codes": ["CANARY"]},
+            {"packet_id": "pkt-2", "action": "ABSTAIN", "reason_codes": ["CANARY"]},
+        ]
+    }
+
+
+class FakeMCP:
+    def __init__(self, health=None):
+        self.health = _health() if health is None else health
+        self.health_calls = 0
+        self.batch_calls = 0
+        self.submit_calls = 0
+        self.submitted = None
+
+    def get_gptrader_health(self):
+        self.health_calls += 1
+        if isinstance(self.health, Exception):
+            raise self.health
+        return self.health
+
+    def get_prediction_batch(self, cursor=None, limit=8):
+        self.batch_calls += 1
+        return {
+            "cursor_in": "c0",
+            "next_cursor": "c2",
+            "has_more": False,
+            "packets": _packets(),
+        }
+
+    def submit_paper_decisions(self, run_id, cursor, decisions):
+        self.submit_calls += 1
+        self.submitted = (run_id, cursor, decisions)
+        return {"applied": len(decisions), "duplicate": False, "cursor": "c2"}
+
+
+class StaticAdapter:
+    def __init__(self, output):
+        self.output = output
+        self.calls = 0
+
+    def decide(self, packets, *, run_id):
+        self.calls += 1
+        return self.output
+
+
+def test_mcp_unavailable_waits_without_requesting_batch_or_submitting():
+    mcp = FakeMCP(MCPUnavailable("unavailable"))
+    client = ExternalDecisionClient(mcp=mcp, adapter=StaticAdapter(_abstain_output()))
+
+    result = client.run_once(run_id="r1")
+
+    assert result["gate"] == "WAIT_MCP"
+    assert result["submitted"] is False
+    assert mcp.batch_calls == 0
+    assert mcp.submit_calls == 0
+
+
+def test_safety_mismatch_blocks_before_batch():
+    mcp = FakeMCP(_health(paper_only=False))
+    client = ExternalDecisionClient(mcp=mcp, adapter=StaticAdapter(_abstain_output()))
+
+    result = client.run_once(run_id="r1")
+
+    assert result["gate"] == "SAFETY_BLOCK"
+    assert result["submitted"] is False
+    assert mcp.batch_calls == 0
+    assert mcp.submit_calls == 0
+
+
+def test_malformed_model_output_fails_closed_without_submit():
+    mcp = FakeMCP()
+    client = ExternalDecisionClient(mcp=mcp, adapter=StaticAdapter("not-json"))
+
+    with pytest.raises(DecisionOutputError):
+        client.run_once(run_id="r1")
+
+    assert mcp.batch_calls == 1
+    assert mcp.submit_calls == 0
+
+
+def test_forbidden_direction_or_flip_fields_are_rejected():
+    packets = _packets()
+    bad = _abstain_output()
+    bad["decisions"][0]["direction"] = "LONG"
+
+    with pytest.raises(DecisionOutputError, match="forbidden|unknown"):
+        normalize_decisions(bad, packets)
+
+    bad = _abstain_output()
+    bad["decisions"][0]["flip"] = True
+    with pytest.raises(DecisionOutputError, match="forbidden|unknown"):
+        normalize_decisions(bad, packets)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"decisions": [{"packet_id": "pkt-1", "action": "ABSTAIN", "reason_codes": ["X"]}]},
+        {
+            "decisions": [
+                {"packet_id": "pkt-2", "action": "ABSTAIN", "reason_codes": ["X"]},
+                {"packet_id": "pkt-1", "action": "ABSTAIN", "reason_codes": ["X"]},
+            ]
+        },
+    ],
+)
+def test_output_cardinality_and_order_must_match_packet_prefix(value):
+    with pytest.raises(DecisionOutputError):
+        normalize_decisions(value, _packets())
+
+
+def test_normalization_adds_stable_idempotency_keys_without_direction():
+    first = normalize_decisions(_abstain_output(), _packets())
+    second = normalize_decisions(_abstain_output(), _packets())
+
+    assert first == second
+    assert all(item["idempotency_key"] for item in first)
+    assert all(set(item) == {"packet_id", "action", "reason_codes", "idempotency_key"} for item in first)
+
+
+def test_exactly_one_batch_and_one_submit_per_run():
+    mcp = FakeMCP()
+    adapter = StaticAdapter(_abstain_output())
+    client = ExternalDecisionClient(mcp=mcp, adapter=adapter, batch_limit=2)
+
+    result = client.run_once(run_id="r1")
+
+    assert result["gate"] == "READY"
+    assert result["submitted"] is True
+    assert result["applied"] == 2
+    assert mcp.health_calls == 1
+    assert mcp.batch_calls == 1
+    assert mcp.submit_calls == 1
+    assert adapter.calls == 1
+
+
+def test_mcp_client_repr_never_exposes_bearer():
+    secret = "s" * 48
+    client = MCPJSONRPCClient("https://example.invalid/mcp", token=secret)
+    assert secret not in repr(client)
+
+
+def test_openai_compatible_adapter_has_no_provider_sdk_and_sends_only_packets():
+    captured = {}
+
+    def fake_post(url, headers, payload, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["payload"] = payload
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(_abstain_output(), separators=(",", ":"))
+                    }
+                }
+            ]
+        }
+
+    adapter = OpenAICompatibleDecisionAdapter(
+        base_url="https://llm.example/v1",
+        model="model-x",
+        api_key="k" * 48,
+        http_post=fake_post,
+    )
+    result = adapter.decide(_packets(), run_id="run-x")
+
+    assert result == _abstain_output()
+    assert captured["url"] == "https://llm.example/v1/chat/completions"
+    wire = json.dumps(captured["payload"], sort_keys=True)
+    assert "pkt-1" in wire and "pkt-2" in wire
+    assert "current_market" not in wire
+    assert "settlement" not in wire
+    assert "outcome" not in wire
