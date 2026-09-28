@@ -11,6 +11,10 @@ MCP_ENABLED="${SENEX_GPTRADER_MCP_ENABLED:-0}"
 MCP_PORT="${SENEX_GPTRADER_MCP_PORT:-8787}"
 MCP_RESULTS_DIR="${SENEX_GPTRADER_MCP_RESULTS_DIR:-/app/polymarket/results/gptrader-mcp-runtime}"
 MCP_PID=""
+MCP_TOKEN_VALUE="${SENEX_GPTRADER_MCP_TOKEN:-}"
+INGEST_TOKEN_VALUE="${SENEX_GPTRADER_INGEST_TOKEN:-}"
+unset SENEX_GPTRADER_MCP_TOKEN
+unset SENEX_GPTRADER_INGEST_TOKEN
 
 # Portable integer validation: invalid operator overrides fail closed.
 case "$HEALTH_GRACE_S" in ''|*[!0-9]*) echo "[start_single_authority.sh] FATAL: invalid SENEX_RECONCILER_HEALTH_GRACE_SEC" >&2; exit 78;; esac
@@ -48,6 +52,8 @@ if [ "$MCP_ENABLED" = "1" ]; then
   mkdir -p "$MCP_RESULTS_DIR"
   export SENEX_GPTRADER_VIEW_ROOT="$MCP_RESULTS_DIR/gptrader"
   echo "[start_single_authority.sh] launching GPTrader Decision MCP sidecar on port ${MCP_PORT}..."
+  SENEX_GPTRADER_MCP_TOKEN="$MCP_TOKEN_VALUE" \
+  SENEX_GPTRADER_INGEST_TOKEN="$INGEST_TOKEN_VALUE" \
   SENEX_RESULTS_DIR="$MCP_RESULTS_DIR" \
     uvicorn backend.gptrader.mcp_http:create_app_from_env \
       --factory \
@@ -59,12 +65,10 @@ if [ "$MCP_ENABLED" = "1" ]; then
   MCP_PID=$!
 fi
 
-# The public/oracle process never needs the Decision MCP bearer token.
-# An enabled, already-started sidecar retains its inherited copy.
-unset SENEX_GPTRADER_MCP_TOKEN
-
-# Production entrypoint intentionally uses main_real: synthetic market scheduler
-# is disabled unless SENEX_ENABLE_SYNTHETIC_DEMO=1 is explicitly supplied.
+# Production entrypoint intentionally uses main_real: synthetic market scheduler.
+# It receives only the H2 ingest credential, never the Decision MCP bearer.
+# Synthetic market scheduler is disabled unless explicitly supplied.
+SENEX_GPTRADER_INGEST_TOKEN="$INGEST_TOKEN_VALUE" \
 uvicorn backend.main_real:app \
   --host 0.0.0.0 \
   --port 8080 \
