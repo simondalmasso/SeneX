@@ -278,7 +278,6 @@ class OpenAICompatibleDecisionAdapter:
     ) -> Any:
         payload = {
             "model": self.model,
-            "temperature": 0,
             "messages": [
                 {
                     "role": "system",
