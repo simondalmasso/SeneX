@@ -92,7 +92,8 @@ jobs:
             tests/test_authority_cross_build_rehydration.py \
             tests/test_b81_provenance.py \
             tests/test_d1_cold_hydration_hotfix.py \
-            tests/test_d1_quota_hotfix.py
+            tests/test_d1_quota_hotfix.py \
+            tests/test_order092_deployment_gate.py
 
       - name: Full product regression
         shell: bash
