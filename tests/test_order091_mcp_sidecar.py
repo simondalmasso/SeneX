@@ -22,6 +22,8 @@ def test_launcher_scopes_sidecar_results_without_repointing_producer():
     assert 'SENEX_RESULTS_DIR="$MCP_RESULTS_DIR"' in START
     assert 'export SENEX_GPTRADER_VIEW_ROOT="$MCP_RESULTS_DIR/gptrader"' in START
     assert 'export SENEX_RESULTS_DIR="$MCP_RESULTS_DIR"' not in START
+    assert "unset SENEX_GPTRADER_MCP_TOKEN" in START
+    assert START.index("unset SENEX_GPTRADER_MCP_TOKEN") < START.index("uvicorn backend.main_real:app")
 
 
 def test_launcher_fails_closed_on_mcp_process_exit_and_cleans_it_up():
