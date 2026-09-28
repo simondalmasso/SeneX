@@ -117,14 +117,34 @@ body {
 /* ============= MAIN GRID ============= */
 main {
   display: grid;
-  grid-template-columns: 320px 1fr 340px 360px;
+  grid-template-columns: minmax(360px, 1.35fr) minmax(330px, .95fr) minmax(300px, 1fr) minmax(300px, 1fr);
+  grid-template-areas: "oracle execution markets diagnostics";
   gap: 8px;
   padding: 8px;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
+  align-items: start;
 }
 .col { display: flex; flex-direction: column; gap: 8px; overflow: hidden; min-height: 0; }
 .col-left, .col-mid, .col-right, .col-oracle { min-height: 0; }
+.col-oracle { grid-area: oracle; }
+.col-right { grid-area: execution; }
+.col-left { grid-area: markets; }
+.col-mid { grid-area: diagnostics; }
+.col::before {
+  display: block;
+  padding: 2px 4px 0;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  line-height: 1;
+}
+.col-oracle::before { content: "01 ? ORACLE"; color: var(--accent); }
+.col-right::before { content: "02 ? PAPER EXECUTION"; color: var(--accent-2); }
+.col-left::before { content: "03 ? MARKET CONTEXT"; }
+.col-mid::before { content: "04 ? DIAGNOSTICS"; }
 
 /* ============= PANEL ============= */
 .panel {
@@ -370,6 +390,16 @@ main {
 }
 .risk-cell .value.pos { color: var(--accent); }
 .risk-cell .value.neg { color: var(--danger); }
+.risk-cell .value.compact-value {
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+#gptrader-trades-panel { min-height: 220px; }
+#gptrader-trades-table { min-width: 720px; }
+#gptrader-trades-table .pnl-pos { color: var(--accent); font-weight: 700; }
+#gptrader-trades-table .pnl-neg { color: var(--danger); font-weight: 700; }
+#gptrader-trades-table .pnl-flat { color: var(--text-dim); }
 
 /* ============= CHARTS ============= */
 .chart-wrap {
@@ -629,7 +659,10 @@ footer {
    Oracle col is now FIRST in DOM order (top-left on desktop, top on mobile). */
 @media (max-width: 1280px) {
   main {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "oracle execution"
+      "markets diagnostics";
     grid-template-rows: auto auto;
     overflow-y: auto;
   }
@@ -639,7 +672,12 @@ footer {
 }
 @media (max-width: 900px) {
   main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "oracle"
+      "execution"
+      "markets"
+      "diagnostics";
     grid-template-rows: auto;
     overflow-y: auto;
   }
