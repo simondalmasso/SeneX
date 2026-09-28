@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import os
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from .task_protocol import TaskGate, task_gate
 
 HttpPost = Callable[[str, dict[str, str], dict[str, Any], float], dict[str, Any]]
+
+DECISION_SCHEMA_VERSION = "gptrader.decision.v1"
+MCP_URL_ENV = "SENEX_GPTRADER_MCP_URL"
+MCP_TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
+PROVIDER_BASE_URL_ENV = "SENEX_DECISION_PROVIDER_BASE_URL"
+PROVIDER_MODEL_ENV = "SENEX_DECISION_PROVIDER_MODEL"
+PROVIDER_API_KEY_ENV = "SENEX_DECISION_PROVIDER_API_KEY"
+BATCH_LIMIT_ENV = "SENEX_GPTRADER_BATCH_LIMIT"
 
 
 class MCPClientError(RuntimeError):
@@ -285,7 +296,6 @@ class OpenAICompatibleDecisionAdapter:
                     "role": "user",
                     "content": _canonical(
                         {
-                            "run_id": str(run_id),
                             "sealed_t0_packets": list(packets),
                         }
                     ),
@@ -350,6 +360,12 @@ class ExternalDecisionClient:
                 "submitted": False,
                 "applied": 0,
             }
+        if health.get("schema_version") != DECISION_SCHEMA_VERSION:
+            return {
+                "gate": TaskGate.SAFETY_BLOCK.value,
+                "submitted": False,
+                "applied": 0,
+            }
 
         cursor = health.get("cursor")
         try:
@@ -395,3 +411,69 @@ class ExternalDecisionClient:
             "duplicate": bool(result.get("duplicate")),
             "cursor": result.get("cursor"),
         }
+
+
+
+def _required_env(environ: Mapping[str, str], name: str) -> str:
+    value = str(environ.get(name) or "").strip()
+    if not value:
+        raise RuntimeError(f"{name} is required")
+    return value
+
+
+def create_external_client_from_env(
+    environ: Mapping[str, str] | None = None,
+) -> ExternalDecisionClient:
+    env = os.environ if environ is None else environ
+    batch_raw = str(env.get(BATCH_LIMIT_ENV) or "8").strip()
+    try:
+        batch_limit = int(batch_raw)
+    except ValueError:
+        raise ValueError(f"{BATCH_LIMIT_ENV} must be an integer") from None
+
+    mcp = MCPJSONRPCClient(
+        _required_env(env, MCP_URL_ENV),
+        token=_required_env(env, MCP_TOKEN_ENV),
+    )
+    adapter = OpenAICompatibleDecisionAdapter(
+        base_url=_required_env(env, PROVIDER_BASE_URL_ENV),
+        model=_required_env(env, PROVIDER_MODEL_ENV),
+        api_key=_required_env(env, PROVIDER_API_KEY_ENV),
+    )
+    return ExternalDecisionClient(
+        mcp=mcp,
+        adapter=adapter,
+        batch_limit=batch_limit,
+    )
+
+
+def _generated_run_id() -> str:
+    now = datetime.now(timezone.utc)
+    return "EXT_" + now.strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run one fail-closed GPTrader PAPER decision batch."
+    )
+    parser.add_argument("--run-id", default=None)
+    args = parser.parse_args(list(argv) if argv is not None else None)
+    run_id = str(args.run_id or "").strip() or _generated_run_id()
+
+    try:
+        client = create_external_client_from_env()
+        result = client.run_once(run_id=run_id)
+    except Exception as exc:
+        print(_canonical({"error": type(exc).__name__, "status": "ERROR"}))
+        return 70
+
+    print(_canonical(result))
+    if result.get("gate") == TaskGate.WAIT_MCP.value:
+        return 75
+    if result.get("gate") == TaskGate.SAFETY_BLOCK.value:
+        return 78
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
