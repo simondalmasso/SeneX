@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,13 @@ def _scrub_future(value: Any) -> Any:
     return value
 
 
+def _view_root(root: str | Path | None = None) -> str | Path | None:
+    if root is not None:
+        return root
+    configured = os.environ.get("SENEX_GPTRADER_VIEW_ROOT")
+    return configured or None
+
+
 def _public_verdict(paths: GPTraderPaths) -> dict[str, Any]:
     raw = _read_json(paths.verdict)
     if raw is None:
@@ -91,7 +99,7 @@ def _public_verdict(paths: GPTraderPaths) -> dict[str, Any]:
 
 
 def gptrader_public_verdict(root: str | Path | None = None) -> dict[str, Any]:
-    return _public_verdict(GPTraderPaths.from_root(root))
+    return _public_verdict(GPTraderPaths.from_root(_view_root(root)))
 
 
 def gptrader_public_trades(
@@ -101,7 +109,7 @@ def gptrader_public_trades(
 ) -> dict[str, Any]:
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
         raise ValueError("limit must be between 1 and 50")
-    paths = GPTraderPaths.from_root(root)
+    paths = GPTraderPaths.from_root(_view_root(root))
     rows = _read_jsonl(paths.trades)
     selected = [] if rows is None else rows[-limit:]
     return {
@@ -115,7 +123,7 @@ def gptrader_public_trades(
 
 
 def gptrader_public_state(root: str | Path | None = None) -> dict[str, Any]:
-    paths = GPTraderPaths.from_root(root)
+    paths = GPTraderPaths.from_root(_view_root(root))
     paper = _read_json(paths.root / "paper_state.json")
     if not paths.decisions.exists():
         decisions = None

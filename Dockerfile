@@ -50,8 +50,8 @@ RUN addgroup --system --gid 10001 senex \
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-EXPOSE 8080
+EXPOSE 8080 8787
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -fsS http://localhost:8080/healthz || exit 1
+  CMD curl -fsS http://localhost:8080/healthz >/dev/null && { [ "${SENEX_GPTRADER_MCP_ENABLED:-0}" != "1" ] || curl -fsS "http://localhost:${SENEX_GPTRADER_MCP_PORT:-8787}/healthz" >/dev/null; } || exit 1
 USER senex:senex
 CMD ["/app/start_single_authority.sh"]
