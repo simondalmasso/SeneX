@@ -5,6 +5,7 @@ import traceback
 
 import pytest
 
+from senecio_polymarket.backend.gptrader import external_client as external_client_module
 from senecio_polymarket.backend.gptrader.external_client import (
     DecisionOutputError,
     ExternalDecisionClient,
@@ -21,6 +22,7 @@ def _health(**overrides):
         "paper_only": True,
         "simulation_only": True,
         "live": False,
+        "schema_version": "gptrader.decision.v1",
     }
     value.update(overrides)
     return value
@@ -210,6 +212,8 @@ def test_openai_compatible_adapter_has_no_provider_sdk_and_sends_only_packets():
     assert "current_market" not in wire
     assert "settlement" not in wire
     assert "outcome" not in wire
+    assert "run_id" not in wire
+    assert "run-x" not in wire
 
 
 def test_mcp_error_traceback_does_not_leak_bearer():
@@ -259,3 +263,61 @@ def test_provider_error_traceback_does_not_leak_api_key():
         )
     )
     assert secret not in rendered
+
+
+def test_schema_version_mismatch_blocks_before_batch():
+    mcp = FakeMCP(_health(schema_version="gptrader.decision.v2"))
+    client = ExternalDecisionClient(mcp=mcp, adapter=StaticAdapter(_abstain_output()))
+
+    result = client.run_once(run_id="r-schema")
+
+    assert result["gate"] == "SAFETY_BLOCK"
+    assert result["submitted"] is False
+    assert mcp.batch_calls == 0
+    assert mcp.submit_calls == 0
+
+
+def test_env_factory_builds_vendor_neutral_client(monkeypatch):
+    factory = getattr(external_client_module, "create_external_client_from_env", None)
+    assert callable(factory), "environment factory is required for schedulable deployment"
+
+    monkeypatch.setenv("SENEX_GPTRADER_MCP_URL", "https://mcp.example/mcp")
+    monkeypatch.setenv("SENEX_GPTRADER_MCP_TOKEN", "m" * 48)
+    monkeypatch.setenv("SENEX_DECISION_PROVIDER_BASE_URL", "https://llm.example/v1")
+    monkeypatch.setenv("SENEX_DECISION_PROVIDER_MODEL", "model-x")
+    monkeypatch.setenv("SENEX_DECISION_PROVIDER_API_KEY", "p" * 48)
+    monkeypatch.setenv("SENEX_GPTRADER_BATCH_LIMIT", "4")
+
+    client = factory()
+
+    assert isinstance(client, ExternalDecisionClient)
+    assert isinstance(client.mcp, MCPJSONRPCClient)
+    assert isinstance(client.adapter, OpenAICompatibleDecisionAdapter)
+    assert client.batch_limit == 4
+    assert "m" * 48 not in repr(client.mcp)
+    assert "p" * 48 not in repr(client.adapter)
+
+
+def test_main_is_one_shot_schedulable_entrypoint(monkeypatch, capsys):
+    main = getattr(external_client_module, "main", None)
+    assert callable(main), "one-shot CLI entrypoint is required for scheduling"
+
+    class OneShot:
+        def run_once(self, *, run_id):
+            assert run_id == "r-main"
+            return {"gate": "READY", "submitted": False, "applied": 0}
+
+    monkeypatch.setattr(
+        external_client_module,
+        "create_external_client_from_env",
+        lambda: OneShot(),
+    )
+    code = main(["--run-id", "r-main"])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert json.loads(captured.out) == {
+        "applied": 0,
+        "gate": "READY",
+        "submitted": False,
+    }
