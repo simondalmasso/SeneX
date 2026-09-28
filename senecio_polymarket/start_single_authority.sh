@@ -57,10 +57,11 @@ if [ "$MCP_ENABLED" = "1" ]; then
       --log-level info \
       --no-access-log &
   MCP_PID=$!
-  # The public/oracle process never needs the Decision MCP bearer token.
-  # The already-started sidecar retains its inherited copy.
-  unset SENEX_GPTRADER_MCP_TOKEN
 fi
+
+# The public/oracle process never needs the Decision MCP bearer token.
+# An enabled, already-started sidecar retains its inherited copy.
+unset SENEX_GPTRADER_MCP_TOKEN
 
 # Production entrypoint intentionally uses main_real: synthetic market scheduler
 # is disabled unless SENEX_ENABLE_SYNTHETIC_DEMO=1 is explicitly supplied.
