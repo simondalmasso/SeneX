@@ -34,6 +34,7 @@ def test_launcher_fails_closed_on_mcp_process_exit_and_cleans_it_up():
 def test_docker_exposes_mcp_port_and_healthchecks_it_when_enabled():
     assert "EXPOSE 8080 8787" in DOCKER
     assert "SENEX_GPTRADER_MCP_ENABLED" in DOCKER
+    assert "HEALTHCHECK" in DOCKER and "\\n  CMD curl" in DOCKER
     assert "8787}/healthz" in DOCKER
 
 
