@@ -22,8 +22,14 @@ def test_launcher_scopes_sidecar_results_without_repointing_producer():
     assert 'SENEX_RESULTS_DIR="$MCP_RESULTS_DIR"' in START
     assert 'export SENEX_GPTRADER_VIEW_ROOT="$MCP_RESULTS_DIR/gptrader"' in START
     assert 'export SENEX_RESULTS_DIR="$MCP_RESULTS_DIR"' not in START
+    assert 'MCP_TOKEN_VALUE="${SENEX_GPTRADER_MCP_TOKEN:-}"' in START
+    assert 'INGEST_TOKEN_VALUE="${SENEX_GPTRADER_INGEST_TOKEN:-}"' in START
     assert "unset SENEX_GPTRADER_MCP_TOKEN" in START
-    assert START.index("unset SENEX_GPTRADER_MCP_TOKEN") < START.index("uvicorn backend.main_real:app")
+    assert "unset SENEX_GPTRADER_INGEST_TOKEN" in START
+    assert START.index("unset SENEX_GPTRADER_MCP_TOKEN") < START.index("start_reconciler")
+    assert 'SENEX_GPTRADER_MCP_TOKEN="$MCP_TOKEN_VALUE"' in START
+    assert 'SENEX_GPTRADER_INGEST_TOKEN="$INGEST_TOKEN_VALUE"' in START
+    assert 'SENEX_GPTRADER_INGEST_TOKEN="$INGEST_TOKEN_VALUE" \\\nuvicorn backend.main_real:app' in START
 
 
 def test_launcher_fails_closed_on_mcp_process_exit_and_cleans_it_up():
