@@ -8,6 +8,7 @@ runtime, exchange, broker, wallet, D1, H011, MCP, or current-market source.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -16,6 +17,28 @@ from typing import Any
 
 ARMS = ("CONTROL", "DECISION_AGENT", "CALIBRATED_AGENT")
 ACTIONS = {"TAKE", "ABSTAIN"}
+V1_CANDIDATES = (
+    "BASELINE",
+    "CONF_Q60",
+    "CONF_Q70",
+    "CONF_Q80",
+    "EV_Q60",
+    "EV_Q70",
+    "EV_Q80",
+    "CONF_Q70_AND_EV_Q70",
+)
+CALIBRATION_CORE_KEYS = (
+    "schema_version",
+    "decision_protocol_version",
+    "source_epochs",
+    "windows",
+    "parameters",
+    "frozen",
+    "objective",
+    "constraints",
+    "code_sha",
+    "random_seed",
+)
 INCIDENT_IDS = {"6868", "6870", "6872"}
 INCIDENT_START = datetime(2026, 9, 27, 21, 29, 53, tzinfo=timezone.utc)
 INCIDENT_END = datetime(2026, 9, 27, 22, 10, 23, tzinfo=timezone.utc)
@@ -58,6 +81,145 @@ def _quarantined(packet: dict[str, Any]) -> bool:
 def _cluster_id(packet: dict[str, Any]) -> str:
     dt = _dt(packet.get("timestamp")).replace(minute=0, second=0, microsecond=0)
     return dt.strftime("%Y-%m-%dT%H:00:00Z")
+
+
+def resolve_clean_baseline(
+    packets: list[dict[str, Any]],
+    *,
+    expected_source_sha: str,
+) -> str | None:
+    candidates = sorted(
+        (
+            packet
+            for packet in packets
+            if _dt(packet.get("timestamp")) >= INCIDENT_END and not _quarantined(packet)
+        ),
+        key=lambda packet: _dt(packet.get("timestamp")),
+    )
+    if not candidates:
+        return None
+    first = candidates[0]
+    if first.get("provenance_exact") is not True:
+        return None
+    if str(first.get("source_sha") or "") != str(expected_source_sha):
+        return None
+    if not str(first.get("packet_hash") or ""):
+        return None
+    return _dt(first["timestamp"]).isoformat().replace("+00:00", "Z")
+
+
+def validate_epoch_partition(
+    train: list[dict[str, Any]],
+    calibration: list[dict[str, Any]],
+    holdout: list[dict[str, Any]],
+) -> None:
+    epochs = {
+        "TRAIN": train,
+        "CALIBRATION": calibration,
+        "HOLDOUT": holdout,
+    }
+    packet_ids: dict[str, set[str]] = {}
+    cluster_ids: dict[str, set[str]] = {}
+    bounds: dict[str, tuple[datetime, datetime] | None] = {}
+    for name, rows in epochs.items():
+        ids: set[str] = set()
+        clusters: set[str] = set()
+        times: list[datetime] = []
+        for row in rows:
+            packet_id = str(row.get("packet_id") or "")
+            if not packet_id:
+                raise ReplayError(f"{name} packet is missing packet_id")
+            ids.add(packet_id)
+            clusters.add(_cluster_id(row))
+            times.append(_dt(row.get("timestamp")))
+        packet_ids[name] = ids
+        cluster_ids[name] = clusters
+        bounds[name] = (min(times), max(times)) if times else None
+
+    ordered = ("TRAIN", "CALIBRATION", "HOLDOUT")
+    for left_index, left in enumerate(ordered):
+        for right in ordered[left_index + 1 :]:
+            if packet_ids[left] & packet_ids[right]:
+                raise ReplayError(f"epoch packet overlap: {left}/{right}")
+            if cluster_ids[left] & cluster_ids[right]:
+                raise ReplayError(f"epoch cluster overlap: {left}/{right}")
+
+    prior_end: datetime | None = None
+    for name in ordered:
+        current = bounds[name]
+        if current is None:
+            continue
+        start, end = current
+        if prior_end is not None and start <= prior_end:
+            raise ReplayError(f"epoch chronology violation at {name}")
+        prior_end = end
+
+
+def compute_calibration_id(artifact: dict[str, Any]) -> str:
+    core = {key: artifact.get(key) for key in CALIBRATION_CORE_KEYS}
+    encoded = json.dumps(
+        core,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return "cal089_" + hashlib.sha256(encoded).hexdigest()
+
+
+def coverage_guard_passes(
+    *,
+    candidate_take_count: int,
+    uncalibrated_take_count: int,
+) -> bool:
+    if candidate_take_count < 0 or uncalibrated_take_count <= 0:
+        return False
+    return candidate_take_count * 2 >= uncalibrated_take_count
+
+
+def replacement_shadow_state(
+    *,
+    calibration_id: str,
+    decision_protocol_version: str,
+    new_provenance: dict[str, Any],
+) -> dict[str, Any]:
+    if not calibration_id or not decision_protocol_version:
+        raise ReplayError("replacement requires fixed artifact and protocol")
+    agent_id = str(new_provenance.get("agent_id") or "")
+    if not agent_id:
+        raise ReplayError("replacement provenance requires agent_id")
+    return {
+        "calibration_id": calibration_id,
+        "decision_protocol_version": decision_protocol_version,
+        "stage": "SHADOW_PAPER",
+        "evaluation_provenance": dict(new_provenance),
+        "independent_1h_clusters": 0,
+        "performance_evidence": [],
+    }
+
+
+def evidence_gate_passes(
+    stage: str,
+    *,
+    independent_1h_clusters: int,
+    calendar_days: int,
+) -> bool:
+    thresholds = {
+        "TRAIN": (168, 7),
+        "CALIBRATION": (168, 7),
+        "HOLDOUT": (600, 25),
+    }
+    if stage not in thresholds:
+        raise ReplayError(f"unknown evidence stage: {stage}")
+    if independent_1h_clusters < 0 or calendar_days <= 0:
+        return False
+    if independent_1h_clusters > calendar_days * 24:
+        return False
+    min_clusters, min_days = thresholds[stage]
+    return (
+        independent_1h_clusters >= min_clusters
+        and calendar_days >= min_days
+    )
 
 
 def evaluate(
