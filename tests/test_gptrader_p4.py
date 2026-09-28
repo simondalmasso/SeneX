@@ -14,7 +14,10 @@ from senecio_polymarket.backend.gptrader.decisions import (
 )
 from senecio_polymarket.backend.gptrader.mcp_http import build_mcp_app
 from senecio_polymarket.backend.gptrader.sealer import PacketSealer
-from senecio_polymarket.backend.gptrader.store import GPTraderStore
+from senecio_polymarket.backend.gptrader.store import (
+    DecisionLogCorruptionError,
+    GPTraderStore,
+)
 
 
 def row(ts: str, symbol: str = "BTCUSDT") -> dict:
@@ -552,3 +555,34 @@ def test_corrupt_cursor_is_distinct_from_missing_and_visible_in_health(tmp_path:
     assert corrupt["cursor_ready"] is False
     assert corrupt["cursor_status"] == "CORRUPT"
     assert corrupt["cursor"] is None
+
+
+
+@pytest.mark.parametrize("raw_record", [b"42\n", b"[]\n", b"null\n"])
+def test_valid_json_non_object_decision_row_quarantines_and_refuses_append(
+    tmp_path: Path,
+    raw_record: bytes,
+) -> None:
+    store = GPTraderStore(tmp_path)
+    store.paths.decisions.write_bytes(raw_record)
+    before = store.paths.decisions.read_bytes()
+
+    with pytest.raises(DecisionLogCorruptionError):
+        store.read_decisions()
+
+    health = store.decision_log_health()
+    assert health["ok"] is False
+    assert health["status"] == "QUARANTINED"
+    assert health["reason"] == "CORRUPT_DECISION_LOG"
+
+    replacement = {
+        "policy_id": "GPTRADER_CHAT_V1",
+        "packet_id": "packet-non-object",
+        "action": "ABSTAIN",
+        "idempotency_key": "idem-non-object",
+        "decision_hash": "9" * 64,
+    }
+    with pytest.raises(DecisionLogCorruptionError):
+        store.append_decision(replacement)
+
+    assert store.paths.decisions.read_bytes() == before
