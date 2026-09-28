@@ -28,3 +28,13 @@ def test_gptrader_trade_tape_is_read_only_and_polling():
     assert "setInterval(refreshGPTraderTrades, 5000)" in JS
     assert "fetch('/mcp" not in JS
     assert 'getJSON("/mcp' not in JS
+
+
+def test_desktop_breakpoint_prevents_four_lane_minimum_width_overflow():
+    assert "@media (max-width: 1360px)" in CSS
+    assert "overflow-x: hidden" in CSS
+
+
+def test_trade_tape_null_pnl_stays_unknown():
+    assert "row.realized_pnl_usd == null" in JS
+    assert 'scope="col"' in HTML
