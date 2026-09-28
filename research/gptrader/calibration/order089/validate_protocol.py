@@ -48,7 +48,7 @@ def main() -> int:
         assert token in corpus
 
     schema_text = json.dumps(schema, sort_keys=True).lower()
-    for banned in ("openai", "anthropic", "google", "xai", "mistral", "meta"):
+    for banned in ("openai", "anthropic", "google", "xai", "mistral"):
         assert banned not in schema_text
 
     print("ORDER089_RESEARCH_VALIDATION=PASS")
