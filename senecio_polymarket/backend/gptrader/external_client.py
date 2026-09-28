@@ -64,7 +64,7 @@ def _default_http_post(
         with urllib_request.urlopen(req, timeout=timeout) as response:
             raw = response.read()
     except (urllib_error.URLError, TimeoutError, OSError) as exc:
-        raise MCPUnavailable("remote endpoint unavailable") from exc
+        raise MCPUnavailable("remote endpoint unavailable") from None
     try:
         value = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -115,7 +115,7 @@ class MCPJSONRPCClient:
         except MCPClientError:
             raise
         except Exception as exc:
-            raise MCPUnavailable("MCP request failed") from exc
+            raise MCPUnavailable("MCP request failed") from None
         if response.get("error") is not None:
             error = response.get("error")
             message = error.get("message") if isinstance(error, dict) else "MCP error"
@@ -302,7 +302,7 @@ class OpenAICompatibleDecisionAdapter:
         except MCPClientError:
             raise
         except Exception as exc:
-            raise MCPUnavailable("decision provider unavailable") from exc
+            raise MCPUnavailable("decision provider unavailable") from None
 
         try:
             content = response["choices"][0]["message"]["content"]
