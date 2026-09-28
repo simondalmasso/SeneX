@@ -657,6 +657,20 @@ footer {
 
 /* Responsive — drop to 2 columns on smaller screens.
    Oracle col is now FIRST in DOM order (top-left on desktop, top on mobile). */
+@media (max-width: 1360px) {
+  main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "oracle execution"
+      "markets diagnostics";
+    grid-template-rows: auto auto;
+    overflow-y: auto;
+  }
+  .col-left, .col-mid, .col-right, .col-oracle {
+    max-height: none;
+  }
+}
+
 @media (max-width: 1280px) {
   main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
