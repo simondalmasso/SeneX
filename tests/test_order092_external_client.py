@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 
 import pytest
 
@@ -209,3 +210,52 @@ def test_openai_compatible_adapter_has_no_provider_sdk_and_sends_only_packets():
     assert "current_market" not in wire
     assert "settlement" not in wire
     assert "outcome" not in wire
+
+
+def test_mcp_error_traceback_does_not_leak_bearer():
+    secret = "mcp-secret-" + ("x" * 48)
+
+    def bad_post(url, headers, payload, timeout):
+        raise RuntimeError(secret)
+
+    client = MCPJSONRPCClient(
+        "https://example.invalid/mcp",
+        token="t" * 48,
+        http_post=bad_post,
+    )
+    with pytest.raises(MCPUnavailable) as caught:
+        client.get_gptrader_health()
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(caught.value),
+            caught.value,
+            caught.value.__traceback__,
+        )
+    )
+    assert secret not in rendered
+
+
+def test_provider_error_traceback_does_not_leak_api_key():
+    secret = "provider-secret-" + ("y" * 48)
+
+    def bad_post(url, headers, payload, timeout):
+        raise RuntimeError(secret)
+
+    adapter = OpenAICompatibleDecisionAdapter(
+        base_url="https://llm.example/v1",
+        model="model-x",
+        api_key=secret,
+        http_post=bad_post,
+    )
+    with pytest.raises(MCPUnavailable) as caught:
+        adapter.decide(_packets(), run_id="r-secret")
+
+    rendered = "".join(
+        traceback.format_exception(
+            type(caught.value),
+            caught.value,
+            caught.value.__traceback__,
+        )
+    )
+    assert secret not in rendered
