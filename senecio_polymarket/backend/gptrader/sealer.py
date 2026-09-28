@@ -156,6 +156,24 @@ def _compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
     audit.pop("decision_replay_v1", None)
     audit.pop("external_markets_v1", None)
+
+    pipeline = audit.get("pipeline")
+    if isinstance(pipeline, dict):
+        step2 = (
+            pipeline.get("step2_features")
+            if isinstance(pipeline.get("step2_features"), dict)
+            else {}
+        )
+        compact_pipeline: dict[str, Any] = {}
+        if "up_prob" in step2:
+            compact_pipeline["step2_features"] = {
+                "up_prob": copy.deepcopy(step2["up_prob"])
+            }
+        if compact_pipeline:
+            audit["pipeline"] = compact_pipeline
+        else:
+            audit.pop("pipeline", None)
+
     return compact
 
 

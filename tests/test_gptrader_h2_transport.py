@@ -217,3 +217,41 @@ def test_http_ingest_rejects_oversized_request_before_mutation(tmp_path: Path) -
 
     assert response.status_code == 413
     assert PacketSealer(root=tmp_path).read_after(None) == []
+
+
+def test_large_realistic_t0_compacts_pipeline_to_decision_safe_subset() -> None:
+    row = source()
+    row["_audit"] = {
+        "confidence_semantics_v1": {"semantics": "RAW_CONVICTION"},
+        "pipeline": {
+            "step2_features": {
+                "up_prob": 0.57,
+                **{f"feature_{idx}": "x" * 180 for idx in range(80)},
+            },
+            "step4_ev": {
+                "ev": 0.01,
+                "diagnostic_blob": "y" * 4000,
+            },
+        },
+        "decision_replay_v1": {
+            "version": "v1",
+            "captured_at": "2026-09-28T03:22:44Z",
+            "snapshot_hash": "a" * 64,
+            "code_hash": "b" * 64,
+            "config_hash": "c" * 64,
+        },
+    }
+
+    packet = build_sealed_packet(row, 1)
+
+    encoded = json.dumps(
+        packet,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    assert len(encoded) <= 8192
+    assert packet["_audit"]["pipeline"] == {
+        "step2_features": {"up_prob": 0.57}
+    }
+    assert packet["_audit"]["provenance_v1"]["snapshot_hash"] == "a" * 64
