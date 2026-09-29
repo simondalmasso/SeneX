@@ -680,3 +680,32 @@ def test_direct_http_health_is_public_minimal_and_has_no_market_or_outcome_data(
         "recent_results",
     ):
         assert forbidden not in keys
+
+
+def test_direct_http_readiness_requires_auth_and_reflects_real_decision_health(tmp_path: Path) -> None:
+    store, _, _, svc = setup_service(tmp_path, count=1)
+    token = "x" * 32
+    app = build_mcp_app(svc, token=token)
+    client = TestClient(app)
+
+    assert client.get("/v1/readiness").status_code == 401
+
+    headers = {"Authorization": f"Bearer {token}"}
+    ready = client.get("/v1/readiness", headers=headers)
+    assert ready.status_code == 200
+    body = ready.json()
+    assert body["ready"] is True
+    assert body["paper_only"] is True
+    assert body["simulation_only"] is True
+    assert body["live"] is False
+    assert body["schema_version"] == "gptrader.decision.v1"
+    encoded = repr(body).lower()
+    for forbidden in ("outcome", "price_1h_later", "realized_pnl", "cash", "equity"):
+        assert forbidden not in encoded
+
+    store.paths.cursor.write_text("{broken", encoding="utf-8")
+    degraded = client.get("/v1/readiness", headers=headers)
+    assert degraded.status_code == 200
+    degraded_body = degraded.json()
+    assert degraded_body["ready"] is False
+    assert degraded_body["cursor_status"] == "CORRUPT"
