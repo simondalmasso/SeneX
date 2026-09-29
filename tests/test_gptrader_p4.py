@@ -586,3 +586,89 @@ def test_valid_json_non_object_decision_row_quarantines_and_refuses_append(
         store.append_decision(replacement)
 
     assert store.paths.decisions.read_bytes() == before
+
+
+def test_direct_http_prediction_and_submit_contract_is_auth_bound_and_paper_only(tmp_path: Path) -> None:
+    store, packets, book, svc = setup_service(tmp_path, count=1)
+    token = "x" * 32
+    app = build_mcp_app(svc, token=token)
+    client = TestClient(app)
+
+    assert client.get("/v1/predictions/next").status_code == 401
+
+    headers = {"Authorization": f"Bearer {token}"}
+    batch_response = client.get(
+        "/v1/predictions/next",
+        headers=headers,
+        params={"limit": 1},
+    )
+    assert batch_response.status_code == 200
+    batch = batch_response.json()
+    assert len(batch["packets"]) == 1
+    assert batch["packets"][0]["packet_id"] == packets[0]["packet_id"]
+    encoded = repr(batch).lower()
+    assert "outcome" not in encoded
+    assert "price_1h_later" not in encoded
+    assert "realized_pnl" not in encoded
+
+    payload = {
+        "run_id": "direct-http-run-1",
+        "cursor": batch["cursor_in"],
+        "decisions": [decision(packets[0]["packet_id"], "ABSTAIN")],
+    }
+    submit = client.post("/v1/decisions", headers=headers, json=payload)
+    assert submit.status_code == 200
+    result = submit.json()
+    assert result["applied"] == 1
+    assert result["duplicate"] is False
+    assert store.cursor_seq() == 1
+    assert len(store.read_decisions()) == 1
+    assert book.calls == [packets[0]["packet_id"]]
+
+
+def test_direct_http_submit_rejects_unauth_invalid_and_oversized_requests(tmp_path: Path) -> None:
+    _, packets, _, svc = setup_service(tmp_path, count=1)
+    token = "x" * 32
+    app = build_mcp_app(svc, token=token)
+    client = TestClient(app)
+    cursor = svc.cursor_for_seq(0)
+
+    payload = {
+        "run_id": "direct-http-run-invalid",
+        "cursor": cursor,
+        "decisions": [
+            {
+                **decision(packets[0]["packet_id"], "ABSTAIN"),
+                "action": "FLIP",
+            }
+        ],
+    }
+    assert client.post("/v1/decisions", json=payload).status_code == 401
+
+    headers = {"Authorization": f"Bearer {token}"}
+    invalid = client.post("/v1/decisions", headers=headers, json=payload)
+    assert invalid.status_code == 400
+
+    oversized = b'{"run_id":"x","cursor":"y","decisions":[],"padding":"' + b"x" * (70 * 1024) + b'"}'
+    too_large = client.post("/v1/decisions", headers=headers, content=oversized)
+    assert too_large.status_code == 413
+
+
+def test_direct_http_health_is_public_minimal_and_has_no_market_or_outcome_data(tmp_path: Path) -> None:
+    _, _, _, svc = setup_service(tmp_path, count=1)
+    app = build_mcp_app(svc, token="x" * 32)
+    client = TestClient(app)
+
+    response = client.get("/v1/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "status": "ok",
+        "service": "senex-gptrader-direct-http",
+        "paper_only": True,
+        "simulation_only": True,
+        "live": False,
+    }
+    encoded = repr(body).lower()
+    for forbidden in ("outcome", "price", "pnl", "equity", "cash", "trade"):
+        assert forbidden not in encoded
