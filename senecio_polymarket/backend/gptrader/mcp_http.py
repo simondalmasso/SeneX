@@ -212,6 +212,70 @@ def build_mcp_app(
             "live": False,
         }
 
+    @app.get("/v1/health")
+    async def direct_health():
+        return {
+            "status": "ok",
+            "service": "senex-gptrader-direct-http",
+            "paper_only": True,
+            "simulation_only": True,
+            "live": False,
+        }
+
+    def _require_direct_auth(request: Request) -> None:
+        authorization = request.headers.get("authorization") or ""
+        expected = f"Bearer {token}"
+        if not hmac.compare_digest(authorization, expected):
+            raise HTTPException(status_code=401, detail="DECISION_AUTH_REQUIRED")
+
+    @app.get("/v1/predictions/next")
+    async def direct_prediction_next(
+        request: Request,
+        cursor: str | None = None,
+        limit: int = 1,
+    ):
+        _require_direct_auth(request)
+        try:
+            return service.get_prediction_batch(cursor, limit)
+        except DecisionValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=type(exc).__name__,
+            ) from exc
+        except CursorMismatchError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=type(exc).__name__,
+            ) from exc
+
+    @app.post("/v1/decisions")
+    async def direct_submit_decisions(request: Request):
+        _require_direct_auth(request)
+        payload = await _read_bounded_json(
+            request,
+            max_bytes=MCP_REQUEST_MAX_BYTES,
+            too_large="DIRECT_REQUEST_TOO_LARGE",
+            invalid="INVALID_DIRECT_REQUEST",
+        )
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="INVALID_DIRECT_REQUEST")
+        try:
+            return await service.submit_paper_decisions(
+                str(payload.get("run_id") or ""),
+                str(payload.get("cursor") or ""),
+                payload.get("decisions"),
+            )
+        except DecisionValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=type(exc).__name__,
+            ) from exc
+        except (CursorMismatchError, ConflictingDecisionError) as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=type(exc).__name__,
+            ) from exc
+
     if ingest_token is not None:
         @app.post("/ingest/t0")
         async def ingest_t0(request: Request):
