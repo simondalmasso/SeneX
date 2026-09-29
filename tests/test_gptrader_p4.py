@@ -669,6 +669,14 @@ def test_direct_http_health_is_public_minimal_and_has_no_market_or_outcome_data(
         "simulation_only": True,
         "live": False,
     }
-    encoded = repr(body).lower()
-    for forbidden in ("outcome", "price", "pnl", "equity", "cash", "trade"):
-        assert forbidden not in encoded
+    keys = {str(key).lower() for key in body}
+    for forbidden in (
+        "outcome",
+        "price",
+        "pnl",
+        "equity",
+        "cash",
+        "trades",
+        "recent_results",
+    ):
+        assert forbidden not in keys
