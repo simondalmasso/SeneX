@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol, Sequence
 from urllib import error as urllib_error
+from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from .task_protocol import TaskGate, task_gate
 
+HttpGet = Callable[[str, dict[str, str], float], dict[str, Any]]
 HttpPost = Callable[[str, dict[str, str], dict[str, Any], float], dict[str, Any]]
 
 DECISION_SCHEMA_VERSION = "gptrader.decision.v1"
@@ -56,6 +58,30 @@ def _canonical(value: Any) -> str:
         ensure_ascii=False,
         allow_nan=False,
     )
+
+
+def _default_http_get(
+    url: str,
+    headers: dict[str, str],
+    timeout: float,
+) -> dict[str, Any]:
+    req = urllib_request.Request(
+        url,
+        headers=dict(headers),
+        method="GET",
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=timeout) as response:
+            raw = response.read()
+    except (urllib_error.URLError, TimeoutError, OSError):
+        raise MCPUnavailable("remote endpoint unavailable") from None
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MCPProtocolError("remote endpoint returned invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise MCPProtocolError("remote endpoint returned non-object JSON")
+    return value
 
 
 def _default_http_post(
@@ -171,6 +197,106 @@ class MCPJSONRPCClient:
     ) -> dict[str, Any]:
         return self._call_tool(
             "submit_paper_decisions",
+            {
+                "run_id": str(run_id),
+                "cursor": str(cursor),
+                "decisions": decisions,
+            },
+        )
+
+
+@dataclass(repr=False)
+class DirectHTTPDecisionClient:
+    endpoint: str
+    token: str = field(repr=False)
+    timeout: float = 15.0
+    http_get: HttpGet = field(default=_default_http_get, repr=False)
+    http_post: HttpPost = field(default=_default_http_post, repr=False)
+    base_url: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        endpoint = str(self.endpoint or "").strip().rstrip("/")
+        if not endpoint.startswith("https://"):
+            raise ValueError("Decision HTTP endpoint must use https")
+        if endpoint.endswith("/mcp"):
+            endpoint = endpoint[:-4]
+        self.endpoint = endpoint
+        self.base_url = endpoint.rstrip("/")
+        self.token = str(self.token or "")
+        if len(self.token) < 32:
+            raise ValueError("Decision bearer token must be at least 32 characters")
+
+    def __repr__(self) -> str:
+        return (
+            f"DirectHTTPDecisionClient(base_url={self.base_url!r}, "
+            f"timeout={self.timeout!r}, token=<redacted>)"
+        )
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}"}
+
+    def _get(self, path: str) -> dict[str, Any]:
+        try:
+            value = self.http_get(
+                self.base_url + path,
+                self._headers(),
+                float(self.timeout),
+            )
+        except MCPClientError:
+            raise
+        except Exception:
+            raise MCPUnavailable("Decision HTTP request failed") from None
+        if not isinstance(value, dict):
+            raise MCPProtocolError("Decision HTTP response must be an object")
+        return value
+
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            value = self.http_post(
+                self.base_url + path,
+                self._headers(),
+                payload,
+                float(self.timeout),
+            )
+        except MCPClientError:
+            raise
+        except Exception:
+            raise MCPUnavailable("Decision HTTP request failed") from None
+        if not isinstance(value, dict):
+            raise MCPProtocolError("Decision HTTP response must be an object")
+        return value
+
+    def get_gptrader_health(self) -> dict[str, Any]:
+        raw = self._get("/v1/health")
+        return {
+            "ready": raw.get("status") == "ok",
+            "paper_only": raw.get("paper_only"),
+            "simulation_only": raw.get("simulation_only"),
+            "live": raw.get("live"),
+            "schema_version": DECISION_SCHEMA_VERSION,
+            "cursor": None,
+        }
+
+    def get_prediction_batch(
+        self,
+        cursor: str | None = None,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        params: list[tuple[str, Any]] = []
+        if cursor is not None:
+            params.append(("cursor", str(cursor)))
+        params.append(("limit", int(limit)))
+        query = urllib_parse.urlencode(params)
+        return self._get(f"/v1/predictions/next?{query}")
+
+    def submit_paper_decisions(
+        self,
+        run_id: str,
+        cursor: str,
+        decisions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self._post(
+            "/v1/decisions",
             {
                 "run_id": str(run_id),
                 "cursor": str(cursor),
@@ -430,7 +556,7 @@ def create_external_client_from_env(
     except ValueError:
         raise ValueError(f"{BATCH_LIMIT_ENV} must be an integer") from None
 
-    mcp = MCPJSONRPCClient(
+    mcp = DirectHTTPDecisionClient(
         _required_env(env, MCP_URL_ENV),
         token=_required_env(env, MCP_TOKEN_ENV),
     )
