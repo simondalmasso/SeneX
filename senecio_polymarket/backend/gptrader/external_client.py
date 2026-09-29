@@ -267,15 +267,7 @@ class DirectHTTPDecisionClient:
         return value
 
     def get_gptrader_health(self) -> dict[str, Any]:
-        raw = self._get("/v1/health")
-        return {
-            "ready": raw.get("status") == "ok",
-            "paper_only": raw.get("paper_only"),
-            "simulation_only": raw.get("simulation_only"),
-            "live": raw.get("live"),
-            "schema_version": DECISION_SCHEMA_VERSION,
-            "cursor": None,
-        }
+        return self._get("/v1/readiness")
 
     def get_prediction_batch(
         self,
