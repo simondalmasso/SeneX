@@ -334,13 +334,14 @@ def test_direct_http_client_reuses_existing_mcp_url_and_token():
 
     def fake_get(url, headers, timeout):
         calls.append(("GET", url, dict(headers)))
-        if url.endswith("/v1/health"):
+        if url.endswith("/v1/readiness"):
             return {
-                "status": "ok",
-                "service": "senex-gptrader-direct-http",
+                "ready": True,
                 "paper_only": True,
                 "simulation_only": True,
                 "live": False,
+                "schema_version": "gptrader.decision.v1",
+                "cursor": "c0",
             }
         assert "/v1/predictions/next" in url
         return {
@@ -369,7 +370,7 @@ def test_direct_http_client_reuses_existing_mcp_url_and_token():
         "simulation_only": True,
         "live": False,
         "schema_version": "gptrader.decision.v1",
-        "cursor": None,
+        "cursor": "c0",
     }
 
     batch = client.get_prediction_batch(cursor=None, limit=1)
@@ -388,7 +389,7 @@ def test_direct_http_client_reuses_existing_mcp_url_and_token():
         ],
     )
     assert submit["applied"] == 1
-    assert calls[0][0:2] == ("GET", "https://mcp.example/v1/health")
+    assert calls[0][0:2] == ("GET", "https://mcp.example/v1/readiness")
     assert calls[1][0] == "GET"
     assert calls[1][1] == "https://mcp.example/v1/predictions/next?limit=1"
     assert calls[2][0:2] == ("POST", "https://mcp.example/v1/decisions")
@@ -404,12 +405,14 @@ def test_direct_http_client_encodes_cursor_and_fails_closed_on_bad_health():
 
     def fake_get(url, headers, timeout):
         seen.append(url)
-        if url.endswith("/v1/health"):
+        if url.endswith("/v1/readiness"):
             return {
-                "status": "degraded",
+                "ready": False,
                 "paper_only": True,
                 "simulation_only": True,
                 "live": False,
+                "schema_version": "gptrader.decision.v1",
+                "cursor": "c0",
             }
         return {
             "cursor_in": "c x",
