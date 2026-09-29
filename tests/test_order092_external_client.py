@@ -291,7 +291,9 @@ def test_env_factory_builds_vendor_neutral_client(monkeypatch):
     client = factory()
 
     assert isinstance(client, ExternalDecisionClient)
-    assert isinstance(client.mcp, MCPJSONRPCClient)
+    direct_cls = getattr(external_client_module, "DirectHTTPDecisionClient", None)
+    assert direct_cls is not None, "direct HTTP Decision client is required"
+    assert isinstance(client.mcp, direct_cls)
     assert isinstance(client.adapter, OpenAICompatibleDecisionAdapter)
     assert client.batch_limit == 4
     assert "m" * 48 not in repr(client.mcp)
@@ -321,3 +323,108 @@ def test_main_is_one_shot_schedulable_entrypoint(monkeypatch, capsys):
         "gate": "READY",
         "submitted": False,
     }
+
+
+
+def test_direct_http_client_reuses_existing_mcp_url_and_token():
+    direct_cls = getattr(external_client_module, "DirectHTTPDecisionClient", None)
+    assert direct_cls is not None, "direct HTTP Decision client is required"
+
+    calls = []
+
+    def fake_get(url, headers, timeout):
+        calls.append(("GET", url, dict(headers)))
+        if url.endswith("/v1/health"):
+            return {
+                "status": "ok",
+                "service": "senex-gptrader-direct-http",
+                "paper_only": True,
+                "simulation_only": True,
+                "live": False,
+            }
+        assert "/v1/predictions/next" in url
+        return {
+            "cursor_in": "c0",
+            "next_cursor": "c1",
+            "has_more": False,
+            "packets": [{"packet_id": "pkt-1"}],
+        }
+
+    def fake_post(url, headers, payload, timeout):
+        calls.append(("POST", url, dict(headers), payload))
+        return {"applied": 1, "duplicate": False, "cursor": "c1"}
+
+    secret = "z" * 48
+    client = direct_cls(
+        "https://mcp.example/mcp",
+        token=secret,
+        http_get=fake_get,
+        http_post=fake_post,
+    )
+
+    health = client.get_gptrader_health()
+    assert health == {
+        "ready": True,
+        "paper_only": True,
+        "simulation_only": True,
+        "live": False,
+        "schema_version": "gptrader.decision.v1",
+        "cursor": None,
+    }
+
+    batch = client.get_prediction_batch(cursor=None, limit=1)
+    assert batch["packets"] == [{"packet_id": "pkt-1"}]
+
+    submit = client.submit_paper_decisions(
+        "run-direct",
+        "c0",
+        [
+            {
+                "packet_id": "pkt-1",
+                "action": "ABSTAIN",
+                "reason_codes": ["DIRECT"],
+                "idempotency_key": "idem-direct",
+            }
+        ],
+    )
+    assert submit["applied"] == 1
+    assert calls[0][0:2] == ("GET", "https://mcp.example/v1/health")
+    assert calls[1][0] == "GET"
+    assert calls[1][1] == "https://mcp.example/v1/predictions/next?limit=1"
+    assert calls[2][0:2] == ("POST", "https://mcp.example/v1/decisions")
+    assert all(call[2]["Authorization"] == f"Bearer {secret}" for call in calls)
+    assert secret not in repr(client)
+
+
+def test_direct_http_client_encodes_cursor_and_fails_closed_on_bad_health():
+    direct_cls = getattr(external_client_module, "DirectHTTPDecisionClient", None)
+    assert direct_cls is not None, "direct HTTP Decision client is required"
+
+    seen = []
+
+    def fake_get(url, headers, timeout):
+        seen.append(url)
+        if url.endswith("/v1/health"):
+            return {
+                "status": "degraded",
+                "paper_only": True,
+                "simulation_only": True,
+                "live": False,
+            }
+        return {
+            "cursor_in": "c x",
+            "next_cursor": "c2",
+            "has_more": False,
+            "packets": [],
+        }
+
+    client = direct_cls(
+        "https://mcp.example/mcp",
+        token="t" * 48,
+        http_get=fake_get,
+    )
+    health = client.get_gptrader_health()
+    assert health["ready"] is False
+
+    client.get_prediction_batch(cursor="c x", limit=2)
+    assert seen[-1] == "https://mcp.example/v1/predictions/next?cursor=c+x&limit=2"
