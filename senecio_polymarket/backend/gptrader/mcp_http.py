@@ -228,6 +228,11 @@ def build_mcp_app(
         if not hmac.compare_digest(authorization, expected):
             raise HTTPException(status_code=401, detail="DECISION_AUTH_REQUIRED")
 
+    @app.get("/v1/readiness")
+    async def direct_readiness(request: Request):
+        _require_direct_auth(request)
+        return service.get_gptrader_health()
+
     @app.get("/v1/predictions/next")
     async def direct_prediction_next(
         request: Request,
