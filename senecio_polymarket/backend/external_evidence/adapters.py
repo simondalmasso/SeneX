@@ -177,6 +177,7 @@ class ScraplingCollector:
                 source_url,
                 str(output),
                 "--ai-targeted",
+                "--no-follow-redirects",
                 "--timeout",
                 str(max(1, int(timeout))),
             ]
