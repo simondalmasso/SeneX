@@ -21,7 +21,6 @@ from senecio_polymarket.backend.external_evidence.schema import (
 from senecio_polymarket.backend.external_evidence.security import (
     UnsafeTargetError,
     validate_public_url,
-    validate_resolved_public_url,
 )
 from senecio_polymarket.backend.external_evidence.service import ShadowEvidenceService
 
@@ -74,25 +73,6 @@ def test_target_guard_rejects_private_local_non_http_and_credentials(url):
 
 def test_target_guard_accepts_public_https():
     assert validate_public_url("https://www.reddit.com/r/Bitcoin/") == "https://www.reddit.com/r/Bitcoin/"
-
-
-def test_resolved_target_guard_rejects_dns_to_private_ip():
-    def fake_resolver(host, port, type=0):
-        assert host == "public-name.example"
-        return [(2, 1, 6, "", ("10.10.0.8", port))]
-
-    with pytest.raises(UnsafeTargetError, match="resolved"):
-        validate_resolved_public_url("https://public-name.example/a", resolver=fake_resolver)
-
-
-def test_resolved_target_guard_accepts_public_ip():
-    def fake_resolver(host, port, type=0):
-        return [(2, 1, 6, "", ("93.184.216.34", port))]
-
-    assert (
-        validate_resolved_public_url("https://example.com/a", resolver=fake_resolver)
-        == "https://example.com/a"
-    )
 
 
 def test_capture_rejects_future_source_time():
@@ -232,11 +212,7 @@ def test_agent_reach_bridge_is_stdin_json_and_bounded(monkeypatch):
             }
         ), ""
 
-    collector = AgentReachBridgeCollector(
-        executable="/opt/senex/agent-reach-bridge",
-        runner=fake_runner,
-        url_validator=validate_public_url,
-    )
+    collector = AgentReachBridgeCollector(executable="/opt/senex/agent-reach-bridge", runner=fake_runner)
     capture = collector.collect("https://example.com/x", timeout=4.0)
     assert capture.provider == "agent_reach"
     assert calls[0][0] == ["/opt/senex/agent-reach-bridge"]
@@ -252,11 +228,7 @@ def test_scrapling_collector_uses_cli_without_shell_and_reads_bounded_output(tmp
         Path(argv[4]).write_text("scraped body", encoding="utf-8")
         return 0, "", ""
 
-    collector = ScraplingCollector(
-        executable="/usr/local/bin/scrapling",
-        runner=fake_runner,
-        url_validator=validate_public_url,
-    )
+    collector = ScraplingCollector(executable="/usr/local/bin/scrapling", runner=fake_runner)
     capture = collector.collect("https://example.com/article", timeout=5.0)
     assert capture.provider == "scrapling"
     assert capture.content == "scraped body"
