@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
@@ -54,7 +55,12 @@ def _reject_sensitive_keys(value: Any, path: str = "metadata") -> None:
     if isinstance(value, Mapping):
         for key, child in value.items():
             lowered = str(key).lower()
-            if any(part in lowered for part in _SENSITIVE_PARTS):
+            normalized = re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")
+            collapsed = re.sub(r"[^a-z0-9]+", "", lowered)
+            if any(
+                part in normalized or part.replace("_", "") in collapsed
+                for part in _SENSITIVE_PARTS
+            ):
                 raise EvidenceValidationError(f"sensitive metadata key forbidden: {path}.{key}")
             _reject_sensitive_keys(child, f"{path}.{key}")
     elif isinstance(value, (list, tuple)):
