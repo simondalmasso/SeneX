@@ -84,7 +84,7 @@ def test_capture_rejects_future_source_time():
 
 def test_capture_rejects_secret_bearing_metadata():
     with pytest.raises(EvidenceValidationError, match="sensitive metadata"):
-        _capture(metadata={"Authorization": "Bearer should-never-persist"}).to_event(
+        _capture(metadata={"nested": {"cookie": "should-never-persist"}}).to_event(
             captured_at="2026-10-02T10:00:02Z"
         )
 
@@ -191,6 +191,7 @@ def test_scrapling_collector_uses_cli_without_shell_and_reads_bounded_output(tmp
     assert capture.content == "scraped body"
     assert calls[0][0][0:3] == ["/usr/local/bin/scrapling", "extract", "get"]
     assert "--ai-targeted" in calls[0][0]
+    assert "--no-follow-redirects" in calls[0][0]
     assert calls[0][1] == 5.0
 
 
