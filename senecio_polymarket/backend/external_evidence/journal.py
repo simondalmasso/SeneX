@@ -3,13 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .paths import ExternalEvidencePaths
-from .schema import ExternalEvidenceEvent
+from .schema import MAX_RAW_BYTES, EvidenceCapture, ExternalEvidenceEvent
+from .security import validate_public_url
 
 
 def _canonical_json(value: dict[str, Any]) -> bytes:
@@ -40,7 +42,7 @@ class ExternalEvidenceJournal:
         self.paths = paths or ExternalEvidencePaths.default()
         self.paths.ensure()
         self._lock = threading.Lock()
-        self._ids: set[str] = set()
+        self._record_hashes: dict[str, str] = {}
         self._last_hash: str | None = None
         self._load_state()
         integrity = self.verify_chain()
@@ -61,8 +63,8 @@ class ExternalEvidenceJournal:
                 row = json.loads(line)
                 event_id = str(row.get("event_id") or "")
                 record_hash = str(row.get("record_hash") or "")
-                if event_id:
-                    self._ids.add(event_id)
+                if event_id and record_hash:
+                    self._record_hashes[event_id] = record_hash
                 if record_hash:
                     self._last_hash = record_hash
 
@@ -72,29 +74,73 @@ class ExternalEvidenceJournal:
             if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
                 raise RuntimeError("external evidence blob hash mismatch")
             return target
-        fd: int | None = None
+
+        temp_path: Path | None = None
         try:
-            fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "wb", closefd=True) as fh:
-                fd = None
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=self.paths.blobs,
+                prefix=f".{digest}.",
+                delete=False,
+            ) as fh:
+                temp_path = Path(fh.name)
                 fh.write(raw)
                 fh.flush()
                 os.fsync(fh.fileno())
-        except FileExistsError:
-            if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-                raise RuntimeError("external evidence blob race/hash mismatch")
+
+            try:
+                os.link(temp_path, target)
+            except FileExistsError:
+                if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+                    raise RuntimeError("external evidence blob race/hash mismatch")
         finally:
-            if fd is not None:
-                os.close(fd)
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
         return target
 
-    def append(self, event: ExternalEvidenceEvent, *, raw: bytes) -> AppendResult:
-        if hashlib.sha256(raw).hexdigest() != event.raw_sha256:
+    def _validate_event(self, event: ExternalEvidenceEvent, raw: bytes) -> None:
+        if not event.shadow_only or event.decision_allowed or event.t0_allowed:
+            raise ValueError("external evidence shadow-only invariant violated")
+
+        raw_bytes = bytes(raw)
+        if hashlib.sha256(raw_bytes).hexdigest() != event.raw_sha256:
             raise ValueError("raw bytes do not match event raw_sha256")
 
+        content_bytes = str(event.content).encode("utf-8")
+        if hashlib.sha256(content_bytes).hexdigest() != event.content_sha256:
+            raise ValueError("content does not match event content_sha256")
+        if len(content_bytes) != event.content_bytes:
+            raise ValueError("content byte count does not match event content_bytes")
+        if len(raw_bytes) != event.raw_bytes:
+            raise ValueError("raw byte count does not match event raw_bytes")
+
+        validate_public_url(event.source_url)
+        canonical = EvidenceCapture(
+            provider=event.provider,
+            collector=event.collector,
+            source_kind=event.source_kind,
+            source_url=event.source_url,
+            native_id=event.native_id,
+            published_at=event.published_at,
+            observed_at=event.observed_at,
+            raw=raw_bytes,
+            content=event.content,
+            provider_version=event.provider_version,
+            metadata=event.metadata,
+        ).to_event(captured_at=event.captured_at)
+        if canonical != event:
+            raise ValueError("external evidence event is not canonical")
+
+    def append(self, event: ExternalEvidenceEvent, *, raw: bytes) -> AppendResult:
+        self._validate_event(event, raw)
+
         with self._lock:
-            if event.event_id in self._ids:
-                return AppendResult(False, event.event_id, self._last_hash)
+            if event.event_id in self._record_hashes:
+                return AppendResult(
+                    False,
+                    event.event_id,
+                    self._record_hashes[event.event_id],
+                )
 
             self._put_blob(event.raw_sha256, raw)
             row = event.to_dict()
@@ -108,8 +154,8 @@ class ExternalEvidenceJournal:
                 fh.flush()
                 os.fsync(fh.fileno())
 
-            self._ids.add(event.event_id)
             self._last_hash = str(row["record_hash"])
+            self._record_hashes[event.event_id] = self._last_hash
             return AppendResult(True, event.event_id, self._last_hash)
 
     def verify_chain(self) -> dict[str, Any]:
@@ -118,6 +164,7 @@ class ExternalEvidenceJournal:
         prev: str | None = None
         count = 0
         seen: set[str] = set()
+        event_fields = tuple(ExternalEvidenceEvent.__dataclass_fields__)
         with self.paths.journal.open("r", encoding="utf-8") as fh:
             for raw_line in fh:
                 line = raw_line.strip()
@@ -134,11 +181,43 @@ class ExternalEvidenceJournal:
                 unsigned.pop("record_hash", None)
                 if _sha(unsigned) != record_hash:
                     return {"ok": False, "records": count, "reason": "RECORD_HASH_MISMATCH"}
-                blob = self.paths.root / str(row.get("blob_relpath") or "")
+                raw_sha256 = str(row.get("raw_sha256") or "")
+                if (
+                    len(raw_sha256) != 64
+                    or any(ch not in "0123456789abcdef" for ch in raw_sha256)
+                ):
+                    return {"ok": False, "records": count, "reason": "INVALID_RAW_HASH"}
+
+                expected_relpath = f"blobs/{raw_sha256}"
+                if row.get("blob_relpath") != expected_relpath:
+                    return {"ok": False, "records": count, "reason": "INVALID_BLOB_PATH"}
+
+                blob = self.paths.blobs / raw_sha256
                 if not blob.is_file():
                     return {"ok": False, "records": count, "reason": "BLOB_MISSING"}
-                if hashlib.sha256(blob.read_bytes()).hexdigest() != str(row.get("raw_sha256") or ""):
+                try:
+                    raw_bytes_expected = int(row.get("raw_bytes"))
+                except (TypeError, ValueError):
+                    return {"ok": False, "records": count, "reason": "INVALID_RAW_SIZE"}
+                if (
+                    raw_bytes_expected < 0
+                    or raw_bytes_expected > MAX_RAW_BYTES
+                    or blob.stat().st_size != raw_bytes_expected
+                ):
+                    return {"ok": False, "records": count, "reason": "BLOB_SIZE_MISMATCH"}
+
+                raw_blob = blob.read_bytes()
+                if hashlib.sha256(raw_blob).hexdigest() != raw_sha256:
                     return {"ok": False, "records": count, "reason": "BLOB_HASH_MISMATCH"}
+
+                try:
+                    event = ExternalEvidenceEvent(
+                        **{field: row[field] for field in event_fields}
+                    )
+                    self._validate_event(event, raw_blob)
+                except (KeyError, TypeError, ValueError):
+                    return {"ok": False, "records": count, "reason": "INVALID_EVENT"}
+
                 seen.add(event_id)
                 prev = record_hash
                 count += 1
