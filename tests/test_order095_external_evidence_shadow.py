@@ -21,6 +21,7 @@ from senecio_polymarket.backend.external_evidence.schema import (
 from senecio_polymarket.backend.external_evidence.security import (
     UnsafeTargetError,
     validate_public_url,
+    validate_resolved_public_url,
 )
 from senecio_polymarket.backend.external_evidence.service import ShadowEvidenceService
 
@@ -75,11 +76,38 @@ def test_target_guard_accepts_public_https():
     assert validate_public_url("https://www.reddit.com/r/Bitcoin/") == "https://www.reddit.com/r/Bitcoin/"
 
 
+def test_resolved_target_guard_rejects_dns_to_private_ip():
+    def fake_resolver(host, port, type=0):
+        assert host == "public-name.example"
+        return [(2, 1, 6, "", ("10.10.0.8", port))]
+
+    with pytest.raises(UnsafeTargetError, match="resolved"):
+        validate_resolved_public_url("https://public-name.example/a", resolver=fake_resolver)
+
+
+def test_resolved_target_guard_accepts_public_ip():
+    def fake_resolver(host, port, type=0):
+        return [(2, 1, 6, "", ("93.184.216.34", port))]
+
+    assert (
+        validate_resolved_public_url("https://example.com/a", resolver=fake_resolver)
+        == "https://example.com/a"
+    )
+
+
 def test_capture_rejects_future_source_time():
     with pytest.raises(EvidenceValidationError, match="published_at"):
         _capture(published_at="2026-10-02T10:10:00Z").to_event(
             captured_at="2026-10-02T10:00:02Z"
         )
+
+
+def test_capture_rejects_publish_time_after_observation_cut():
+    with pytest.raises(EvidenceValidationError, match="observed_at"):
+        _capture(
+            published_at="2026-10-02T10:04:00Z",
+            observed_at="2026-10-02T10:00:00Z",
+        ).to_event(captured_at="2026-10-02T10:04:01Z")
 
 
 def test_capture_rejects_secret_bearing_metadata():
@@ -136,6 +164,41 @@ def test_journal_is_append_only_deduplicated_and_hash_chained(tmp_path):
     assert (paths.blobs / second.raw_sha256).read_bytes() == b"beta"
 
 
+def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="tamper", raw=b"raw", content="raw").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    journal.append(event, raw=b"raw")
+    row = json.loads(paths.journal.read_text())
+    row["content"] = "tampered"
+    paths.journal.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="integrity"):
+        ExternalEvidenceJournal(paths)
+
+
+def test_verifier_rejects_tampered_blob_relpath_without_traversal(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="path", raw=b"safe", content="safe").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    journal.append(event, raw=b"safe")
+    row = json.loads(paths.journal.read_text())
+    row["blob_relpath"] = "../../outside"
+    unsigned = dict(row)
+    unsigned.pop("record_hash", None)
+    import hashlib
+    row["record_hash"] = hashlib.sha256(
+        json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    paths.journal.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    assert ExternalEvidenceJournal.verify_file(paths)["reason"] == "INVALID_BLOB_PATH"
+
+
 def test_shadow_service_persists_capture_without_decision_hook(tmp_path):
     service = ShadowEvidenceService(ExternalEvidencePaths.from_root(tmp_path))
     result = service.persist(_capture(), captured_at="2026-10-02T10:00:02Z")
@@ -169,7 +232,11 @@ def test_agent_reach_bridge_is_stdin_json_and_bounded(monkeypatch):
             }
         ), ""
 
-    collector = AgentReachBridgeCollector(executable="/opt/senex/agent-reach-bridge", runner=fake_runner)
+    collector = AgentReachBridgeCollector(
+        executable="/opt/senex/agent-reach-bridge",
+        runner=fake_runner,
+        url_validator=validate_public_url,
+    )
     capture = collector.collect("https://example.com/x", timeout=4.0)
     assert capture.provider == "agent_reach"
     assert calls[0][0] == ["/opt/senex/agent-reach-bridge"]
@@ -185,7 +252,11 @@ def test_scrapling_collector_uses_cli_without_shell_and_reads_bounded_output(tmp
         Path(argv[4]).write_text("scraped body", encoding="utf-8")
         return 0, "", ""
 
-    collector = ScraplingCollector(executable="/usr/local/bin/scrapling", runner=fake_runner)
+    collector = ScraplingCollector(
+        executable="/usr/local/bin/scrapling",
+        runner=fake_runner,
+        url_validator=validate_public_url,
+    )
     capture = collector.collect("https://example.com/article", timeout=5.0)
     assert capture.provider == "scrapling"
     assert capture.content == "scraped body"
