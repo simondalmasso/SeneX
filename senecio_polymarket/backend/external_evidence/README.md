@@ -37,7 +37,7 @@ Optional, out-of-process, no SENEX dependency pin:
 
 ```bash
 SENEX_SCRAPLING_BIN=/path/to/scrapling \
-python -m senecio_polymarket.backend.external_evidence.cli collect \
+python -m backend.external_evidence.cli collect \
   --provider scrapling \
   --url https://example.com/public-page
 ```
@@ -111,7 +111,7 @@ Provider bridges remain responsible for enforcing the same rule across redirects
 ## Verify
 
 ```bash
-python -m senecio_polymarket.backend.external_evidence.cli verify
+python -m backend.external_evidence.cli verify
 ```
 
 The verifier checks the JSONL hash chain, duplicate IDs, raw blob existence and raw blob SHA-256.
