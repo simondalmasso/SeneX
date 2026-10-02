@@ -144,6 +144,22 @@ def test_journal_is_append_only_deduplicated_and_hash_chained(tmp_path):
     assert (paths.blobs / second.raw_sha256).read_bytes() == b"beta"
 
 
+
+def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="tamper", raw=b"raw", content="raw").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    journal.append(event, raw=b"raw")
+    row = json.loads(paths.journal.read_text())
+    row["content"] = "tampered"
+    paths.journal.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="integrity"):
+        ExternalEvidenceJournal(paths)
+
+
 def test_shadow_service_persists_capture_without_decision_hook(tmp_path):
     service = ShadowEvidenceService(ExternalEvidencePaths.from_root(tmp_path))
     result = service.persist(_capture(), captured_at="2026-10-02T10:00:02Z")
