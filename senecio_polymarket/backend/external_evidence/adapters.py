@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -29,28 +30,76 @@ def _utcnow() -> str:
 
 
 def _bridge_runner(argv: list[str], stdin_text: str, timeout: float) -> tuple[int, str, str]:
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         argv,
-        input=stdin_text,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=timeout,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         shell=False,
     )
-    return int(proc.returncode), proc.stdout, proc.stderr
+    if proc.stdin is None or proc.stdout is None:
+        proc.kill()
+        proc.wait()
+        raise CollectorError("bridge process pipes unavailable")
+
+    state: dict[str, object] = {"overflow": False, "chunks": []}
+
+    def _read_stdout() -> None:
+        chunks: list[bytes] = []
+        total = 0
+        try:
+            while True:
+                chunk = proc.stdout.read(64 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_RAW_BYTES:
+                    state["overflow"] = True
+                    proc.kill()
+                    break
+                chunks.append(chunk)
+        finally:
+            state["chunks"] = chunks
+
+    reader = threading.Thread(target=_read_stdout, name="senex-bridge-stdout", daemon=True)
+    reader.start()
+    try:
+        try:
+            proc.stdin.write(stdin_text.encode("utf-8"))
+            proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        try:
+            return_code = proc.wait(timeout=float(timeout))
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise
+    finally:
+        reader.join(timeout=1.0)
+        proc.stdout.close()
+
+    if bool(state["overflow"]):
+        raise CollectorError("bridge response exceeds bound")
+
+    raw_stdout = b"".join(state["chunks"])
+    try:
+        stdout = raw_stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CollectorError("bridge response must be UTF-8") from exc
+    return int(return_code), stdout, ""
 
 
 def _cli_runner(argv: list[str], timeout: float) -> tuple[int, str, str]:
     proc = subprocess.run(
         argv,
-        capture_output=True,
-        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         check=False,
         timeout=timeout,
         shell=False,
     )
-    return int(proc.returncode), proc.stdout, proc.stderr
+    return int(proc.returncode), "", ""
 
 
 class _JSONBridgeCollector:
@@ -95,7 +144,13 @@ class _JSONBridgeCollector:
             raise CollectorError(f"{self.provider} bridge returned invalid JSON") from exc
         if not isinstance(payload, dict):
             raise CollectorError(f"{self.provider} bridge returned non-object JSON")
-        content = str(payload.get("content") or "")
+        content_value = payload.get("content")
+        if content_value is None:
+            content = ""
+        elif isinstance(content_value, str):
+            content = content_value
+        else:
+            raise CollectorError(f"{self.provider} bridge content must be UTF-8 text")
         raw_value = payload.get("raw", content)
         if not isinstance(raw_value, str):
             raise CollectorError(f"{self.provider} bridge raw must be UTF-8 text")
