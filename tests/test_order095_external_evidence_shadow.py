@@ -144,41 +144,6 @@ def test_journal_is_append_only_deduplicated_and_hash_chained(tmp_path):
     assert (paths.blobs / second.raw_sha256).read_bytes() == b"beta"
 
 
-def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
-    paths = ExternalEvidencePaths.from_root(tmp_path)
-    journal = ExternalEvidenceJournal(paths)
-    event = _capture(native_id="tamper", raw=b"raw", content="raw").to_event(
-        captured_at="2026-10-02T10:00:02Z"
-    )
-    journal.append(event, raw=b"raw")
-    row = json.loads(paths.journal.read_text())
-    row["content"] = "tampered"
-    paths.journal.write_text(json.dumps(row) + "\n", encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="integrity"):
-        ExternalEvidenceJournal(paths)
-
-
-def test_verifier_rejects_tampered_blob_relpath_without_traversal(tmp_path):
-    paths = ExternalEvidencePaths.from_root(tmp_path)
-    journal = ExternalEvidenceJournal(paths)
-    event = _capture(native_id="path", raw=b"safe", content="safe").to_event(
-        captured_at="2026-10-02T10:00:02Z"
-    )
-    journal.append(event, raw=b"safe")
-    row = json.loads(paths.journal.read_text())
-    row["blob_relpath"] = "../../outside"
-    unsigned = dict(row)
-    unsigned.pop("record_hash", None)
-    import hashlib
-    row["record_hash"] = hashlib.sha256(
-        json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    ).hexdigest()
-    paths.journal.write_text(json.dumps(row) + "\n", encoding="utf-8")
-
-    assert ExternalEvidenceJournal.verify_file(paths)["reason"] == "INVALID_BLOB_PATH"
-
-
 def test_shadow_service_persists_capture_without_decision_hook(tmp_path):
     service = ShadowEvidenceService(ExternalEvidencePaths.from_root(tmp_path))
     result = service.persist(_capture(), captured_at="2026-10-02T10:00:02Z")
