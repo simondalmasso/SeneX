@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,13 +12,16 @@ import pytest
 from senecio_polymarket.backend.external_evidence.adapters import (
     AgentReachBridgeCollector,
     BridgeUnavailable,
+    CollectorError,
     PatchrightBridgeCollector,
     ScraplingCollector,
+    _bridge_runner,
 )
 from senecio_polymarket.backend.external_evidence.journal import ExternalEvidenceJournal
 from senecio_polymarket.backend.external_evidence.paths import ExternalEvidencePaths
 from senecio_polymarket.backend.external_evidence.schema import (
     MAX_CONTENT_BYTES,
+    MAX_RAW_BYTES,
     EvidenceCapture,
     EvidenceValidationError,
 )
@@ -60,6 +67,9 @@ def test_results_dir_override_keeps_external_evidence_on_durable_root(tmp_path, 
         "http://172.16.0.5/a",
         "http://192.168.1.5/a",
         "http://169.254.169.254/latest/meta-data",
+        "http://2130706433/",
+        "http://127.1/",
+        "http://0x7f000001/",
         "file:///etc/passwd",
         "ftp://example.com/file",
         "https://user:pass@example.com/",
@@ -93,6 +103,17 @@ def test_capture_rejects_publish_time_after_observation_cut():
 def test_capture_rejects_secret_bearing_metadata():
     with pytest.raises(EvidenceValidationError, match="sensitive metadata"):
         _capture(metadata={"nested": {"cookie": "should-never-persist"}}).to_event(
+            captured_at="2026-10-02T10:00:02Z"
+        )
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["api-key", "api key", "private-key", "private key"],
+)
+def test_capture_rejects_separator_variants_of_sensitive_metadata(key):
+    with pytest.raises(EvidenceValidationError, match="sensitive metadata"):
+        _capture(metadata={key: "must-not-persist"}).to_event(
             captured_at="2026-10-02T10:00:02Z"
         )
 
@@ -145,6 +166,38 @@ def test_journal_is_append_only_deduplicated_and_hash_chained(tmp_path):
 
 
 
+def test_journal_rejects_non_shadow_or_inconsistent_events(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="boundary", raw=b"alpha", content="alpha").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+
+    with pytest.raises(ValueError, match="shadow"):
+        journal.append(replace(event, decision_allowed=True), raw=b"alpha")
+
+    with pytest.raises(ValueError, match="content"):
+        journal.append(replace(event, content="tampered"), raw=b"alpha")
+
+
+def test_duplicate_returns_original_record_hash(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    first = _capture(native_id="dup-a", raw=b"alpha", content="alpha").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    second = _capture(native_id="dup-b", raw=b"beta", content="beta").to_event(
+        captured_at="2026-10-02T10:00:03Z"
+    )
+
+    first_result = journal.append(first, raw=b"alpha")
+    journal.append(second, raw=b"beta")
+    duplicate = journal.append(first, raw=b"alpha")
+
+    assert duplicate.appended is False
+    assert duplicate.record_hash == first_result.record_hash
+
+
 def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
     paths = ExternalEvidencePaths.from_root(tmp_path)
     journal = ExternalEvidenceJournal(paths)
@@ -158,6 +211,56 @@ def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
 
     with pytest.raises(RuntimeError, match="integrity"):
         ExternalEvidenceJournal(paths)
+
+
+def test_journal_verifier_rejects_blob_path_escape_even_if_hashes_match(tmp_path):
+    root = tmp_path / "store"
+    paths = ExternalEvidencePaths.from_root(root)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="escape", raw=b"outside", content="outside").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    journal.append(event, raw=b"outside")
+
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"outside")
+    row = json.loads(paths.journal.read_text())
+    row["blob_relpath"] = "../outside"
+    unsigned = dict(row)
+    unsigned.pop("record_hash", None)
+    row["record_hash"] = hashlib.sha256(
+        json.dumps(
+            unsigned,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    paths.journal.write_text(
+        json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="integrity"):
+        ExternalEvidenceJournal(paths)
+
+
+def test_failed_blob_write_does_not_leave_final_digest_path(tmp_path, monkeypatch):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(native_id="disk-failure", raw=b"partial", content="partial").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+
+    def fail_fsync(_fd):
+        raise OSError("synthetic fsync failure")
+
+    monkeypatch.setattr(os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="synthetic"):
+        journal.append(event, raw=b"partial")
+
+    assert not (paths.blobs / event.raw_sha256).exists()
 
 
 def test_shadow_service_persists_capture_without_decision_hook(tmp_path):
@@ -201,6 +304,35 @@ def test_agent_reach_bridge_is_stdin_json_and_bounded(monkeypatch):
     assert len(calls) == 1
 
 
+def test_bridge_rejects_non_string_content():
+    def fake_runner(_argv, _stdin_text, _timeout):
+        return 0, json.dumps(
+            {
+                "content": {"text": "not-a-string"},
+                "provider_version": "bridge-1",
+            }
+        ), ""
+
+    collector = AgentReachBridgeCollector(
+        executable="/opt/senex/agent-reach-bridge",
+        runner=fake_runner,
+    )
+    with pytest.raises(CollectorError, match="content"):
+        collector.collect("https://example.com/x", timeout=1.0)
+
+
+def test_default_bridge_runner_rejects_oversized_stdout_before_return(tmp_path):
+    script = tmp_path / "noisy_bridge.py"
+    script.write_text(
+        "import sys\nsys.stdin.read()\nsys.stdout.write('x' * "
+        + str(MAX_RAW_BYTES + 1)
+        + ")\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(CollectorError, match="response exceeds bound"):
+        _bridge_runner([sys.executable, str(script)], "{}", 5.0)
+
+
 def test_scrapling_collector_uses_cli_without_shell_and_reads_bounded_output(tmp_path):
     calls = []
 
@@ -223,6 +355,19 @@ def test_patchright_bridge_fails_closed_when_not_configured(monkeypatch):
     monkeypatch.delenv("SENEX_PATCHRIGHT_BRIDGE", raising=False)
     with pytest.raises(BridgeUnavailable):
         PatchrightBridgeCollector.from_env()
+
+
+def test_readme_uses_runtime_module_path_available_in_container():
+    root = Path(__file__).resolve().parents[1]
+    readme = (
+        root
+        / "senecio_polymarket"
+        / "backend"
+        / "external_evidence"
+        / "README.md"
+    ).read_text(encoding="utf-8")
+    assert "python -m backend.external_evidence.cli" in readme
+    assert "python -m senecio_polymarket.backend.external_evidence.cli" not in readme
 
 
 def test_decision_paths_do_not_import_external_evidence():
