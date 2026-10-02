@@ -9,6 +9,7 @@ from senecio_polymarket.backend.external_evidence.adapters import (
     AgentReachBridgeCollector,
     BridgeUnavailable,
     PatchrightBridgeCollector,
+    ScraplingCollector,
 )
 from senecio_polymarket.backend.external_evidence.journal import ExternalEvidenceJournal
 from senecio_polymarket.backend.external_evidence.paths import ExternalEvidencePaths
@@ -174,6 +175,23 @@ def test_agent_reach_bridge_is_stdin_json_and_bounded(monkeypatch):
     assert calls[0][0] == ["/opt/senex/agent-reach-bridge"]
     assert calls[0][2] == 4.0
     assert len(calls) == 1
+
+
+def test_scrapling_collector_uses_cli_without_shell_and_reads_bounded_output(tmp_path):
+    calls = []
+
+    def fake_runner(argv, timeout):
+        calls.append((argv, timeout))
+        Path(argv[4]).write_text("scraped body", encoding="utf-8")
+        return 0, "", ""
+
+    collector = ScraplingCollector(executable="/usr/local/bin/scrapling", runner=fake_runner)
+    capture = collector.collect("https://example.com/article", timeout=5.0)
+    assert capture.provider == "scrapling"
+    assert capture.content == "scraped body"
+    assert calls[0][0][0:3] == ["/usr/local/bin/scrapling", "extract", "get"]
+    assert "--ai-targeted" in calls[0][0]
+    assert calls[0][1] == 5.0
 
 
 def test_patchright_bridge_fails_closed_when_not_configured(monkeypatch):
