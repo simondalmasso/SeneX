@@ -43,6 +43,12 @@ class ExternalEvidenceJournal:
         self._ids: set[str] = set()
         self._last_hash: str | None = None
         self._load_state()
+        integrity = self.verify_chain()
+        if not integrity.get("ok", False):
+            raise RuntimeError(
+                "external evidence journal integrity failure: "
+                + str(integrity.get("reason") or "UNKNOWN")
+            )
 
     def _load_state(self) -> None:
         if not self.paths.journal.exists():
