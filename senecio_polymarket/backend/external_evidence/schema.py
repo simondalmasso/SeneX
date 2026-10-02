@@ -143,6 +143,8 @@ class EvidenceCapture:
             published_dt = _parse_time(self.published_at, "published_at")
             if published_dt > captured_dt + CLOCK_SKEW_TOLERANCE:
                 raise EvidenceValidationError("published_at is after captured_at beyond clock tolerance")
+            if published_dt > observed_dt + CLOCK_SKEW_TOLERANCE:
+                raise EvidenceValidationError("published_at is after observed_at beyond clock tolerance")
             published_norm = published_dt.isoformat().replace("+00:00", "Z")
 
         raw_hash = _sha256(raw)
