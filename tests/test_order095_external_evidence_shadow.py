@@ -85,9 +85,9 @@ def test_capture_rejects_future_source_time():
 def test_capture_rejects_publish_time_after_observation_cut():
     with pytest.raises(EvidenceValidationError, match="observed_at"):
         _capture(
-            published_at="2026-10-02T10:04:00Z",
+            published_at="2026-10-02T10:06:00Z",
             observed_at="2026-10-02T10:00:00Z",
-        ).to_event(captured_at="2026-10-02T10:04:01Z")
+        ).to_event(captured_at="2026-10-02T10:06:01Z")
 
 
 def test_capture_rejects_secret_bearing_metadata():
