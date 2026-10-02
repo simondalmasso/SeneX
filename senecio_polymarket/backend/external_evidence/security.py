@@ -12,10 +12,28 @@ _BLOCKED_HOSTS = {"localhost", "localhost.localdomain"}
 _BLOCKED_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home")
 
 
+def _looks_like_legacy_numeric_ipv4(hostname: str) -> bool:
+    """Reject non-canonical numeric host spellings accepted by system resolvers."""
+    lowered = hostname.lower()
+    parts = lowered.split(".")
+    if not parts or any(not part for part in parts):
+        return False
+
+    def _numeric_part(part: str) -> bool:
+        if part.startswith("0x"):
+            digits = part[2:]
+            return bool(digits) and all(ch in "0123456789abcdef" for ch in digits)
+        return part.isdigit()
+
+    return all(_numeric_part(part) for part in parts)
+
+
 def _validate_ip_literal(hostname: str) -> None:
     try:
         address = ipaddress.ip_address(hostname)
     except ValueError:
+        if _looks_like_legacy_numeric_ipv4(hostname):
+            raise UnsafeTargetError("ambiguous numeric network target is forbidden")
         return
     if (
         address.is_private
