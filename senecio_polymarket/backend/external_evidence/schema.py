@@ -50,12 +50,21 @@ def _norm_time(value: str, field: str) -> str:
     return parsed.isoformat().replace("+00:00", "Z")
 
 
+def _reject_sensitive_keys(value: Any, path: str = "metadata") -> None:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            lowered = str(key).lower()
+            if any(part in lowered for part in _SENSITIVE_PARTS):
+                raise EvidenceValidationError(f"sensitive metadata key forbidden: {path}.{key}")
+            _reject_sensitive_keys(child, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _reject_sensitive_keys(child, f"{path}[{index}]")
+
+
 def _safe_metadata(value: Mapping[str, Any] | None) -> dict[str, Any]:
     metadata = dict(value or {})
-    for key in metadata:
-        lowered = str(key).lower()
-        if any(part in lowered for part in _SENSITIVE_PARTS):
-            raise EvidenceValidationError(f"sensitive metadata key forbidden: {key}")
+    _reject_sensitive_keys(metadata)
     try:
         encoded = json.dumps(metadata, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
     except (TypeError, ValueError) as exc:
