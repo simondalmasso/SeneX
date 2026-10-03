@@ -1,9 +1,9 @@
 # ORDER096 — External Source / Strategy Screen (2026-10-03)
 
-STATUS=RESEARCH_ONLY  
-EDGE=UNPROVEN  
-NEW_RUNTIME_DEPENDENCIES=0  
-NEW_PAID_COST=0  
+STATUS=RESEARCH_ONLY
+EDGE=UNPROVEN
+NEW_RUNTIME_DEPENDENCIES=0
+NEW_PAID_COST=0
 PRODUCTION_INTEGRATIONS=0
 
 Purpose: decide whether newly proposed repositories, models, and TradingView tools add information that SENEX does not already have. The default is **do not integrate** unless a source removes a concrete uncertainty or defines a distinct falsifiable strategy.
