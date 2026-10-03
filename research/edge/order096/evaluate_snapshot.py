@@ -107,16 +107,30 @@ def matched_signal_agreement(
     left: dict[str, Any],
     right: dict[str, Any],
 ) -> dict[str, Any]:
-    """Compare indicator states only on timestamps present in both venues."""
+    """Compare initialized indicator states on timestamps present in both venues.
+
+    Warm-up/unavailable states are excluded explicitly. Once initialized, zero
+    remains a real neutral/abstain state and participates in state agreement.
+    """
     left_rows = [dict(row) for row in left["candles"]]
     right_rows = [dict(row) for row in right["candles"]]
+    left_base_ms = _base_interval_ms(left)
+    right_base_ms = _base_interval_ms(right)
     left_matrix = baselines.compute_baseline_matrix(
         left_rows,
-        base_interval_ms=_base_interval_ms(left),
+        base_interval_ms=left_base_ms,
     )
     right_matrix = baselines.compute_baseline_matrix(
         right_rows,
-        base_interval_ms=_base_interval_ms(right),
+        base_interval_ms=right_base_ms,
+    )
+    left_available = baselines.compute_baseline_availability_matrix(
+        left_rows,
+        base_interval_ms=left_base_ms,
+    )
+    right_available = baselines.compute_baseline_availability_matrix(
+        right_rows,
+        base_interval_ms=right_base_ms,
     )
 
     li = {int(row["open_time"]): i for i, row in enumerate(left_rows)}
@@ -125,23 +139,33 @@ def matched_signal_agreement(
 
     per_rule: dict[str, Any] = {}
     for name in sorted(set(left_matrix) & set(right_matrix)):
-        compared = agreed = nonzero_both = 0
+        compared = agreed = nonzero_both = directional_agreed = 0
         for ts in common:
-            lv = int(left_matrix[name][li[ts]] or 0)
-            rv = int(right_matrix[name][ri[ts]] or 0)
-            # Zero is also the warm-up/unavailable sentinel for these frozen
-            # directional baselines. Cross-venue agreement must compare only
-            # timestamps where both implementations are initialized and emit
-            # an actionable directional state.
-            if lv == 0 or rv == 0:
+            left_index = li[ts]
+            right_index = ri[ts]
+            if (
+                not left_available[name][left_index]
+                or not right_available[name][right_index]
+            ):
                 continue
+
+            lv = int(left_matrix[name][left_index] or 0)
+            rv = int(right_matrix[name][right_index] or 0)
             compared += 1
             agreed += int(lv == rv)
-            nonzero_both += 1
+            if lv != 0 and rv != 0:
+                nonzero_both += 1
+                directional_agreed += int(lv == rv)
+
         per_rule[name] = {
             "compared_n": compared,
+            "availability_excluded_n": len(common) - compared,
             "both_nonzero_n": nonzero_both,
             "signal_agreement": round(agreed / compared, 6) if compared else None,
+            "directional_agreement": (
+                round(directional_agreed / nonzero_both, 6)
+                if nonzero_both else None
+            ),
         }
 
     return {
