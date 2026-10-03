@@ -128,6 +128,23 @@ def extract_t0_pair(row: dict) -> T0Pair | None:
     if not isinstance(step2, dict):
         return None
 
+    # Incremental-value testing must not compare the market prior against a
+    # SENEX score that already consumed that same prior.  Require explicit T0
+    # evidence that Polymarket directional fusion was disabled.
+    poly_influence = step2.get("polymarket_context_v1")
+    if not isinstance(poly_influence, dict):
+        return None
+    if poly_influence.get("directional_use") is not False:
+        return None
+    if poly_influence.get("experiment_enabled") is not False:
+        return None
+    try:
+        effective_weight = float(poly_influence.get("effective_weight"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(effective_weight) or abs(effective_weight) > 1e-12:
+        return None
+
     external = audit.get("external_markets_v1")
     poly = external.get("polymarket") if isinstance(external, dict) else None
     if not isinstance(poly, dict):
@@ -205,6 +222,9 @@ def _resolution_record(raw: dict) -> tuple[tuple[str, str], dict]:
     outcome = str(raw.get("outcome") or "").upper()
     if outcome not in {"UP", "DOWN"}:
         raise ResolutionContractError("resolution outcome must be UP or DOWN")
+    source = str(raw.get("source") or "").strip()
+    if not source:
+        raise ResolutionContractError("resolution source is missing")
     try:
         resolved_at = _parse_time(raw.get("resolved_at"), "resolved_at")
     except ValueError as exc:
@@ -219,7 +239,7 @@ def _resolution_record(raw: dict) -> tuple[tuple[str, str], dict]:
         "end_ts": end_ts,
         "outcome": outcome,
         "resolved_at": resolved_at,
-        "source": str(raw.get("source") or ""),
+        "source": source,
     }
     return (slug, condition_id), normalized
 
