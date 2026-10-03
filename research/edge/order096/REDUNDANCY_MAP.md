@@ -64,3 +64,26 @@ A recent-window diagnostic screen (not promotion evidence) showed unstable behav
 - Squeeze-release observations were extremely sparse (1–7 signals in the screened holdouts), making raw hit rates meaningless.
 
 Conclusion: the useful question is **incremental disagreement information**, not headline indicator accuracy.
+
+
+## Second-wave HTF redundancy ruling
+
+The new HTF/SMC-style tools split into two groups.
+
+### Mostly duplicate / workflow only
+
+- **HTF Fractal Bars**: useful human visualization of higher-timeframe OHLC/C1-C2-C3, but SENEX already carries a 4h regime. No production feature added.
+- **Minicharts Pro+**: visualization only.
+- **Tech Leadership Map+**: not duplicate, but would add QQQ/SPY/market-internal dependencies. That is a separate cross-asset regime hypothesis, not a free improvement to BTC EDGE.
+
+### Distinct enough for one cheap experiment
+
+- **Premium/Discount**: completed-HTF range location.
+- **HTF Liquidity**: previous completed HTF high/low levels.
+- **Sweep Reversal**: sweep + reclaim event around those levels.
+
+Instead of implementing three branded stacks, ORDER096 represents them with only:
+- `htf_discount_reversion_4h`
+- `htf_sweep_reclaim_4h`
+
+Recent exploratory results are weak/unstable, so these remain research baselines only.
