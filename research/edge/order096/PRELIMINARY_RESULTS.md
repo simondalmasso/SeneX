@@ -12,6 +12,20 @@ This is a cheap sanity screen performed before spending repository complexity on
 
 The screen below supersedes the earlier pre-fidelity draft. Before refreshing these numbers, the SuperTrend baseline was corrected to use the previous trailing bands for flips, Chandelier was aligned to the public default `useClose=true`, and Squeeze Keltner range was aligned to a simple moving average of True Range. No outcome-driven parameter changes were made.
 
+## Reproducibility
+
+The exploratory input is frozen in:
+
+`research/edge/order096/data/indicator_screen_v1.json`
+
+Git blob SHA: `ff8b40ba63b93a2c37be2a53ff7e5ab9c7a29c84`.
+
+The deterministic evaluator is:
+
+`research/edge/order096/evaluate_snapshot.py`
+
+It contains no network I/O and reproduces the standalone metrics plus a same-timestamp cross-venue signal-agreement diagnostic. The frozen file records provider, exact query parameters, candle counts, and exact first/last open timestamps.
+
 ## Windows screened
 
 - TraderSpy BTCUSDT 15m: 500 closed candles, final 40% evaluated (199 next-bar decisions).
@@ -101,8 +115,8 @@ These are descriptive diagnostics only. They are not multiplicity-controlled and
 2. ATR/trend-family rules are especially unstable across venue/horizon and remain high-redundancy candidates.
 3. Squeeze release is too sparse for any hit-rate statement.
 4. A candidate that looks positive on 15m can flip negative on 1h.
-5. Venue sensitivity is material enough that single-source backtests would be dangerous.
-6. The strongest small-window 1h reading remains the simple momentum baseline on Bybit, which argues against adding complexity before incremental tests.
+5. The raw TraderSpy-vs-Bybit tables use different historical spans, so their performance differences must **not** be attributed to venue. The committed evaluator separately restricts cross-venue signal-agreement diagnostics to timestamps present in both datasets.
+6. The strongest small-window 1h reading in the Bybit sample remains the simple momentum baseline, which argues against adding complexity before incremental tests.
 7. Positive mean signed return with sub-50% accuracy is possible because return magnitudes are asymmetric; neither metric alone establishes EDGE.
 
 ## Next valid test
