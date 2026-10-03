@@ -78,7 +78,7 @@ def test_order096_module_is_research_only():
 def test_all_baselines_return_bounded_direction_series():
     m = _load_module()
     candles = _candles()
-    matrix = m.compute_baseline_matrix(candles)
+    matrix = m.compute_baseline_matrix(candles, base_interval_ms=3_600_000)
 
     expected = {
         "momentum_1",
@@ -103,7 +103,7 @@ def test_indicator_history_is_causal_under_future_mutation():
     m = _load_module()
     candles = _candles()
     cut = 230
-    before = m.compute_baseline_matrix(candles)
+    before = m.compute_baseline_matrix(candles, base_interval_ms=3_600_000)
 
     mutated = [dict(row) for row in candles]
     for i in range(cut + 1, len(mutated)):
@@ -113,7 +113,7 @@ def test_indicator_history_is_causal_under_future_mutation():
         mutated[i]["close"] *= 4.1
         mutated[i]["volume"] *= 50.0
 
-    after = m.compute_baseline_matrix(mutated)
+    after = m.compute_baseline_matrix(mutated, base_interval_ms=3_600_000)
     for name in before:
         assert before[name][: cut + 1] == after[name][: cut + 1], name
 
@@ -121,7 +121,7 @@ def test_indicator_history_is_causal_under_future_mutation():
 def test_squeeze_release_is_strict_subset_of_squeeze_direction():
     m = _load_module()
     candles = _candles()
-    matrix = m.compute_baseline_matrix(candles)
+    matrix = m.compute_baseline_matrix(candles, base_interval_ms=3_600_000)
     release = matrix["squeeze_release_20"]
     momentum = matrix["squeeze_momentum_20"]
 
@@ -224,8 +224,16 @@ def test_htf_sweep_reclaim_uses_only_last_completed_4h_range():
             }
         )
 
-    sweep = m.htf_sweep_reclaim(candles, target_ms=4 * 3_600_000)
-    location = m.htf_discount_reversion(candles, target_ms=4 * 3_600_000)
+    sweep = m.htf_sweep_reclaim(
+        candles,
+        target_ms=4 * 3_600_000,
+        base_interval_ms=3_600_000,
+    )
+    location = m.htf_discount_reversion(
+        candles,
+        target_ms=4 * 3_600_000,
+        base_interval_ms=3_600_000,
+    )
 
     assert sweep[:4] == [0, 0, 0, 0]
     assert sweep[4] == 1
@@ -239,8 +247,16 @@ def test_htf_context_fails_closed_when_previous_bucket_is_incomplete():
     candles = _candles(12)
     # Remove one bar from the first 4h bucket.
     candles = [row for i, row in enumerate(candles) if i != 1]
-    sweep = m.htf_sweep_reclaim(candles, target_ms=4 * 3_600_000)
-    location = m.htf_discount_reversion(candles, target_ms=4 * 3_600_000)
+    sweep = m.htf_sweep_reclaim(
+        candles,
+        target_ms=4 * 3_600_000,
+        base_interval_ms=3_600_000,
+    )
+    location = m.htf_discount_reversion(
+        candles,
+        target_ms=4 * 3_600_000,
+        base_interval_ms=3_600_000,
+    )
 
     # The first bar after that incomplete bucket must not synthesize HTF truth.
     first_bucket = candles[0]["open_time"] // (4 * 3_600_000)
@@ -248,6 +264,37 @@ def test_htf_context_fails_closed_when_previous_bucket_is_incomplete():
         if row["open_time"] // (4 * 3_600_000) == first_bucket + 1:
             assert sweep[i] == 0
             assert location[i] == 0
+
+
+def test_htf_history_does_not_depend_on_future_timestamp_density():
+    m = _load_module()
+    base_ms = 15 * 60_000
+    target_ms = 4 * 60 * 60_000
+
+    # First 32 rows are deliberately sparse (30m apart), but the declared
+    # dataset interval is 15m. Therefore no synthetic "complete 4h" truth may
+    # be created from only 8 sparse records. Later dense timestamps must not
+    # retroactively change the historical prefix.
+    candles = _candles(64)
+    start = 1_790_000_000_000
+    for i, row in enumerate(candles):
+        if i < 32:
+            row["open_time"] = start + i * 30 * 60_000
+        else:
+            row["open_time"] = start + 32 * 30 * 60_000 + (i - 32) * base_ms
+
+    prefix = [dict(row) for row in candles[:32]]
+    prefix_signal = m.htf_discount_reversion(
+        prefix,
+        target_ms=target_ms,
+        base_interval_ms=base_ms,
+    )
+    full_signal = m.htf_discount_reversion(
+        candles,
+        target_ms=target_ms,
+        base_interval_ms=base_ms,
+    )
+    assert prefix_signal == full_signal[:32]
 
 
 def test_warmup_does_not_emit_nonfinite_values():
