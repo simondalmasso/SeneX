@@ -85,3 +85,22 @@ No Pine source is copied into SENEX by ORDER096. Implemented baselines are indep
 | Minicharts Pro+ [Herman] | visualization only | none | no model input |
 
 The two implemented HTF baselines intentionally compress three related scripts into two falsifiable primitives. This avoids feature multiplication.
+
+
+## User-supplied iFVG Ultimate+ Deluxe source
+
+Source: Google Doc `Pastebin INFO SENEX`, read directly on 2026-10-03.
+
+This is treated as a confluence bundle rather than one indicator. Its unique-enough components are tracked as separate hypotheses:
+
+| Component | Redundancy | Disposition |
+|---|---|---|
+| IFVG inversion | LOW-MEDIUM | KEEP research hypothesis; no production feature |
+| confirmed sweep/reclaim | MEDIUM | KEEP research hypothesis; compare to completed-HTF sweep baseline |
+| BTC/ETH SMT divergence | LOW-MEDIUM | KEEP research hypothesis; requires aligned dual-asset T0 data |
+| lower-TF delta proxy | HIGH | REJECT duplicate of SENEX delta/orderflow family |
+| session/macro windows | HIGH | REJECT duplicate of SENEX session/regime enrichment |
+| volume profile/value area | MEDIUM complexity | HOLD; no evidence it removes current uncertainty |
+| six-check grade | combination only | REJECT until components independently earn evidence |
+
+See `IFVG_SOURCE_AUDIT.md` for causality notes and the small exploratory proxy screen.
