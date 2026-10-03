@@ -150,14 +150,14 @@ After the owner supplied a second TradingView set, ORDER096 added only two minim
 
 These are independent research baselines, not copies of the TradingView scripts.
 
-Recent exploratory results:
+Recent exploratory results, regenerated from the frozen snapshot with the explicit lower-timeframe interval supplied to HTF completion logic. The exact six-decimal values behind this table are locked by `tests/test_order096_indicator_baselines.py`:
 
 | Provider / horizon | HTF range N | Accuracy | Mean signed bps | Sweep N | Sweep accuracy | Sweep mean signed bps |
 |---|---:|---:|---:|---:|---:|---:|
-| TraderSpy 15m | 199 | 53.3% | -1.07 | 17 | 35.3% | -12.39 |
-| TraderSpy 1h | 199 | 50.3% | -1.09 | 42 | 38.1% | -3.33 |
-| Bybit linear 15m | 79 | 46.8% | +0.31 | 3 | 33.3% | +2.41 |
-| Bybit linear 1h | 79 | 49.4% | -3.92 | 11 | 36.4% | -2.72 |
+| TraderSpy 15m | 199 | 52.8% | -0.49 | 21 | 38.1% | -2.71 |
+| TraderSpy 1h | 199 | 50.8% | -0.36 | 42 | 35.7% | -5.52 |
+| Bybit linear 15m | 79 | 45.6% | -2.69 | 10 | 40.0% | -4.43 |
+| Bybit linear 1h | 79 | 45.6% | -3.65 | 17 | 29.4% | -3.16 |
 
 Interpretation:
 
