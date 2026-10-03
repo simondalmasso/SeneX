@@ -105,6 +105,10 @@ def _bridge_runner(argv: list[str], stdin_text: str, timeout: float) -> tuple[in
                             break
                         if not chunk:
                             eof = True
+                            try:
+                                selector.unregister(fd)
+                            except Exception:
+                                pass
                             break
                         total += len(chunk)
                         if total > MAX_RAW_BYTES:
@@ -116,17 +120,33 @@ def _bridge_runner(argv: list[str], stdin_text: str, timeout: float) -> tuple[in
                             raise CollectorError("bridge response exceeds bound")
                         chunks.append(chunk)
 
-                if eof and proc.poll() is not None:
+                if eof:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        _kill_process_group(proc)
+                        try:
+                            proc.wait(timeout=1.0)
+                        except subprocess.TimeoutExpired:
+                            pass
+                        raise subprocess.TimeoutExpired(argv, timeout_s)
+                    try:
+                        return_code = proc.wait(timeout=remaining)
+                    except subprocess.TimeoutExpired:
+                        _kill_process_group(proc)
+                        try:
+                            proc.wait(timeout=1.0)
+                        except subprocess.TimeoutExpired:
+                            pass
+                        raise subprocess.TimeoutExpired(argv, timeout_s)
                     break
 
                 # If the direct process exited but a descendant inherited stdout,
-                # continue only until the same wall-clock deadline. The timeout
-                # path kills the whole process group and never performs a blocking
-                # pipe close behind a reader thread.
+                # keep waiting for pipe EOF only until the same wall-clock deadline.
                 if proc.poll() is not None and not events:
                     continue
 
-            return_code = proc.wait(timeout=max(0.001, deadline - time.monotonic()))
+            if not eof:
+                return_code = proc.wait(timeout=max(0.001, deadline - time.monotonic()))
         finally:
             try:
                 selector.unregister(fd)
