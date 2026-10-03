@@ -1,8 +1,8 @@
 # ORDER096 — Indicator Registry
 
-STATUS=OFFLINE_RESEARCH_ONLY  
-EDGE=UNPROVEN  
-DECISION_PATH_IMPORTS=FORBIDDEN  
+STATUS=OFFLINE_RESEARCH_ONLY
+EDGE=UNPROVEN
+DECISION_PATH_IMPORTS=FORBIDDEN
 PAID_PURCHASES=0
 
 This registry separates mathematical families from branded TradingView scripts. Popularity is not evidence. A candidate only survives if it contributes out-of-sample information beyond simpler baselines under the same timestamps and costs.
