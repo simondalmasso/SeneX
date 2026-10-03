@@ -38,14 +38,23 @@ def _directional_metrics(
     candles: list[dict[str, Any]],
     signal: list[int],
     *,
+    availability: list[bool] | None = None,
     start_fraction: float = 0.60,
 ) -> dict[str, Any]:
     start = max(1, int(len(candles) * start_fraction))
+    if availability is None:
+        availability = [True] * len(candles)
+    if len(availability) != len(candles):
+        raise ValueError("availability length must match candles")
     n = correct = 0
     signed_sum = 0.0
     common = agreement = disagreement_n = disagreement_correct = 0
 
+    eligible_n = 0
     for i in range(start, len(candles) - 1):
+        if not availability[i]:
+            continue
+        eligible_n += 1
         side = int(signal[i] or 0)
         if side == 0:
             continue
@@ -68,10 +77,10 @@ def _directional_metrics(
                 disagreement_n += 1
                 disagreement_correct += int(actual == side)
 
-    eligible = max(1, len(candles) - 1 - start)
     return {
+        "eligible_n": eligible_n,
         "n": n,
-        "coverage": round(n / eligible, 6),
+        "coverage": round(n / eligible_n, 6) if eligible_n else None,
         "accuracy": round(correct / n, 6) if n else None,
         "mean_signed_bps": round(signed_sum / n * 10_000.0, 6) if n else None,
         "agreement_with_momentum": round(agreement / common, 6) if common else None,
@@ -85,9 +94,14 @@ def _directional_metrics(
 
 def evaluate_dataset(dataset: dict[str, Any]) -> dict[str, Any]:
     candles = [dict(row) for row in dataset["candles"]]
+    base_interval_ms = _base_interval_ms(dataset)
     matrix = baselines.compute_baseline_matrix(
         candles,
-        base_interval_ms=_base_interval_ms(dataset),
+        base_interval_ms=base_interval_ms,
+    )
+    availability = baselines.compute_baseline_availability_matrix(
+        candles,
+        base_interval_ms=base_interval_ms,
     )
     return {
         "id": dataset["id"],
@@ -97,7 +111,11 @@ def evaluate_dataset(dataset: dict[str, Any]) -> dict[str, Any]:
         "first_open_time": candles[0]["open_time"] if candles else None,
         "last_open_time": candles[-1]["open_time"] if candles else None,
         "evaluation": {
-            name: _directional_metrics(candles, signal)
+            name: _directional_metrics(
+                candles,
+                signal,
+                availability=availability[name],
+            )
             for name, signal in sorted(matrix.items())
         },
     }
@@ -112,8 +130,16 @@ def matched_signal_agreement(
     Warm-up/unavailable states are excluded explicitly. Once initialized, zero
     remains a real neutral/abstain state and participates in state agreement.
     """
-    left_rows = [dict(row) for row in left["candles"]]
-    right_rows = [dict(row) for row in right["candles"]]
+    left_all = [dict(row) for row in left["candles"]]
+    right_all = [dict(row) for row in right["candles"]]
+    left_by_ts = {int(row["open_time"]): row for row in left_all}
+    right_by_ts = {int(row["open_time"]): row for row in right_all}
+    common = sorted(set(left_by_ts) & set(right_by_ts))
+
+    # Stateful indicators must see identical timestamp prehistory on both venues;
+    # otherwise unequal snapshot lengths contaminate the comparison.
+    left_rows = [left_by_ts[ts] for ts in common]
+    right_rows = [right_by_ts[ts] for ts in common]
     left_base_ms = _base_interval_ms(left)
     right_base_ms = _base_interval_ms(right)
     left_matrix = baselines.compute_baseline_matrix(
@@ -135,7 +161,6 @@ def matched_signal_agreement(
 
     li = {int(row["open_time"]): i for i, row in enumerate(left_rows)}
     ri = {int(row["open_time"]): i for i, row in enumerate(right_rows)}
-    common = sorted(set(li) & set(ri))
 
     per_rule: dict[str, Any] = {}
     for name in sorted(set(left_matrix) & set(right_matrix)):
