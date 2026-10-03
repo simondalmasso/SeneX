@@ -139,3 +139,32 @@ That difference is **not yet an EDGE estimate**:
 - subtracting probabilities with mismatched semantics/horizons is only a diagnostic divergence.
 
 Therefore ORDER096 does not use `up_prob - market_up` as evidence of incremental 1h EDGE. A later paired prior experiment must enforce horizon/semantic compatibility or fail closed.
+
+
+## Additional HTF structure screen — 2026-10-03
+
+After the owner supplied a second TradingView set, ORDER096 added only two minimal concepts that are not already explicit SENEX features:
+
+- `htf_discount_reversion_4h`: long below / short above the midpoint of the **previous fully completed** 4h range;
+- `htf_sweep_reclaim_4h`: sparse reversal only when price sweeps the previous completed 4h high/low and closes back inside.
+
+These are independent research baselines, not copies of the TradingView scripts.
+
+Recent exploratory results:
+
+| Provider / horizon | HTF range N | Accuracy | Mean signed bps | Sweep N | Sweep accuracy | Sweep mean signed bps |
+|---|---:|---:|---:|---:|---:|---:|
+| TraderSpy 15m | 199 | 53.3% | -1.07 | 17 | 35.3% | -12.39 |
+| TraderSpy 1h | 199 | 50.3% | -1.09 | 42 | 38.1% | -3.33 |
+| Bybit linear 15m | 79 | 46.8% | +0.31 | 3 | 33.3% | +2.41 |
+| Bybit linear 1h | 79 | 49.4% | -3.92 | 11 | 36.4% | -2.72 |
+
+Interpretation:
+
+1. The HTF midpoint rule has no stable recent directional advantage despite one >50% accuracy cell.
+2. Sweep/reclaim is sparse and poor in these windows.
+3. These results argue **against** importing full Premium/Discount, HTF Liquidity, or Sweep Reversal feature stacks now.
+4. The useful residue is conceptual: completed-HTF structure is a distinct information family, but it has not earned production complexity.
+5. No parameter tuning was performed to rescue the result.
+
+This screen remains exploratory, short-window, and non-multiplicity-controlled. It is sufficient to deny immediate integration, not to prove the concepts can never work.
