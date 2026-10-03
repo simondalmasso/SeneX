@@ -7,6 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "research" / "edge" / "order096" / "indicator_baselines.py"
+EVALUATOR_PATH = ROOT / "research" / "edge" / "order096" / "evaluate_snapshot.py"
+SNAPSHOT_PATH = ROOT / "research" / "edge" / "order096" / "data" / "indicator_screen_v1.json"
 
 
 def _load_module():
@@ -14,6 +16,18 @@ def _load_module():
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    return module
+
+
+def _load_evaluator():
+    spec = importlib.util.spec_from_file_location("order096_evaluator", EVALUATOR_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(EVALUATOR_PATH.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -200,3 +214,40 @@ def test_warmup_does_not_emit_nonfinite_values():
         else:
             series = result
         assert all(isinstance(v, int) and v in {-1, 0, 1} for v in series)
+
+
+def test_frozen_snapshot_is_complete_and_evaluator_is_offline_reproducible():
+    payload = __import__("json").loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    datasets = payload["datasets"]
+    assert [(row["provider"], row["query"]["interval"], row["count"]) for row in datasets] == [
+        ("TraderSpy", "15m", 500),
+        ("TraderSpy", "1h", 500),
+        ("Bybit", "15m", 200),
+        ("Bybit", "1h", 200),
+    ]
+
+    evaluator = _load_evaluator()
+    first = evaluator.run(payload)
+    second = evaluator.run(payload)
+    assert first == second
+    assert first["promotion_evidence"] is False
+    assert first["edge"] == "UNPROVEN"
+    assert len(first["datasets"]) == 4
+    assert len(first["matched_cross_venue"]) == 2
+
+    for matched in first["matched_cross_venue"]:
+        assert matched["common_timestamp_n"] > 0
+        for row in matched["per_rule"].values():
+            value = row["signal_agreement"]
+            assert value is None or 0.0 <= value <= 1.0
+
+
+def test_chandelier_source_contract_uses_close_extrema():
+    text = MODULE_PATH.read_text(encoding="utf-8")
+    assert 'highest = max(_f(row["close"]) for row in window)' in text
+    assert 'lowest = min(_f(row["close"]) for row in window)' in text
+
+
+def test_squeeze_source_contract_uses_sma_true_range():
+    text = MODULE_PATH.read_text(encoding="utf-8")
+    assert 'true_range_ma = _sma(_true_range(candles), length)' in text
