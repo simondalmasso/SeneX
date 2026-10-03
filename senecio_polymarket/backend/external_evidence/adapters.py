@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
 import shutil
+import signal
 import subprocess
 import tempfile
-import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -29,65 +31,124 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _kill_process_group(proc: subprocess.Popen) -> None:
+    try:
+        if os.name == "posix":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except (ProcessLookupError, OSError):
+        try:
+            proc.kill()
+        except (ProcessLookupError, OSError):
+            pass
+
+
 def _bridge_runner(argv: list[str], stdin_text: str, timeout: float) -> tuple[int, str, str]:
+    """Run a bridge with bounded stdout and a wall-clock deadline.
+
+    A dedicated process group ensures browser/helper descendants inheriting stdout
+    cannot keep the pipe open forever after the direct bridge process exits.
+    """
+    timeout_s = float(timeout)
+    if timeout_s <= 0:
+        raise ValueError("bridge timeout must be positive")
+
     proc = subprocess.Popen(
         argv,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         shell=False,
+        bufsize=0,
+        start_new_session=(os.name == "posix"),
     )
     if proc.stdin is None or proc.stdout is None:
-        proc.kill()
+        _kill_process_group(proc)
         proc.wait()
         raise CollectorError("bridge process pipes unavailable")
 
-    state: dict[str, object] = {"overflow": False, "chunks": []}
-
-    def _read_stdout() -> None:
-        chunks: list[bytes] = []
-        total = 0
-        try:
-            while True:
-                chunk = proc.stdout.read(64 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > MAX_RAW_BYTES:
-                    state["overflow"] = True
-                    proc.kill()
-                    break
-                chunks.append(chunk)
-        finally:
-            state["chunks"] = chunks
-
-    reader = threading.Thread(target=_read_stdout, name="senex-bridge-stdout", daemon=True)
-    reader.start()
     try:
         try:
             proc.stdin.write(stdin_text.encode("utf-8"))
             proc.stdin.close()
         except BrokenPipeError:
             pass
+
+        fd = proc.stdout.fileno()
+        os.set_blocking(fd, False)
+        selector = selectors.DefaultSelector()
+        selector.register(fd, selectors.EVENT_READ)
+        chunks: list[bytes] = []
+        total = 0
+        eof = False
+        deadline = time.monotonic() + timeout_s
+
         try:
-            return_code = proc.wait(timeout=float(timeout))
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-            raise
-    finally:
-        reader.join(timeout=1.0)
-        proc.stdout.close()
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    _kill_process_group(proc)
+                    try:
+                        proc.wait(timeout=1.0)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    raise subprocess.TimeoutExpired(argv, timeout_s)
 
-    if bool(state["overflow"]):
-        raise CollectorError("bridge response exceeds bound")
+                events = selector.select(timeout=min(0.05, remaining))
+                if events:
+                    while True:
+                        try:
+                            allowance = max(1, MAX_RAW_BYTES - total + 1)
+                            chunk = os.read(fd, min(64 * 1024, allowance))
+                        except BlockingIOError:
+                            break
+                        if not chunk:
+                            eof = True
+                            break
+                        total += len(chunk)
+                        if total > MAX_RAW_BYTES:
+                            _kill_process_group(proc)
+                            try:
+                                proc.wait(timeout=1.0)
+                            except subprocess.TimeoutExpired:
+                                pass
+                            raise CollectorError("bridge response exceeds bound")
+                        chunks.append(chunk)
 
-    raw_stdout = b"".join(state["chunks"])
-    try:
-        stdout = raw_stdout.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise CollectorError("bridge response must be UTF-8") from exc
-    return int(return_code), stdout, ""
+                if eof and proc.poll() is not None:
+                    break
+
+                # If the direct process exited but a descendant inherited stdout,
+                # continue only until the same wall-clock deadline. The timeout
+                # path kills the whole process group and never performs a blocking
+                # pipe close behind a reader thread.
+                if proc.poll() is not None and not events:
+                    continue
+
+            return_code = proc.wait(timeout=max(0.001, deadline - time.monotonic()))
+        finally:
+            try:
+                selector.unregister(fd)
+            except Exception:
+                pass
+            selector.close()
+            proc.stdout.close()
+
+        raw_stdout = b"".join(chunks)
+        try:
+            stdout = raw_stdout.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise CollectorError("bridge response must be UTF-8") from exc
+        return int(return_code), stdout, ""
+    except Exception:
+        if proc.poll() is None:
+            _kill_process_group(proc)
+            try:
+                proc.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                pass
+        raise
 
 
 def _cli_runner(argv: list[str], timeout: float) -> tuple[int, str, str]:
@@ -100,6 +161,23 @@ def _cli_runner(argv: list[str], timeout: float) -> tuple[int, str, str]:
         shell=False,
     )
     return int(proc.returncode), "", ""
+
+
+def _payload_string(
+    payload: dict,
+    key: str,
+    *,
+    default: str | None = None,
+    nullable: bool = False,
+) -> str | None:
+    if key not in payload or payload[key] is None:
+        if nullable:
+            return None
+        return default
+    value = payload[key]
+    if not isinstance(value, str):
+        raise CollectorError(f"bridge field {key} must be a string")
+    return value
 
 
 class _JSONBridgeCollector:
@@ -154,22 +232,34 @@ class _JSONBridgeCollector:
         raw_value = payload.get("raw", content)
         if not isinstance(raw_value, str):
             raise CollectorError(f"{self.provider} bridge raw must be UTF-8 text")
-        metadata = payload.get("metadata") or {}
-        if not isinstance(metadata, dict):
+        metadata_value = payload.get("metadata")
+        if metadata_value is None:
+            metadata = {}
+        elif isinstance(metadata_value, dict):
+            metadata = metadata_value
+        else:
             raise CollectorError(f"{self.provider} bridge metadata must be an object")
+
+        source_kind = _payload_string(payload, "source_kind", default="web")
+        native_id = _payload_string(payload, "native_id", nullable=True)
+        published_at = _payload_string(payload, "published_at", nullable=True)
+        observed_at = _payload_string(payload, "observed_at", default=_utcnow())
+        provider_version = _payload_string(payload, "provider_version", default="unknown")
+        assert source_kind is not None
+        assert observed_at is not None
+        assert provider_version is not None
+
         return EvidenceCapture(
             provider=self.provider,
             collector=f"{self.provider}-json-bridge",
-            source_kind=str(payload.get("source_kind") or "web"),
+            source_kind=source_kind,
             source_url=source_url,
-            native_id=str(payload["native_id"]) if payload.get("native_id") is not None else None,
-            published_at=(
-                str(payload["published_at"]) if payload.get("published_at") is not None else None
-            ),
-            observed_at=str(payload.get("observed_at") or _utcnow()),
+            native_id=native_id,
+            published_at=published_at,
+            observed_at=observed_at,
             raw=raw_value.encode("utf-8"),
             content=content,
-            provider_version=str(payload.get("provider_version") or "unknown"),
+            provider_version=provider_version,
             metadata=metadata,
         )
 
