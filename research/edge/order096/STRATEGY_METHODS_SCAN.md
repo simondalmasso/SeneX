@@ -131,3 +131,58 @@ This may be economically useful, but it **does not calibrate SENEX directional E
 6. Arbitrage/market making desk — separate mission, not EDGE calibration.
 
 This list is intentionally short.
+
+
+## Clodds strategy-by-strategy ruling
+
+The source implementation was inspected, not inferred from the README.
+
+### Momentum / spot-lag — KEEP, but only as a calibrated residual
+
+Clodds evaluates a short-window spot move, Polymarket token price, quote staleness and spread before entering. That is the one strategy in the set that points at a genuinely different information source: **cross-market repricing latency**.
+
+SENEX already persists decision-time Polymarket context including `up_probability`, `freshness_s`, `seconds_to_close`, spread/depth and a diagnostic `model_up - market_up`. However, the current Polymarket attachment is a short-horizon market while SENEX's authoritative EDGE gate is 1h, and `up_prob` is explicitly UNVALIDATED as a calibrated probability.
+
+Therefore the useful next construct is not another predictor weight. It is a matched-horizon residual experiment:
+
+`observed_market_probability - expected_market_probability(spot path, time_to_close, volatility, spread/depth)`
+
+The expected mapping must be fitted on historical resolved observations and tested prospectively. Clodds' rough scaling is not imported.
+
+### Mean reversion — REJECT as a current priority
+
+The inspected Clodds rule buys/fades extreme binary-token prices only when spot is calm and order-book imbalance is not strongly adverse.
+
+This does not solve SENEX's present uncertainty. Without a calibrated fair-value model, “cheap” or “expensive” token prices can simply represent information that the market already knows. Testing this before the matched-horizon market-prior model would amount to fading the market without a defensible anchor.
+
+Disposition: no implementation now. Revisit only after HYP_PM_LAG001 produces a calibrated probability residual; then mean reversion can be phrased as a residual-reversion hypothesis rather than a raw-price threshold.
+
+### Penny Clipper — HOLD for replay after execution calibration
+
+This remains distinct because the proposed edge is maker microstructure/oscillation rather than 1h directional forecasting. Its validity depends on queue position, passive fill probability, cancellation latency, adverse selection and maker economics.
+
+Disposition: Phase 2 only, after SENEX's existing execution model is empirically calibrated.
+
+### Expiry Fade — REJECT now
+
+The inspected rule buys the cheaper side close to expiry when spot is calm and the binary price is skewed away from 0.50.
+
+That is especially dangerous to interpret as EDGE without a settlement-distance model: near expiry, a highly skewed price may be correct because the underlying is far from the strike/reference condition. A generic “fade skew” rule can therefore systematically buy low-probability outcomes.
+
+Disposition: reject as a standalone hypothesis. If revisited, it must condition on exact contract resolution semantics, underlying distance-to-threshold, volatility over remaining time, executable spread and quote age.
+
+## Exact SENEX gap after repository comparison
+
+The repository already has:
+
+- decision-time Polymarket probability/context;
+- `freshness_s` and `seconds_to_close`;
+- Polymarket depth/spread/last trade context;
+- exchange spot/derivative features;
+- order-flow / volume-delta / book-imbalance families;
+- execution latency/slippage/queue/fill machinery;
+- a diagnostic `up_prob - market_up_probability` view.
+
+What it does **not** yet have as a validated EDGE object is a horizon-compatible, calibrated market-prior residual with a prospective outcome window.
+
+That is the narrow gap ORDER096 identifies.
