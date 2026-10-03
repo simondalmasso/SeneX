@@ -12,7 +12,7 @@ A null result is a successful result.
 
 Read the local prediction journal only.
 
-Extract rows with a valid causal T0 pair. Do not backfill missing priors from current market state.
+Extract rows with a valid causal T0 pair. Do not backfill missing priors from current market state. Exclude any row where Polymarket directional fusion was active, non-zero, or not explicitly auditable as disabled.
 
 Report:
 
