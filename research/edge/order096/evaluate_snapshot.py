@@ -103,11 +103,15 @@ def matched_signal_agreement(
         for ts in common:
             lv = int(left_matrix[name][li[ts]] or 0)
             rv = int(right_matrix[name][ri[ts]] or 0)
-            if lv == 0 and rv == 0:
+            # Zero is also the warm-up/unavailable sentinel for these frozen
+            # directional baselines. Cross-venue agreement must compare only
+            # timestamps where both implementations are initialized and emit
+            # an actionable directional state.
+            if lv == 0 or rv == 0:
                 continue
             compared += 1
             agreed += int(lv == rv)
-            nonzero_both += int(lv != 0 and rv != 0)
+            nonzero_both += 1
         per_rule[name] = {
             "compared_n": compared,
             "both_nonzero_n": nonzero_both,
