@@ -405,6 +405,7 @@ def _previous_completed_htf_ranges(
     candles: list[dict],
     *,
     target_ms: int,
+    base_interval_ms: int,
 ) -> list[tuple[float, float] | None]:
     """Return the prior fully completed HTF high/low available at each row.
 
@@ -414,22 +415,16 @@ def _previous_completed_htf_ranges(
     """
     if target_ms <= 0:
         raise ValueError("target_ms must be positive")
+    if base_interval_ms <= 0:
+        raise ValueError("base_interval_ms must be positive")
     out: list[tuple[float, float] | None] = [None] * len(candles)
     if len(candles) < 2:
         return out
 
     times = [int(row["open_time"]) for row in candles]
-    positive_diffs = [
-        times[i] - times[i - 1]
-        for i in range(1, len(times))
-        if times[i] > times[i - 1]
-    ]
-    if not positive_diffs:
+    if target_ms % base_interval_ms != 0:
         return out
-    base_ms = min(positive_diffs)
-    if base_ms <= 0 or target_ms % base_ms != 0:
-        return out
-    expected = target_ms // base_ms
+    expected = target_ms // base_interval_ms
     if expected <= 0:
         return out
 
@@ -445,7 +440,7 @@ def _previous_completed_htf_ranges(
             continue
         ordered = sorted(rows, key=lambda row: int(row["open_time"]))
         if any(
-            int(ordered[i]["open_time"]) - int(ordered[i - 1]["open_time"]) != base_ms
+            int(ordered[i]["open_time"]) - int(ordered[i - 1]["open_time"]) != base_interval_ms
             for i in range(1, len(ordered))
         ):
             continue
@@ -464,6 +459,7 @@ def htf_discount_reversion(
     candles: list[dict],
     *,
     target_ms: int = 4 * 60 * 60 * 1000,
+    base_interval_ms: int,
 ) -> SignalSeries:
     """Mean-reversion baseline from the prior completed HTF range midpoint.
 
@@ -471,7 +467,11 @@ def htf_discount_reversion(
     Above midpoint => -1 (premium / short hypothesis).
     Missing/incomplete prior HTF range => 0.
     """
-    ranges = _previous_completed_htf_ranges(candles, target_ms=target_ms)
+    ranges = _previous_completed_htf_ranges(
+        candles,
+        target_ms=target_ms,
+        base_interval_ms=base_interval_ms,
+    )
     out = [0] * len(candles)
     for i, prior in enumerate(ranges):
         if prior is None:
@@ -487,6 +487,7 @@ def htf_sweep_reclaim(
     candles: list[dict],
     *,
     target_ms: int = 4 * 60 * 60 * 1000,
+    base_interval_ms: int,
 ) -> SignalSeries:
     """Sparse reversal baseline from sweeps of the prior completed HTF range.
 
@@ -494,7 +495,11 @@ def htf_sweep_reclaim(
     Short: current high trades above prior HTF high, then closes back below it.
     Bars sweeping both sides are ambiguous and fail closed to 0.
     """
-    ranges = _previous_completed_htf_ranges(candles, target_ms=target_ms)
+    ranges = _previous_completed_htf_ranges(
+        candles,
+        target_ms=target_ms,
+        base_interval_ms=base_interval_ms,
+    )
     out = [0] * len(candles)
     for i, prior in enumerate(ranges):
         if prior is None:
@@ -512,7 +517,11 @@ def htf_sweep_reclaim(
     return out
 
 
-def compute_baseline_matrix(candles: Iterable[dict]) -> dict[str, SignalSeries]:
+def compute_baseline_matrix(
+    candles: Iterable[dict],
+    *,
+    base_interval_ms: int,
+) -> dict[str, SignalSeries]:
     rows = [dict(row) for row in candles]
     squeeze_direction, squeeze_release = squeeze_momentum(rows, length=20)
     return {
@@ -525,6 +534,12 @@ def compute_baseline_matrix(candles: Iterable[dict]) -> dict[str, SignalSeries]:
         "squeeze_momentum_20": squeeze_direction,
         "squeeze_release_20": squeeze_release,
         "vwap_ema_9_21_bias": vwap_ema_bias(rows, fast=9, slow=21),
-        "htf_discount_reversion_4h": htf_discount_reversion(rows),
-        "htf_sweep_reclaim_4h": htf_sweep_reclaim(rows),
+        "htf_discount_reversion_4h": htf_discount_reversion(
+            rows,
+            base_interval_ms=base_interval_ms,
+        ),
+        "htf_sweep_reclaim_4h": htf_sweep_reclaim(
+            rows,
+            base_interval_ms=base_interval_ms,
+        ),
     }
