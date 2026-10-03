@@ -517,6 +517,106 @@ def htf_sweep_reclaim(
     return out
 
 
+def compute_baseline_availability_matrix(
+    candles: Iterable[dict],
+    *,
+    base_interval_ms: int,
+) -> dict[str, list[bool]]:
+    """Availability mask for each frozen baseline.
+
+    A zero signal may be a legitimate neutral/abstain state, so callers must
+    not infer warm-up from signal value alone. Availability mirrors the exact
+    internal prerequisites used by each baseline.
+    """
+    rows = [dict(row) for row in candles]
+    n = len(rows)
+    close = _close(rows)
+
+    atr10 = _atr(rows, 10)
+    atr22 = _atr(rows, 22)
+
+    first = _linreg([float(v) for v in close], 32)
+    second = _linreg(first, 32)
+
+    ap = [
+        (_f(row["high"]) + _f(row["low"]) + _f(row["close"])) / 3.0
+        for row in rows
+    ]
+    esa = _ema(ap, 10)
+    deviation: list[float | None] = []
+    for value, mean in zip(ap, esa):
+        deviation.append(None if mean is None else abs(value - mean))
+    d = _ema(deviation, 10)
+    ci: list[float | None] = []
+    for value, mean, dev in zip(ap, esa, d):
+        if mean is None or dev is None or dev == 0:
+            ci.append(None)
+        else:
+            ci.append((value - mean) / (0.015 * dev))
+    wt1 = _ema(ci, 21)
+    wt2 = _sma(wt1, 4)
+
+    squeeze_basis = _sma(close, 20)
+    squeeze_raw: list[float | None] = [None] * n
+    for i in range(19, n):
+        window = rows[i - 19 : i + 1]
+        mean = squeeze_basis[i]
+        if mean is None:
+            continue
+        highest = max(_f(row["high"]) for row in window)
+        lowest = min(_f(row["low"]) for row in window)
+        center = ((highest + lowest) / 2.0 + mean) / 2.0
+        squeeze_raw[i] = close[i] - center
+    squeeze_momentum_value = _linreg(squeeze_raw, 20)
+
+    ema_fast = _ema(close, 9)
+    ema_slow = _ema(close, 21)
+    vwap_available = [False] * n
+    current_day: str | None = None
+    cumulative_volume = 0.0
+    for i, row in enumerate(rows):
+        day = _utc_day(row["open_time"])
+        if day != current_day:
+            current_day = day
+            cumulative_volume = 0.0
+        cumulative_volume += max(0.0, _f(row["volume"]))
+        vwap_available[i] = (
+            cumulative_volume > 0
+            and ema_fast[i] is not None
+            and ema_slow[i] is not None
+        )
+
+    htf_ranges = _previous_completed_htf_ranges(
+        rows,
+        target_ms=4 * 60 * 60 * 1000,
+        base_interval_ms=base_interval_ms,
+    )
+
+    return {
+        "momentum_1": [i >= 1 for i in range(n)],
+        "supertrend_10_3": [value is not None for value in atr10],
+        "chandelier_22_3": [value is not None for value in atr22],
+        "zlsma_32": [
+            first[i] is not None and second[i] is not None
+            for i in range(n)
+        ],
+        "wavetrend_10_21": [
+            wt1[i] is not None and wt2[i] is not None
+            for i in range(n)
+        ],
+        "utbot_1_10": [value is not None for value in atr10],
+        "squeeze_momentum_20": [
+            value is not None for value in squeeze_momentum_value
+        ],
+        "squeeze_release_20": [
+            value is not None for value in squeeze_momentum_value
+        ],
+        "vwap_ema_9_21_bias": vwap_available,
+        "htf_discount_reversion_4h": [value is not None for value in htf_ranges],
+        "htf_sweep_reclaim_4h": [value is not None for value in htf_ranges],
+    }
+
+
 def compute_baseline_matrix(
     candles: Iterable[dict],
     *,
