@@ -56,6 +56,14 @@ The SENEX score is:
 
 It is treated as a score in [0,1], **not** as an already calibrated probability.
 
+To avoid circularity, the same T0 row must also prove that Polymarket directional fusion was disabled:
+
+- `pipeline.step2_features.polymarket_context_v1.directional_use=false`
+- `effective_weight=0.0`
+- `experiment_enabled=false`
+
+Rows without that explicit evidence are ineligible. A score that already consumed the Polymarket prior cannot be used to claim incremental information over that prior.
+
 ## Resolution source contract
 
 A resolution record must contain:
