@@ -259,19 +259,26 @@ def utbot(
     key_value: float = 1.0,
     atr_period: int = 10,
 ) -> SignalSeries:
-    """ATR trailing-stop state used as a simple UT-Bot-family baseline."""
+    """UT-Bot-family persistent position state from the public ATR stop logic.
+
+    This is the persistent position state, not a fabricated signal on every bar.
+    A direction changes only when price crosses the previous ATR trailing stop.
+    """
     atr = _atr(candles, atr_period)
     out = [0] * len(candles)
     stop: float | None = None
+    position = 0
+
     for i, row in enumerate(candles):
         atr_i = atr[i]
         if atr_i is None:
             continue
         src = _f(row["close"])
         loss = key_value * atr_i
+
         if stop is None:
             stop = src - loss
-            out[i] = 1
+            out[i] = position
             continue
 
         prev_src = _f(candles[i - 1]["close"])
@@ -283,9 +290,13 @@ def utbot(
         else:
             stop = src - loss if src > prev_stop else src + loss
 
-        out[i] = 1 if src > stop else -1 if src < stop else 0
-    return out
+        if prev_src < prev_stop and src > prev_stop:
+            position = 1
+        elif prev_src > prev_stop and src < prev_stop:
+            position = -1
+        out[i] = position
 
+    return out
 
 def squeeze_momentum(
     candles: list[dict],
