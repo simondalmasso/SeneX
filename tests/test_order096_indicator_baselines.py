@@ -306,3 +306,42 @@ def test_chandelier_source_contract_uses_close_extrema():
 def test_squeeze_source_contract_uses_sma_true_range():
     text = MODULE_PATH.read_text(encoding="utf-8")
     assert 'true_range_ma = _sma(_true_range(candles), length)' in text
+
+
+def test_matched_venue_agreement_excludes_unavailable_zero_states():
+    import importlib.util
+    import sys
+
+    evaluator_path = (
+        ROOT / "research" / "edge" / "order096" / "evaluate_snapshot.py"
+    )
+    module_dir = str(evaluator_path.parent)
+    if module_dir not in sys.path:
+        sys.path.insert(0, module_dir)
+    spec = importlib.util.spec_from_file_location("order096_evaluator", evaluator_path)
+    assert spec is not None and spec.loader is not None
+    evaluator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evaluator)
+
+    # Left has prehistory and is fully initialized at common timestamps.
+    left_rows = _candles(120)
+    right_rows = [dict(row) for row in left_rows[-40:]]
+    left = {
+        "id": "left",
+        "provider": "A",
+        "query": {"interval": "1h"},
+        "candles": left_rows,
+    }
+    right = {
+        "id": "right",
+        "provider": "B",
+        "query": {"interval": "1h"},
+        "candles": right_rows,
+    }
+
+    result = evaluator.matched_signal_agreement(left, right)
+    zlsma = result["per_rule"]["zlsma_32"]
+
+    # Right-side warm-up zeroes are unavailable, not disagreements.
+    assert zlsma["compared_n"] == zlsma["both_nonzero_n"]
+    assert zlsma["signal_agreement"] == 1.0
