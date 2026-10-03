@@ -401,6 +401,117 @@ def vwap_ema_bias(
     return out
 
 
+def _previous_completed_htf_ranges(
+    candles: list[dict],
+    *,
+    target_ms: int,
+) -> list[tuple[float, float] | None]:
+    """Return the prior fully completed HTF high/low available at each row.
+
+    This deliberately uses only the immediately preceding fixed UTC bucket and
+    fails closed when that bucket is missing one or more expected lower-timeframe
+    bars. It is a minimal, reproducible proxy for HTF liquidity/range concepts.
+    """
+    if target_ms <= 0:
+        raise ValueError("target_ms must be positive")
+    out: list[tuple[float, float] | None] = [None] * len(candles)
+    if len(candles) < 2:
+        return out
+
+    times = [int(row["open_time"]) for row in candles]
+    positive_diffs = [
+        times[i] - times[i - 1]
+        for i in range(1, len(times))
+        if times[i] > times[i - 1]
+    ]
+    if not positive_diffs:
+        return out
+    base_ms = min(positive_diffs)
+    if base_ms <= 0 or target_ms % base_ms != 0:
+        return out
+    expected = target_ms // base_ms
+    if expected <= 0:
+        return out
+
+    buckets: dict[int, list[dict]] = {}
+    for row in candles:
+        ts = int(row["open_time"])
+        bucket = (ts // target_ms) * target_ms
+        buckets.setdefault(bucket, []).append(row)
+
+    completed: dict[int, tuple[float, float]] = {}
+    for bucket, rows in buckets.items():
+        if len(rows) != expected:
+            continue
+        ordered = sorted(rows, key=lambda row: int(row["open_time"]))
+        if any(
+            int(ordered[i]["open_time"]) - int(ordered[i - 1]["open_time"]) != base_ms
+            for i in range(1, len(ordered))
+        ):
+            continue
+        completed[bucket] = (
+            max(_f(row["high"]) for row in ordered),
+            min(_f(row["low"]) for row in ordered),
+        )
+
+    for i, ts in enumerate(times):
+        current_bucket = (ts // target_ms) * target_ms
+        out[i] = completed.get(current_bucket - target_ms)
+    return out
+
+
+def htf_discount_reversion(
+    candles: list[dict],
+    *,
+    target_ms: int = 4 * 60 * 60 * 1000,
+) -> SignalSeries:
+    """Mean-reversion baseline from the prior completed HTF range midpoint.
+
+    Below midpoint => +1 (discount / long hypothesis).
+    Above midpoint => -1 (premium / short hypothesis).
+    Missing/incomplete prior HTF range => 0.
+    """
+    ranges = _previous_completed_htf_ranges(candles, target_ms=target_ms)
+    out = [0] * len(candles)
+    for i, prior in enumerate(ranges):
+        if prior is None:
+            continue
+        high, low = prior
+        midpoint = (high + low) / 2.0
+        close = _f(candles[i]["close"])
+        out[i] = 1 if close < midpoint else -1 if close > midpoint else 0
+    return out
+
+
+def htf_sweep_reclaim(
+    candles: list[dict],
+    *,
+    target_ms: int = 4 * 60 * 60 * 1000,
+) -> SignalSeries:
+    """Sparse reversal baseline from sweeps of the prior completed HTF range.
+
+    Long: current low trades below prior HTF low, then closes back above it.
+    Short: current high trades above prior HTF high, then closes back below it.
+    Bars sweeping both sides are ambiguous and fail closed to 0.
+    """
+    ranges = _previous_completed_htf_ranges(candles, target_ms=target_ms)
+    out = [0] * len(candles)
+    for i, prior in enumerate(ranges):
+        if prior is None:
+            continue
+        prior_high, prior_low = prior
+        high = _f(candles[i]["high"])
+        low = _f(candles[i]["low"])
+        close = _f(candles[i]["close"])
+        swept_low = low < prior_low and close > prior_low
+        swept_high = high > prior_high and close < prior_high
+        if swept_low and not swept_high:
+            out[i] = 1
+        elif swept_high and not swept_low:
+            out[i] = -1
+    return out
+
+
 def compute_baseline_matrix(candles: Iterable[dict]) -> dict[str, SignalSeries]:
     rows = [dict(row) for row in candles]
     squeeze_direction, squeeze_release = squeeze_momentum(rows, length=20)
@@ -414,4 +525,6 @@ def compute_baseline_matrix(candles: Iterable[dict]) -> dict[str, SignalSeries]:
         "squeeze_momentum_20": squeeze_direction,
         "squeeze_release_20": squeeze_release,
         "vwap_ema_9_21_bias": vwap_ema_bias(rows, fast=9, slow=21),
+        "htf_discount_reversion_4h": htf_discount_reversion(rows),
+        "htf_sweep_reclaim_4h": htf_sweep_reclaim(rows),
     }
