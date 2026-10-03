@@ -71,3 +71,17 @@ Lorentzian Classification is intentionally delayed. It has more features, filter
 - LuxAlgo Price Action Concepts: https://www.tradingview.com/script/ZGl2xWym-LuxAlgo-Price-Action-Concepts/
 
 No Pine source is copied into SENEX by ORDER096. Implemented baselines are independent mathematical reimplementations of the public concepts for research comparison.
+
+
+## Second-wave HTF / context candidates
+
+| Candidate | Distinct information? | Minimal ORDER096 representation | Current disposition |
+|---|---|---|---|
+| HTF Fractal Bars [Herman] | LOW-MEDIUM; mostly visual HTF OHLC/structure, overlaps existing 4h regime | none | visual/reference only |
+| Premium & Discount Map [Herman] | MEDIUM; explicit location inside prior HTF range is not currently a SENEX feature | `htf_discount_reversion_4h` | tested; no promotion |
+| Tech Leadership Map+ [Herman] | distinct but cross-asset US-equity context | none | reject for current BTC mission |
+| HTF Liquidity Map [Herman] | MEDIUM; completed HTF high/low levels not currently explicit | prior completed 4h high/low | tested through sweep baseline |
+| Sweep Reversal Map+ [Herman] | MEDIUM; price-level sweep/reclaim event not currently explicit | `htf_sweep_reclaim_4h` | tested; no promotion |
+| Minicharts Pro+ [Herman] | visualization only | none | no model input |
+
+The two implemented HTF baselines intentionally compress three related scripts into two falsifiable primitives. This avoids feature multiplication.
