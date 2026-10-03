@@ -188,6 +188,43 @@ def test_supertrend_stays_bullish_in_orderly_rise_and_flips_on_break():
     assert m.supertrend(broken, period=10, multiplier=3.0)[-1] == -1
 
 
+def test_chandelier_initializes_direction_from_first_available_stops():
+    m = _load_module()
+    # Construct a sharp decline into the first available ATR/exit window.
+    candles = []
+    price = 120.0
+    for i in range(22):
+        open_px = price
+        close = open_px - 1.0
+        candles.append(
+            {
+                "open_time": i * 3_600_000,
+                "open": open_px,
+                "high": open_px + 0.2,
+                "low": close - 0.2,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+        price = close
+    signal = m.chandelier(candles, period=22, multiplier=3.0)
+    assert signal[21] == -1
+
+
+def test_htf_shifted_bucket_fails_closed():
+    m = _load_module()
+    rows = _candles(8)
+    # Four rows are evenly spaced but shifted 30m off the fixed UTC 4h grid.
+    for i, row in enumerate(rows):
+        row["open_time"] = 30 * 60_000 + i * 3_600_000
+    signal = m.htf_discount_reversion(
+        rows,
+        target_ms=4 * 3_600_000,
+        base_interval_ms=3_600_000,
+    )
+    assert signal == [0] * len(rows)
+
+
 def test_chandelier_default_ignores_extreme_wicks_for_extrema():
     m = _load_module()
     base = _candles(100)
@@ -323,6 +360,23 @@ def test_warmup_does_not_emit_nonfinite_values():
         else:
             series = result
         assert all(isinstance(v, int) and v in {-1, 0, 1} for v in series)
+
+
+def test_standalone_metrics_exclude_unavailable_rows_from_coverage():
+    evaluator = _load_evaluator()
+    candles = _candles(10)
+    signal = [1] * 10
+    availability = [False] * 8 + [True, True]
+    metrics = evaluator._directional_metrics(
+        candles,
+        signal,
+        availability=availability,
+        start_fraction=0.0,
+    )
+    # Only row 8 can be evaluated because row 9 has no next bar.
+    assert metrics["eligible_n"] == 1
+    assert metrics["n"] == 1
+    assert metrics["coverage"] == 1.0
 
 
 def test_frozen_snapshot_is_complete_and_evaluator_is_offline_reproducible():
@@ -491,3 +545,46 @@ def test_matched_venue_agreement_distinguishes_warmup_from_neutral(monkeypatch):
     assert neutral["signal_agreement"] == 0.666667
     assert neutral["both_nonzero_n"] == 2
     assert neutral["directional_agreement"] == 1.0
+
+
+def test_matched_venue_comparison_uses_equal_common_timestamp_history(monkeypatch):
+    evaluator = _load_evaluator()
+    left_rows = _candles(10)
+    right_rows = [dict(row) for row in left_rows[-5:]]
+    for row in left_rows:
+        row["source"] = "left"
+    for row in right_rows:
+        row["source"] = "right"
+    left = {"id": "left", "provider": "A", "query": {"interval": "1h"}, "candles": left_rows}
+    right = {"id": "right", "provider": "B", "query": {"interval": "1h"}, "candles": right_rows}
+
+    seen = []
+
+    def fake_matrix(rows, *, base_interval_ms):
+        seen.append([int(row["open_time"]) for row in rows])
+        return {"rule": [1] * len(rows)}
+
+    def fake_availability(rows, *, base_interval_ms):
+        return {"rule": [True] * len(rows)}
+
+    monkeypatch.setattr(evaluator.baselines, "compute_baseline_matrix", fake_matrix)
+    monkeypatch.setattr(evaluator.baselines, "compute_baseline_availability_matrix", fake_availability)
+    evaluator.matched_signal_agreement(left, right)
+
+    assert len(seen) == 2
+    assert seen[0] == seen[1]
+    assert len(seen[0]) == 5
+
+
+def test_ifvg_source_audit_contains_no_unreproducible_proxy_statistics():
+    path = ROOT / "research" / "edge" / "order096" / "IFVG_SOURCE_AUDIT.md"
+    text = path.read_text(encoding="utf-8")
+    assert "Cheap exploratory proxy screen" not in text
+    assert "62.5%" not in text
+    assert "+1.87 bps" not in text
+
+
+def test_final_recommendation_does_not_claim_cross_venue_performance_advantage():
+    path = ROOT / "research" / "edge" / "order096" / "FINAL_RECOMMENDATION.md"
+    text = path.read_text(encoding="utf-8").lower()
+    assert 'stable advantage "across"' not in text
