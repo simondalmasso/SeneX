@@ -210,3 +210,30 @@ NEW_RUNTIME_DEPENDENCIES=0
 NEW_PAID_COST=0
 EDGE=UNPROVEN
 ```
+
+
+## User-supplied iFVG confluence source — surgical ruling
+
+The Google Doc source `Pastebin INFO SENEX` was read directly and decomposed rather than ported.
+
+Its six-check setup grade combines liquidity sweep, HTF FVG/PDA delivery, delta imbalance, IFVG inversion, clear targets and SMT divergence. Most of that stack is redundant with information SENEX already carries or is strategy packaging rather than a new information source.
+
+Three concepts are genuinely distinct enough to retain as research hypotheses:
+
+- IFVG inversion;
+- confirmed liquidity sweep/reclaim with detection-time timestamps;
+- BTC↔ETH SMT divergence.
+
+AUD ran cheap causal proxies on recent 15m/1h closed BTC/ETH bars only to decide whether immediate implementation was warranted. Results were sparse and unstable across horizons: no concept earned production complexity. Full source audit: `IFVG_SOURCE_AUDIT.md`.
+
+Therefore:
+
+```text
+PORT_FULL_IFVG_SCRIPT=NO
+ADD_CONFLUENCE_GRADE=NO
+ADD_SECOND_DELTA_FEATURE=NO
+KEEP_IFVG_SWEEP_SMT_AS_RESEARCH_HYPOTHESES=YES
+PROMOTE_NOW=NO
+```
+
+This is consistent with FEATURE_FREEZE: extract hypotheses, not stacks.
