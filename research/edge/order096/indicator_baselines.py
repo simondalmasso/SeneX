@@ -196,9 +196,11 @@ def chandelier(
             short_exit = min(short_exit, prev_short)
 
         close = _f(candles[i]["close"])
-        if prev_short is not None and close > prev_short:
+        direction_short_stop = prev_short if prev_short is not None else short_exit
+        direction_long_stop = prev_long if prev_long is not None else long_exit
+        if close > direction_short_stop:
             state = 1
-        elif prev_long is not None and close < prev_long:
+        elif close < direction_long_stop:
             state = -1
 
         out[i] = state
@@ -439,9 +441,13 @@ def _previous_completed_htf_ranges(
         if len(rows) != expected:
             continue
         ordered = sorted(rows, key=lambda row: int(row["open_time"]))
+        if int(ordered[0]["open_time"]) != bucket:
+            continue
+        if int(ordered[-1]["open_time"]) != bucket + target_ms - base_interval_ms:
+            continue
         if any(
-            int(ordered[i]["open_time"]) - int(ordered[i - 1]["open_time"]) != base_interval_ms
-            for i in range(1, len(ordered))
+            int(row["open_time"]) != bucket + i * base_interval_ms
+            for i, row in enumerate(ordered)
         ):
             continue
         completed[bucket] = (
