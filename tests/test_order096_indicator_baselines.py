@@ -343,6 +343,35 @@ def test_frozen_snapshot_is_complete_and_evaluator_is_offline_reproducible():
             value = row["signal_agreement"]
             assert value is None or 0.0 <= value <= 1.0
 
+    by_key = {
+        (row["provider"], row["query"]["interval"]): row["evaluation"]
+        for row in first["datasets"]
+    }
+    expected_htf = {
+        ("TraderSpy", "15m"): {
+            "htf_discount_reversion_4h": (199, 0.527638, -0.487005),
+            "htf_sweep_reclaim_4h": (21, 0.380952, -2.708709),
+        },
+        ("TraderSpy", "1h"): {
+            "htf_discount_reversion_4h": (199, 0.507538, -0.364912),
+            "htf_sweep_reclaim_4h": (42, 0.357143, -5.516746),
+        },
+        ("Bybit", "15m"): {
+            "htf_discount_reversion_4h": (79, 0.455696, -2.689925),
+            "htf_sweep_reclaim_4h": (10, 0.4, -4.428679),
+        },
+        ("Bybit", "1h"): {
+            "htf_discount_reversion_4h": (79, 0.455696, -3.651319),
+            "htf_sweep_reclaim_4h": (17, 0.294118, -3.1598),
+        },
+    }
+    for key, expected_rules in expected_htf.items():
+        actual = by_key[key]
+        for rule, (n, accuracy, mean_bps) in expected_rules.items():
+            assert actual[rule]["n"] == n
+            assert actual[rule]["accuracy"] == accuracy
+            assert actual[rule]["mean_signed_bps"] == mean_bps
+
 
 def test_chandelier_source_contract_uses_close_extrema():
     text = MODULE_PATH.read_text(encoding="utf-8")
@@ -371,8 +400,8 @@ def test_matched_venue_agreement_excludes_unavailable_zero_states():
     spec.loader.exec_module(evaluator)
 
     # Left has prehistory and is fully initialized at common timestamps.
-    left_rows = _candles(120)
-    right_rows = [dict(row) for row in left_rows[-40:]]
+    left_rows = _candles(160)
+    right_rows = [dict(row) for row in left_rows[-80:]]
     left = {
         "id": "left",
         "provider": "A",
