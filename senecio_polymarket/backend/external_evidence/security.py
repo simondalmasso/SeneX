@@ -62,6 +62,8 @@ def validate_public_url(url: str) -> str:
         raise UnsafeTargetError("credentials in target URLs are forbidden")
 
     host = parsed.hostname.rstrip(".").lower()
+    if any(ord(ch) > 127 for ch in host):
+        raise UnsafeTargetError("non-ASCII hostname is forbidden")
     if host in _BLOCKED_HOSTS or host.endswith(_BLOCKED_SUFFIXES):
         raise UnsafeTargetError("local hostname is forbidden")
     _validate_ip_literal(host)
