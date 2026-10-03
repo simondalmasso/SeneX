@@ -75,13 +75,14 @@ This improves ECONOMIC_EDGE calibration without adding a new predictive feature.
 
 ### Concrete execution gaps isolated by the scan
 
-Repository comparison narrows the useful transfer to three missing **calibration/evidence** fields, not another execution stack:
+Repository comparison narrows the useful transfer to two missing maker-economics/safety terms plus one new cross-market construct, not another execution stack:
 
-- **quote age / snapshot age** — required for any spot→Polymarket lag claim. A stale prediction-market quote can look like alpha when it is only delayed data. Current SENEX has stale-quote fault simulation, but no canonical decision-time quote-age field was found in the predictor/execution surfaces.
+- **cross-market lag residual** — this is the genuinely missing research variable. SENEX already persists Polymarket `freshness_s` and `seconds_to_close` at decision time, so quote age/time-to-close should be reused rather than reimplemented. The experiment still needs a synchronized residual joining those decision-time market fields to frozen spot-move windows. If sub-snapshot timing proves material, add explicit per-side/event observation timestamps as evidence rather than pretending `freshness_s` is exact exchange event time.
 - **maker rebate as a separate economic term** — the external L2 replay work models venue-documented maker rebates separately from taker fees. SENEX has fee/slippage/impact machinery but no canonical `maker_rebate` term was found. Any maker-strategy research must report gross edge, fees, rebate, and net edge separately and fail closed when the rebate schedule is not evidenced for that market.
 - **anti-sniping / midpoint-jump state** — the LP tooling uses midpoint-jump filtering, stability confirmation, fill cooldown, and max chase limits. These are execution-safety controls, not predictive alpha. They are relevant only if a maker hypothesis survives replay.
 
 What is **not** missing:
+- Polymarket decision-time freshness and time-to-close already exist as `freshness_s` and `seconds_to_close`;
 - queue-position/fill-probability modeling already exists in `backend/portfolio/execution_fidelity.py`;
 - latency and slippage fields/models already exist;
 - orderbook depth/walk logic already exists.
