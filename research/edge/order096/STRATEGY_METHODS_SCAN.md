@@ -73,6 +73,21 @@ Action: calibrate the existing SENEX execution-fidelity parameters against colle
 
 This improves ECONOMIC_EDGE calibration without adding a new predictive feature.
 
+### Concrete execution gaps isolated by the scan
+
+Repository comparison narrows the useful transfer to three missing **calibration/evidence** fields, not another execution stack:
+
+- **quote age / snapshot age** — required for any spot→Polymarket lag claim. A stale prediction-market quote can look like alpha when it is only delayed data. Current SENEX has stale-quote fault simulation, but no canonical decision-time quote-age field was found in the predictor/execution surfaces.
+- **maker rebate as a separate economic term** — the external L2 replay work models venue-documented maker rebates separately from taker fees. SENEX has fee/slippage/impact machinery but no canonical `maker_rebate` term was found. Any maker-strategy research must report gross edge, fees, rebate, and net edge separately and fail closed when the rebate schedule is not evidenced for that market.
+- **anti-sniping / midpoint-jump state** — the LP tooling uses midpoint-jump filtering, stability confirmation, fill cooldown, and max chase limits. These are execution-safety controls, not predictive alpha. They are relevant only if a maker hypothesis survives replay.
+
+What is **not** missing:
+- queue-position/fill-probability modeling already exists in `backend/portfolio/execution_fidelity.py`;
+- latency and slippage fields/models already exist;
+- orderbook depth/walk logic already exists.
+
+Therefore ORDER096 must calibrate or add evidence fields around the existing execution model rather than importing another engine.
+
 ## HOLD / MAYBE
 
 ### Whale/copy-trading signals
