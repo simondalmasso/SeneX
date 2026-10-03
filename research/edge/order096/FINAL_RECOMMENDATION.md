@@ -182,3 +182,31 @@ MARKET_MAKING=DEFER
 DCA=REJECT_FOR_EDGE_CALIBRATION
 EDGE=UNPROVEN
 ```
+
+
+## 2026-10-03 additional-source ruling
+
+The second research wave does not change the production recommendation.
+
+### Do not integrate
+
+- NVIDIA OpenShell into the current H011 runtime — useful future sandbox pattern, but unnecessary control-plane/runtime complexity while collectors remain dormant and bridge-isolated.
+- Decision 2.0 models — no demonstrated SENEX information gap they solve; adds inference and custom-code surface before EDGE is established.
+- Prism Legal OS — unrelated mission.
+- awesome-pinescript — catalog only.
+- Tech Leadership Map+ — US-equity leadership context is a separate cross-asset hypothesis, not a free BTC feature.
+- Minicharts Pro+ — visualization only.
+
+### Tested, not promoted
+
+Minimal completed-HTF range-location and sweep/reclaim baselines were added to ORDER096. Their recent TraderSpy/Bybit 15m/1h screen is weak/unstable and does not justify production integration.
+
+Therefore the surgical rule remains:
+
+```text
+ADD_FULL_HTF_INDICATOR_STACK=NO
+KEEP_COMPLETED_HTF_PRIMITIVES_AS_RESEARCH_BASELINES=YES
+NEW_RUNTIME_DEPENDENCIES=0
+NEW_PAID_COST=0
+EDGE=UNPROVEN
+```
