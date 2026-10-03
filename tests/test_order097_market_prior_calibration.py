@@ -44,6 +44,12 @@ def _row(
             "pipeline": {
                 "step2_features": {
                     "up_prob": p_senex,
+                    "polymarket_context_v1": {
+                        "version": "polymarket-pressure-v2",
+                        "directional_use": False,
+                        "effective_weight": 0.0,
+                        "experiment_enabled": False,
+                    },
                 }
             },
             "external_markets_v1": {
@@ -132,6 +138,25 @@ def test_invalid_or_non_5m_t0_context_fails_closed(mutator):
     assert m.extract_t0_pair(row) is None
 
 
+def test_circular_polymarket_influence_is_rejected():
+    m = _load()
+    row = _row()
+    ctx = row["_audit"]["pipeline"]["step2_features"]["polymarket_context_v1"]
+    ctx.update({
+        "directional_use": True,
+        "effective_weight": 0.25,
+        "experiment_enabled": True,
+    })
+    assert m.extract_t0_pair(row) is None
+
+
+def test_missing_polymarket_influence_audit_is_rejected():
+    m = _load()
+    row = _row()
+    row["_audit"]["pipeline"]["step2_features"].pop("polymarket_context_v1")
+    assert m.extract_t0_pair(row) is None
+
+
 def test_t0_timestamp_must_fall_inside_the_exact_market_window():
     m = _load()
     row = _row(ts="2026-10-03T23:35:30Z")
@@ -156,6 +181,16 @@ def test_resolution_must_match_slug_condition_and_grid():
                 _resolution(condition_id="cond-1", outcome="DOWN"),
             ],
         )
+
+
+def test_resolution_requires_explicit_provenance_source():
+    m = _load()
+    pair = m.extract_t0_pair(_row())
+    assert pair is not None
+    resolution = _resolution()
+    resolution["source"] = ""
+    with pytest.raises(m.ResolutionContractError, match="source"):
+        m.join_resolutions([pair], [resolution])
 
 
 def test_resolution_before_market_close_is_rejected():
