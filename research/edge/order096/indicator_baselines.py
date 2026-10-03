@@ -120,7 +120,51 @@ def momentum_1(candles: list[dict]) -> SignalSeries:
     return out
 
 
-def supertrend(\n    candles: list[dict],\n    *,\n    period: int = 10,\n    multiplier: float = 3.0,\n) -> SignalSeries:\n    """KivancOzbilgic-style SuperTrend state with default RMA ATR.\n\n    The flip uses the previous trailing bands, matching the public Pine\n    mechanics. The lower band is bullish; the upper band is bearish.\n    """\n    atr = _atr(candles, period)\n    out = [0] * len(candles)\n    prev_up: float | None = None\n    prev_dn: float | None = None\n    trend = 1\n\n    for i, row in enumerate(candles):\n        atr_i = atr[i]\n        if atr_i is None:\n            continue\n        close = _f(row["close"])\n        src = (_f(row["high"]) + _f(row["low"])) / 2.0\n        basic_up = src - multiplier * atr_i\n        basic_dn = src + multiplier * atr_i\n\n        if prev_up is None or prev_dn is None:\n            up = basic_up\n            dn = basic_dn\n            trend = 1\n        else:\n            prev_close = _f(candles[i - 1]["close"])\n            up = max(basic_up, prev_up) if prev_close > prev_up else basic_up\n            dn = min(basic_dn, prev_dn) if prev_close < prev_dn else basic_dn\n\n            if trend == -1 and close > prev_dn:\n                trend = 1\n            elif trend == 1 and close < prev_up:\n                trend = -1\n\n        out[i] = trend\n        prev_up = up\n        prev_dn = dn\n    return out\n
+def supertrend(
+    candles: list[dict],
+    *,
+    period: int = 10,
+    multiplier: float = 3.0,
+) -> SignalSeries:
+    """KivancOzbilgic-style SuperTrend state with default RMA ATR.
+
+    The flip uses the previous trailing bands, matching the public Pine
+    mechanics. The lower band is bullish; the upper band is bearish.
+    """
+    atr = _atr(candles, period)
+    out = [0] * len(candles)
+    prev_up: float | None = None
+    prev_dn: float | None = None
+    trend = 1
+
+    for i, row in enumerate(candles):
+        atr_i = atr[i]
+        if atr_i is None:
+            continue
+        close = _f(row["close"])
+        src = (_f(row["high"]) + _f(row["low"])) / 2.0
+        basic_up = src - multiplier * atr_i
+        basic_dn = src + multiplier * atr_i
+
+        if prev_up is None or prev_dn is None:
+            up = basic_up
+            dn = basic_dn
+            trend = 1
+        else:
+            prev_close = _f(candles[i - 1]["close"])
+            up = max(basic_up, prev_up) if prev_close > prev_up else basic_up
+            dn = min(basic_dn, prev_dn) if prev_close < prev_dn else basic_dn
+
+            if trend == -1 and close > prev_dn:
+                trend = 1
+            elif trend == 1 and close < prev_up:
+                trend = -1
+
+        out[i] = trend
+        prev_up = up
+        prev_dn = dn
+    return out
+
 def chandelier(
     candles: list[dict],
     *,
