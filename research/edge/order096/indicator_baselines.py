@@ -62,23 +62,23 @@ def _ema(values: list[float | None], period: int) -> list[float | None]:
     return out
 
 
-def _atr(candles: list[dict], period: int) -> list[float | None]:
-    if period <= 0:
-        raise ValueError("period must be positive")
-    tr: list[float] = []
+def _true_range(candles: list[dict]) -> list[float]:
+    out: list[float] = []
     for i, row in enumerate(candles):
         high = _f(row["high"])
         low = _f(row["low"])
         if i == 0:
-            value = high - low
-        else:
-            prev_close = _f(candles[i - 1]["close"])
-            value = max(
-                high - low,
-                abs(high - prev_close),
-                abs(low - prev_close),
-            )
-        tr.append(value)
+            out.append(high - low)
+            continue
+        prev_close = _f(candles[i - 1]["close"])
+        out.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
+    return out
+
+
+def _atr(candles: list[dict], period: int) -> list[float | None]:
+    if period <= 0:
+        raise ValueError("period must be positive")
+    tr = _true_range(candles)
 
     out: list[float | None] = [None] * len(candles)
     state: float | None = None
@@ -120,51 +120,7 @@ def momentum_1(candles: list[dict]) -> SignalSeries:
     return out
 
 
-def supertrend(
-    candles: list[dict],
-    *,
-    period: int = 10,
-    multiplier: float = 3.0,
-) -> SignalSeries:
-    """ATR trailing-trend state using standard SuperTrend mechanics."""
-    atr = _atr(candles, period)
-    out = [0] * len(candles)
-    final_upper: float | None = None
-    final_lower: float | None = None
-    trend = 0
-
-    for i, row in enumerate(candles):
-        atr_i = atr[i]
-        if atr_i is None:
-            continue
-        high = _f(row["high"])
-        low = _f(row["low"])
-        close = _f(row["close"])
-        midpoint = (high + low) / 2.0
-        basic_upper = midpoint + multiplier * atr_i
-        basic_lower = midpoint - multiplier * atr_i
-
-        if final_upper is None or final_lower is None or i == 0:
-            final_upper = basic_upper
-            final_lower = basic_lower
-            trend = 1
-            out[i] = trend
-            continue
-
-        prev_close = _f(candles[i - 1]["close"])
-        if basic_upper < final_upper or prev_close > final_upper:
-            final_upper = basic_upper
-        if basic_lower > final_lower or prev_close < final_lower:
-            final_lower = basic_lower
-
-        if trend >= 0 and close < final_upper:
-            trend = -1
-        elif trend <= 0 and close > final_lower:
-            trend = 1
-        out[i] = trend
-    return out
-
-
+def supertrend(\n    candles: list[dict],\n    *,\n    period: int = 10,\n    multiplier: float = 3.0,\n) -> SignalSeries:\n    """KivancOzbilgic-style SuperTrend state with default RMA ATR.\n\n    The flip uses the previous trailing bands, matching the public Pine\n    mechanics. The lower band is bullish; the upper band is bearish.\n    """\n    atr = _atr(candles, period)\n    out = [0] * len(candles)\n    prev_up: float | None = None\n    prev_dn: float | None = None\n    trend = 1\n\n    for i, row in enumerate(candles):\n        atr_i = atr[i]\n        if atr_i is None:\n            continue\n        close = _f(row["close"])\n        src = (_f(row["high"]) + _f(row["low"])) / 2.0\n        basic_up = src - multiplier * atr_i\n        basic_dn = src + multiplier * atr_i\n\n        if prev_up is None or prev_dn is None:\n            up = basic_up\n            dn = basic_dn\n            trend = 1\n        else:\n            prev_close = _f(candles[i - 1]["close"])\n            up = max(basic_up, prev_up) if prev_close > prev_up else basic_up\n            dn = min(basic_dn, prev_dn) if prev_close < prev_dn else basic_dn\n\n            if trend == -1 and close > prev_dn:\n                trend = 1\n            elif trend == 1 and close < prev_up:\n                trend = -1\n\n        out[i] = trend\n        prev_up = up\n        prev_dn = dn\n    return out\n
 def chandelier(
     candles: list[dict],
     *,
@@ -183,8 +139,9 @@ def chandelier(
         if atr_i is None:
             continue
         window = candles[i - period + 1 : i + 1]
-        highest = max(_f(row["high"]) for row in window)
-        lowest = min(_f(row["low"]) for row in window)
+        # everget default: useClose=true for extrema.
+        highest = max(_f(row["close"]) for row in window)
+        lowest = min(_f(row["close"]) for row in window)
         long_exit = highest - multiplier * atr_i
         short_exit = lowest + multiplier * atr_i
         prev_close = _f(candles[i - 1]["close"]) if i else _f(candles[i]["close"])
@@ -300,7 +257,7 @@ def squeeze_momentum(
     """
     close = _close(candles)
     basis = _sma(close, length)
-    atr = _atr(candles, length)
+    true_range_ma = _sma(_true_range(candles), length)
     raw: list[float | None] = [None] * len(candles)
 
     for i in range(length - 1, len(candles)):
@@ -320,16 +277,16 @@ def squeeze_momentum(
 
     for i in range(length - 1, len(candles)):
         mean = basis[i]
-        atr_i = atr[i]
-        if mean is None or atr_i is None:
+        range_i = true_range_ma[i]
+        if mean is None or range_i is None:
             continue
         window = close[i - length + 1 : i + 1]
         variance = sum((value - mean) ** 2 for value in window) / length
         sd = sqrt(variance)
         upper_bb = mean + bb_multiplier * sd
         lower_bb = mean - bb_multiplier * sd
-        upper_kc = mean + kc_multiplier * atr_i
-        lower_kc = mean - kc_multiplier * atr_i
+        upper_kc = mean + kc_multiplier * range_i
+        lower_kc = mean - kc_multiplier * range_i
         squeeze_on = lower_bb > lower_kc and upper_bb < upper_kc
 
         value = momentum_value[i]
