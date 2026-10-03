@@ -268,6 +268,26 @@ def test_duplicate_returns_original_record_hash(tmp_path):
     assert duplicate.record_hash == first_result.record_hash
 
 
+def test_same_writer_append_does_not_full_rescan_archive(tmp_path, monkeypatch):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+
+    first = _capture(native_id="scan-a", raw=b"a", content="a").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    second = _capture(native_id="scan-b", raw=b"b", content="b").to_event(
+        captured_at="2026-10-02T10:00:03Z"
+    )
+    journal.append(first, raw=b"a")
+
+    def fail_full_scan():
+        raise AssertionError("same-writer append must not full-rescan archive")
+
+    monkeypatch.setattr(journal, "verify_chain", fail_full_scan)
+    result = journal.append(second, raw=b"b")
+    assert result.appended is True
+
+
 def test_journal_refuses_to_open_corrupt_existing_chain(tmp_path):
     paths = ExternalEvidencePaths.from_root(tmp_path)
     journal = ExternalEvidenceJournal(paths)
@@ -438,6 +458,51 @@ def test_bridge_timeout_survives_descendant_inheriting_stdout(tmp_path):
     with pytest.raises(subprocess.TimeoutExpired):
         _bridge_runner([sys.executable, str(script)], "{}", 0.5)
     assert time.monotonic() - started < 3.0
+
+
+def test_bridge_unregisters_stdout_after_eof_instead_of_busy_spinning(tmp_path, monkeypatch):
+    if os.name != "posix":
+        pytest.skip("selector regression is POSIX-specific")
+
+    import senecio_polymarket.backend.external_evidence.adapters as adapters_module
+
+    real_selector = adapters_module.selectors.DefaultSelector
+    calls = {"select": 0}
+
+    class CountingSelector:
+        def __init__(self):
+            self._inner = real_selector()
+
+        def register(self, *args, **kwargs):
+            return self._inner.register(*args, **kwargs)
+
+        def unregister(self, *args, **kwargs):
+            return self._inner.unregister(*args, **kwargs)
+
+        def select(self, *args, **kwargs):
+            calls["select"] += 1
+            return self._inner.select(*args, **kwargs)
+
+        def close(self):
+            return self._inner.close()
+
+    monkeypatch.setattr(adapters_module.selectors, "DefaultSelector", CountingSelector)
+
+    script = tmp_path / "close_stdout_then_wait.py"
+    script.write_text(
+        "import os, sys, time\n"
+        "sys.stdin.read()\n"
+        "sys.stdout.write('ok')\n"
+        "sys.stdout.flush()\n"
+        "os.close(sys.stdout.fileno())\n"
+        "time.sleep(0.25)\n",
+        encoding="utf-8",
+    )
+
+    rc, stdout, _ = _bridge_runner([sys.executable, str(script)], "{}", 2.0)
+    assert rc == 0
+    assert stdout == "ok"
+    assert calls["select"] < 30
 
 
 def test_default_bridge_runner_rejects_oversized_stdout_before_return(tmp_path):
