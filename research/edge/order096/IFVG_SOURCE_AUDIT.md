@@ -119,35 +119,11 @@ Required:
 - no symbol substitution after outcome;
 - cross-venue sanity before promotion.
 
-## Cheap exploratory proxy screen
+## Evidence status for the retained hypotheses
 
-To decide whether these concepts deserve immediate implementation, AUD ran independent causal proxies on recent closed TraderSpy BTC/ETH windows. These proxies are not exact reproductions of the supplied Pine script and are not promotion evidence.
+No IFVG/sweep/SMT performance statistics are retained in ORDER096 because the ad-hoc proxy screen was not committed with a reproducible dual-asset input snapshot, exact proxy implementations, split timestamps and evaluator.
 
-### 15m recent holdout
-
-| Proxy | N | Accuracy | Mean signed next-bar return |
-|---|---:|---:|---:|
-| IFVG inversion | 8 | 62.5% | +1.87 bps |
-| confirmed swing sweep/reclaim | 7 | 57.1% | -3.96 bps |
-| BTC-vs-ETH SMT proxy | 19 | 47.4% | -10.21 bps |
-
-### 1h recent holdout
-
-| Proxy | N | Accuracy | Mean signed next-bar return |
-|---|---:|---:|---:|
-| IFVG inversion | 22 | 40.9% | -3.37 bps |
-| confirmed swing sweep/reclaim | 6 | 50.0% | -9.48 bps |
-| BTC-vs-ETH SMT proxy | 26 | 57.7% | +0.59 bps |
-
-Interpretation:
-
-- sample sizes are far too small for inferential claims;
-- no concept is stable across 15m and 1h;
-- a visually attractive 15m IFVG hit rate does not survive the 1h screen;
-- the SMT proxy flips from poor 15m to mildly positive 1h;
-- sweep/reclaim is sparse and economically weak in this tiny window.
-
-Therefore the source adds research hypotheses, not production features.
+The three concepts survive only as **unscored research hypotheses** because they represent information families that are not obvious duplicates of current SENEX features. They must earn evidence from a separately frozen, reproducible experiment before any ranking or promotion.
 
 ## Final source disposition
 
