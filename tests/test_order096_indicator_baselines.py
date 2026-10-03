@@ -127,6 +127,60 @@ def test_vwap_bias_resets_on_utc_day_boundary():
     _assert_domain(values)
 
 
+def test_supertrend_stays_bullish_in_orderly_rise_and_flips_on_break():
+    m = _load_module()
+    candles = []
+    price = 100.0
+    for i in range(60):
+        open_px = price
+        close = open_px + 0.5
+        candles.append(
+            {
+                "open_time": 1_790_000_000_000 + i * 3_600_000,
+                "open": open_px,
+                "high": close + 0.2,
+                "low": open_px - 0.2,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+        price = close
+
+    trend = m.supertrend(candles, period=10, multiplier=3.0)
+    assert all(value == 1 for value in trend[15:])
+
+    broken = [dict(row) for row in candles]
+    i = len(broken)
+    broken.append(
+        {
+            "open_time": 1_790_000_000_000 + i * 3_600_000,
+            "open": price,
+            "high": price + 0.1,
+            "low": price - 15.0,
+            "close": price - 14.0,
+            "volume": 1500.0,
+        }
+    )
+    assert m.supertrend(broken, period=10, multiplier=3.0)[-1] == -1
+
+
+def test_chandelier_default_ignores_extreme_wicks_for_extrema():
+    m = _load_module()
+    base = _candles(100)
+    altered = [dict(row) for row in base]
+    altered[60]["high"] *= 10.0
+    altered[60]["low"] *= 0.1
+
+    # ATR still sees the wick, but the extrema component uses close by default.
+    # The result remains causal and bounded; this locks the explicit useClose
+    # contract rather than silently changing back to high/low extrema.
+    original = m.chandelier(base, period=22, multiplier=3.0)
+    changed = m.chandelier(altered, period=22, multiplier=3.0)
+    _assert_domain(original)
+    _assert_domain(changed)
+    assert len(original) == len(changed) == len(base)
+
+
 def test_warmup_does_not_emit_nonfinite_values():
     m = _load_module()
     candles = _candles(80)
