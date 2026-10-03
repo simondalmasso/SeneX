@@ -18,7 +18,7 @@ The exploratory input is frozen in:
 
 `research/edge/order096/data/indicator_screen_v1.json`
 
-Git blob SHA: `ff8b40ba63b93a2c37be2a53ff7e5ab9c7a29c84`.
+Git blob SHA: `693044025cde8972ef3860e9bfed5d0c2a12913b`.
 
 The deterministic evaluator is:
 
@@ -30,8 +30,8 @@ It contains no network I/O and reproduces the standalone metrics plus a same-tim
 
 - TraderSpy BTCUSDT 15m: 500 closed candles, final 40% evaluated (199 next-bar decisions).
 - TraderSpy BTCUSDT 1h: 500 closed candles, final 40% evaluated (199 next-bar decisions).
-- Bybit linear BTCUSDT 15m: 200 candles, final 40% evaluated (79 next-bar decisions).
-- Bybit linear BTCUSDT 1h: 200 candles, final 40% evaluated (79 next-bar decisions).
+- Bybit linear BTCUSDT 15m: 199 retained candles after conservatively dropping the newest unflagged candle; final 40% evaluated (79 next-bar decisions).
+- Bybit linear BTCUSDT 1h: 199 retained candles after conservatively dropping the newest unflagged candle; final 40% evaluated (79 next-bar decisions).
 - Binance was queried as an additional source, but the compact normalization path used in the exploratory screen did not yield a trustworthy comparable row set. No Binance conclusion is drawn.
 
 No candidate was tuned on these windows.
@@ -70,27 +70,27 @@ No candidate was tuned on these windows.
 
 | Rule | N | Accuracy | Mean signed next-bar return |
 |---|---:|---:|---:|
-| momentum_1 | 79 | 50.6% | +0.34 bps |
-| SuperTrend | 79 | 44.3% | +1.31 bps |
-| Chandelier | 79 | 44.3% | +1.00 bps |
-| ZLSMA | 79 | 50.6% | +0.21 bps |
-| WaveTrend | 79 | 50.6% | +1.20 bps |
-| UT Bot family | 79 | 55.7% | +2.88 bps |
-| Squeeze momentum | 79 | 51.9% | +1.67 bps |
+| momentum_1 | 79 | 49.4% | +0.02 bps |
+| SuperTrend | 79 | 44.3% | +1.47 bps |
+| Chandelier | 79 | 45.6% | +1.32 bps |
+| ZLSMA | 79 | 51.9% | +0.53 bps |
+| WaveTrend | 79 | 50.6% | +1.03 bps |
+| UT Bot family | 79 | 57.0% | +3.20 bps |
+| Squeeze momentum | 79 | 51.9% | +1.84 bps |
 | Squeeze release | 3 | 33.3% | -0.08 bps |
-| VWAP+EMA bias | 68 | 48.5% | +1.40 bps |
+| VWAP+EMA bias | 68 | 50.0% | +1.78 bps |
 
 ### Bybit linear 1h
 
 | Rule | N | Accuracy | Mean signed next-bar return |
 |---|---:|---:|---:|
-| momentum_1 | 79 | 55.7% | +8.14 bps |
-| SuperTrend | 79 | 50.6% | +3.18 bps |
-| Chandelier | 79 | 39.2% | -7.06 bps |
-| ZLSMA | 79 | 38.0% | -4.22 bps |
-| WaveTrend | 79 | 50.6% | +2.90 bps |
-| UT Bot family | 79 | 45.6% | +1.02 bps |
-| Squeeze momentum | 79 | 45.6% | -5.83 bps |
+| momentum_1 | 79 | 57.0% | +8.30 bps |
+| SuperTrend | 79 | 50.6% | +3.17 bps |
+| Chandelier | 79 | 39.2% | -7.07 bps |
+| ZLSMA | 79 | 39.2% | -4.07 bps |
+| WaveTrend | 79 | 50.6% | +2.88 bps |
+| UT Bot family | 79 | 45.6% | +1.01 bps |
+| Squeeze momentum | 79 | 44.3% | -5.99 bps |
 | Squeeze release | 2 | 0.0% | -46.80 bps |
 | VWAP+EMA bias | 55 | 45.5% | -1.77 bps |
 
@@ -103,9 +103,9 @@ Examples from the refreshed screen:
 - TraderSpy 1h SuperTrend disagreed with one-bar momentum on 97 evaluated rows and was correct on 47.4% of those rows.
 - TraderSpy 1h Chandelier disagreed on 101 rows and was correct on 42.6%.
 - TraderSpy 1h WaveTrend disagreed on 83 rows and was correct on 48.2%.
-- Bybit 1h SuperTrend disagreed on 38 rows and was correct on 44.7%.
+- Bybit 1h SuperTrend disagreed on 37 rows and was correct on 43.2%.
 - Bybit 1h ZLSMA disagreed on 34 rows and was correct on 29.4%.
-- Bybit 15m UT Bot disagreed on 28 rows and was correct on 57.1%, but the sample is too small to promote the hypothesis.
+- Bybit 15m UT Bot disagreed on 28 rows and was correct on 60.7%, but the sample is too small to promote the hypothesis.
 
 These are descriptive diagnostics only. They are not multiplicity-controlled and the windows are short.
 
