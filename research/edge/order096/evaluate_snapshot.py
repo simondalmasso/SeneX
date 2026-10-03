@@ -16,6 +16,23 @@ import indicator_baselines as baselines
 HERE = Path(__file__).resolve().parent
 DEFAULT_INPUT = HERE / "data" / "indicator_screen_v1.json"
 
+_INTERVAL_MS = {
+    "1m": 60_000,
+    "5m": 5 * 60_000,
+    "15m": 15 * 60_000,
+    "30m": 30 * 60_000,
+    "1h": 60 * 60_000,
+    "4h": 4 * 60 * 60_000,
+}
+
+
+def _base_interval_ms(dataset: dict[str, Any]) -> int:
+    interval = str((dataset.get("query") or {}).get("interval") or "").strip()
+    value = _INTERVAL_MS.get(interval)
+    if value is None:
+        raise ValueError(f"unsupported frozen interval: {interval!r}")
+    return value
+
 
 def _directional_metrics(
     candles: list[dict[str, Any]],
@@ -68,7 +85,10 @@ def _directional_metrics(
 
 def evaluate_dataset(dataset: dict[str, Any]) -> dict[str, Any]:
     candles = [dict(row) for row in dataset["candles"]]
-    matrix = baselines.compute_baseline_matrix(candles)
+    matrix = baselines.compute_baseline_matrix(
+        candles,
+        base_interval_ms=_base_interval_ms(dataset),
+    )
     return {
         "id": dataset["id"],
         "provider": dataset["provider"],
@@ -90,8 +110,14 @@ def matched_signal_agreement(
     """Compare indicator states only on timestamps present in both venues."""
     left_rows = [dict(row) for row in left["candles"]]
     right_rows = [dict(row) for row in right["candles"]]
-    left_matrix = baselines.compute_baseline_matrix(left_rows)
-    right_matrix = baselines.compute_baseline_matrix(right_rows)
+    left_matrix = baselines.compute_baseline_matrix(
+        left_rows,
+        base_interval_ms=_base_interval_ms(left),
+    )
+    right_matrix = baselines.compute_baseline_matrix(
+        right_rows,
+        base_interval_ms=_base_interval_ms(right),
+    )
 
     li = {int(row["open_time"]): i for i, row in enumerate(left_rows)}
     ri = {int(row["open_time"]): i for i, row in enumerate(right_rows)}
