@@ -12,7 +12,7 @@ The proposed indicator set does **not** justify expanding SENEX's production fea
 
 The first-principles reason is redundancy: SENEX already contains price momentum, 4h regime/trend, volatility/range, orderbook imbalance, funding/open-interest, spread/depth and execution-aware context. Most of the proposed TradingView indicators are deterministic recombinations of those same families.
 
-The recent cross-venue screen reinforces that conclusion: no classic indicator produced a stable advantage across 15m/1h and TraderSpy/Bybit. Some candidates looked positive in one small window and negative in another. That is evidence against immediate integration, not proof that every candidate is useless.
+The recent standalone screens show no classic indicator with a consistent enough signal to justify immediate integration. Because TraderSpy and Bybit standalone tables cover different historical spans, ORDER096 does not attribute performance differences to venue. The matched-timestamp diagnostic is used only for indicator-state agreement/redundancy, not predictive advantage.
 
 ## What survives
 
@@ -224,7 +224,7 @@ Three concepts are genuinely distinct enough to retain as research hypotheses:
 - confirmed liquidity sweep/reclaim with detection-time timestamps;
 - BTC↔ETH SMT divergence.
 
-AUD ran cheap causal proxies on recent 15m/1h closed BTC/ETH bars only to decide whether immediate implementation was warranted. Results were sparse and unstable across horizons: no concept earned production complexity. Full source audit: `IFVG_SOURCE_AUDIT.md`.
+The source was decomposed into three unscored research hypotheses. ORDER096 deliberately removes the earlier ad-hoc proxy statistics because they were not backed by a committed reproducible dual-asset snapshot/evaluator. Full source audit: `IFVG_SOURCE_AUDIT.md`.
 
 Therefore:
 
