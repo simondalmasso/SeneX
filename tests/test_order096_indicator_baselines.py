@@ -421,3 +421,66 @@ def test_matched_venue_agreement_excludes_unavailable_zero_states():
     # Right-side warm-up zeroes are unavailable, not disagreements.
     assert zlsma["compared_n"] == zlsma["both_nonzero_n"]
     assert zlsma["signal_agreement"] == 1.0
+
+
+def test_matched_venue_agreement_distinguishes_warmup_from_neutral(monkeypatch):
+    evaluator = _load_evaluator()
+
+    left = {
+        "id": "left",
+        "provider": "A",
+        "query": {"interval": "1h"},
+        "candles": [
+            {"open_time": i * 3_600_000, "source": "left"}
+            for i in range(3)
+        ],
+    }
+    right = {
+        "id": "right",
+        "provider": "B",
+        "query": {"interval": "1h"},
+        "candles": [
+            {"open_time": i * 3_600_000, "source": "right"}
+            for i in range(3)
+        ],
+    }
+
+    def fake_matrix(rows, *, base_interval_ms):
+        assert base_interval_ms == 3_600_000
+        return {"rule": [1, 1, 1] if rows[0]["source"] == "left" else [0, 1, 1]}
+
+    def fake_availability(rows, *, base_interval_ms):
+        assert base_interval_ms == 3_600_000
+        if rows[0]["source"] == "left":
+            return {"rule": [True, True, True]}
+        return {"rule": [False, True, True]}
+
+    monkeypatch.setattr(evaluator.baselines, "compute_baseline_matrix", fake_matrix)
+    monkeypatch.setattr(
+        evaluator.baselines,
+        "compute_baseline_availability_matrix",
+        fake_availability,
+    )
+
+    warmup = evaluator.matched_signal_agreement(left, right)["per_rule"]["rule"]
+    assert warmup["compared_n"] == 2
+    assert warmup["availability_excluded_n"] == 1
+    assert warmup["signal_agreement"] == 1.0
+    assert warmup["both_nonzero_n"] == 2
+    assert warmup["directional_agreement"] == 1.0
+
+    def all_available(rows, *, base_interval_ms):
+        return {"rule": [True, True, True]}
+
+    monkeypatch.setattr(
+        evaluator.baselines,
+        "compute_baseline_availability_matrix",
+        all_available,
+    )
+    neutral = evaluator.matched_signal_agreement(left, right)["per_rule"]["rule"]
+    assert neutral["compared_n"] == 3
+    assert neutral["availability_excluded_n"] == 0
+    # The real neutral/abstain zero must count as a state disagreement.
+    assert neutral["signal_agreement"] == 0.666667
+    assert neutral["both_nonzero_n"] == 2
+    assert neutral["directional_agreement"] == 1.0
