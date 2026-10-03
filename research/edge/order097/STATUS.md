@@ -31,6 +31,7 @@ CAPITAL=0
 The research harness can:
 
 - extract only valid decision-time SENEX/Polymarket pairs;
+- reject circular rows where SENEX already consumed Polymarket directionally;
 - enforce the exact BTC 5m market grid;
 - ignore normal SENEX 15m/1h outcome fields;
 - join independently supplied 5m resolutions after market close;
