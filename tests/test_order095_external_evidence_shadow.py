@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -70,6 +71,9 @@ def test_results_dir_override_keeps_external_evidence_on_durable_root(tmp_path, 
         "http://2130706433/",
         "http://127.1/",
         "http://0x7f000001/",
+        "http://127。0。0。1/",
+        "http://127．0．0．1/",
+        "http://127｡0｡0｡1/",
         "file:///etc/passwd",
         "ftp://example.com/file",
         "https://user:pass@example.com/",
@@ -176,8 +180,71 @@ def test_journal_rejects_non_shadow_or_inconsistent_events(tmp_path):
     with pytest.raises(ValueError, match="shadow"):
         journal.append(replace(event, decision_allowed=True), raw=b"alpha")
 
+    with pytest.raises(ValueError, match="shadow"):
+        journal.append(
+            replace(
+                event,
+                shadow_only=1,
+                decision_allowed=0,
+                t0_allowed=0,
+            ),
+            raw=b"alpha",
+        )
+
     with pytest.raises(ValueError, match="content"):
         journal.append(replace(event, content="tampered"), raw=b"alpha")
+
+
+def test_journal_rejects_non_normalized_source_url(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    event = _capture(
+        native_id="fragment",
+        source_url="https://example.com/post/1#secret-fragment",
+        raw=b"fragment",
+        content="fragment",
+    ).to_event(captured_at="2026-10-02T10:00:02Z")
+
+    with pytest.raises(ValueError, match="normalized"):
+        journal.append(event, raw=b"fragment")
+
+
+def test_stale_journal_instances_reload_tail_before_append(tmp_path):
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    first_writer = ExternalEvidenceJournal(paths)
+    stale_second_writer = ExternalEvidenceJournal(paths)
+
+    first = _capture(native_id="writer-a", raw=b"a", content="a").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    second = _capture(native_id="writer-b", raw=b"b", content="b").to_event(
+        captured_at="2026-10-02T10:00:03Z"
+    )
+
+    first_writer.append(first, raw=b"a")
+    stale_second_writer.append(second, raw=b"b")
+
+    reopened = ExternalEvidenceJournal(paths)
+    assert reopened.verify_chain() == {"ok": True, "records": 2}
+
+
+def test_blob_directory_is_synced_before_journal_reference(tmp_path, monkeypatch):
+    import senecio_polymarket.backend.external_evidence.journal as journal_module
+
+    paths = ExternalEvidencePaths.from_root(tmp_path)
+    journal = ExternalEvidenceJournal(paths)
+    calls = []
+
+    def fake_sync(path):
+        calls.append(Path(path))
+
+    monkeypatch.setattr(journal_module, "_fsync_directory", fake_sync)
+    event = _capture(native_id="dirsync", raw=b"dirsync", content="dirsync").to_event(
+        captured_at="2026-10-02T10:00:02Z"
+    )
+    journal.append(event, raw=b"dirsync")
+
+    assert paths.blobs in calls
 
 
 def test_duplicate_returns_original_record_hash(tmp_path):
@@ -319,6 +386,55 @@ def test_bridge_rejects_non_string_content():
     )
     with pytest.raises(CollectorError, match="content"):
         collector.collect("https://example.com/x", timeout=1.0)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("source_kind", {"type": "social"}),
+        ("native_id", ["x-1"]),
+        ("published_at", {"ts": "2026-10-02T10:00:00Z"}),
+        ("observed_at", ["2026-10-02T10:00:01Z"]),
+        ("provider_version", {"version": "1"}),
+    ],
+)
+def test_bridge_rejects_non_string_identity_fields(field, value):
+    def fake_runner(_argv, _stdin_text, _timeout):
+        payload = {
+            "content": "public",
+            "raw": "public",
+            "provider_version": "bridge-1",
+        }
+        payload[field] = value
+        return 0, json.dumps(payload), ""
+
+    collector = AgentReachBridgeCollector(
+        executable="/opt/senex/agent-reach-bridge",
+        runner=fake_runner,
+    )
+    with pytest.raises(CollectorError, match=field):
+        collector.collect("https://example.com/x", timeout=1.0)
+
+
+def test_bridge_timeout_survives_descendant_inheriting_stdout(tmp_path):
+    if os.name != "posix":
+        pytest.skip("process-group regression is POSIX-specific")
+
+    script = tmp_path / "bridge_with_child.py"
+    script.write_text(
+        "import subprocess, sys\n"
+        "sys.stdin.read()\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'])\n"
+        "sys.stdout.write('ok')\n"
+        "sys.stdout.flush()\n",
+        encoding="utf-8",
+    )
+
+    import time
+    started = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        _bridge_runner([sys.executable, str(script)], "{}", 0.5)
+    assert time.monotonic() - started < 3.0
 
 
 def test_default_bridge_runner_rejects_oversized_stdout_before_return(tmp_path):
