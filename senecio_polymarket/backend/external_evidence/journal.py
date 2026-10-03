@@ -5,9 +5,15 @@ import json
 import os
 import tempfile
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - canonical SENEX runtime is Linux
+    fcntl = None
 
 from .paths import ExternalEvidencePaths
 from .schema import MAX_RAW_BYTES, EvidenceCapture, ExternalEvidenceEvent
@@ -26,6 +32,29 @@ def _canonical_json(value: dict[str, Any]) -> bytes:
 
 def _sha(value: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(value)).hexdigest()
+
+
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(str(path), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def _exclusive_process_lock(path: Path):
+    if fcntl is None:
+        raise RuntimeError("external evidence journal requires POSIX process locking")
+    fd = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
 
 
 @dataclass(frozen=True)
@@ -53,6 +82,8 @@ class ExternalEvidenceJournal:
             )
 
     def _load_state(self) -> None:
+        self._record_hashes.clear()
+        self._last_hash = None
         if not self.paths.journal.exists():
             return
         with self.paths.journal.open("r", encoding="utf-8") as fh:
@@ -90,16 +121,24 @@ class ExternalEvidenceJournal:
 
             try:
                 os.link(temp_path, target)
+                _fsync_directory(self.paths.blobs)
             except FileExistsError:
                 if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
                     raise RuntimeError("external evidence blob race/hash mismatch")
         finally:
             if temp_path is not None:
+                existed = temp_path.exists()
                 temp_path.unlink(missing_ok=True)
+                if existed:
+                    _fsync_directory(self.paths.blobs)
         return target
 
     def _validate_event(self, event: ExternalEvidenceEvent, raw: bytes) -> None:
-        if not event.shadow_only or event.decision_allowed or event.t0_allowed:
+        if (
+            event.shadow_only is not True
+            or event.decision_allowed is not False
+            or event.t0_allowed is not False
+        ):
             raise ValueError("external evidence shadow-only invariant violated")
 
         raw_bytes = bytes(raw)
@@ -114,7 +153,9 @@ class ExternalEvidenceJournal:
         if len(raw_bytes) != event.raw_bytes:
             raise ValueError("raw byte count does not match event raw_bytes")
 
-        validate_public_url(event.source_url)
+        normalized_url = validate_public_url(event.source_url)
+        if normalized_url != event.source_url:
+            raise ValueError("external evidence source URL is not normalized")
         canonical = EvidenceCapture(
             provider=event.provider,
             collector=event.collector,
@@ -135,28 +176,44 @@ class ExternalEvidenceJournal:
         self._validate_event(event, raw)
 
         with self._lock:
-            if event.event_id in self._record_hashes:
-                return AppendResult(
-                    False,
-                    event.event_id,
-                    self._record_hashes[event.event_id],
-                )
+            lock_path = self.paths.root / ".events.lock"
+            with _exclusive_process_lock(lock_path):
+                integrity = self.verify_chain()
+                if not integrity.get("ok", False):
+                    raise RuntimeError(
+                        "external evidence journal integrity failure before append: "
+                        + str(integrity.get("reason") or "UNKNOWN")
+                    )
 
-            self._put_blob(event.raw_sha256, raw)
-            row = event.to_dict()
-            row["blob_relpath"] = f"blobs/{event.raw_sha256}"
-            row["prev_record_hash"] = self._last_hash
-            row["record_hash"] = _sha(row)
+                # Another process may have appended after this instance was created.
+                # Reload the authoritative tail while holding the process lock.
+                self._load_state()
 
-            self.paths.journal.parent.mkdir(parents=True, exist_ok=True)
-            with self.paths.journal.open("a", encoding="utf-8", newline="\n") as fh:
-                fh.write(_canonical_json(row).decode("utf-8") + "\n")
-                fh.flush()
-                os.fsync(fh.fileno())
+                if event.event_id in self._record_hashes:
+                    return AppendResult(
+                        False,
+                        event.event_id,
+                        self._record_hashes[event.event_id],
+                    )
 
-            self._last_hash = str(row["record_hash"])
-            self._record_hashes[event.event_id] = self._last_hash
-            return AppendResult(True, event.event_id, self._last_hash)
+                self._put_blob(event.raw_sha256, raw)
+                row = event.to_dict()
+                row["blob_relpath"] = f"blobs/{event.raw_sha256}"
+                row["prev_record_hash"] = self._last_hash
+                row["record_hash"] = _sha(row)
+
+                journal_existed = self.paths.journal.exists()
+                self.paths.journal.parent.mkdir(parents=True, exist_ok=True)
+                with self.paths.journal.open("a", encoding="utf-8", newline="\n") as fh:
+                    fh.write(_canonical_json(row).decode("utf-8") + "\n")
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                if not journal_existed:
+                    _fsync_directory(self.paths.journal.parent)
+
+                self._last_hash = str(row["record_hash"])
+                self._record_hashes[event.event_id] = self._last_hash
+                return AppendResult(True, event.event_id, self._last_hash)
 
     def verify_chain(self) -> dict[str, Any]:
         if not self.paths.journal.exists():
