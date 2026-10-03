@@ -90,6 +90,8 @@ def test_all_baselines_return_bounded_direction_series():
         "squeeze_momentum_20",
         "squeeze_release_20",
         "vwap_ema_9_21_bias",
+        "htf_discount_reversion_4h",
+        "htf_sweep_reclaim_4h",
     }
     assert set(matrix) == expected
     for name, values in matrix.items():
@@ -194,6 +196,58 @@ def test_chandelier_default_ignores_extreme_wicks_for_extrema():
     _assert_domain(original)
     _assert_domain(changed)
     assert len(original) == len(changed) == len(base)
+
+
+def test_htf_sweep_reclaim_uses_only_last_completed_4h_range():
+    m = _load_module()
+    candles = []
+    # Four complete 1h bars define the prior 4h range: high=105, low=95.
+    rows = [
+        (100, 103, 99, 102),
+        (102, 105, 100, 104),
+        (104, 104.5, 98, 99),
+        (99, 101, 95, 100),
+        # First bar of next 4h bucket sweeps SSL then closes back above it.
+        (100, 101, 94, 96),
+        # Second bar sweeps BSL then closes back below it.
+        (96, 106, 96, 104),
+    ]
+    for i, (open_px, high, low, close) in enumerate(rows):
+        candles.append(
+            {
+                "open_time": i * 3_600_000,
+                "open": open_px,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+
+    sweep = m.htf_sweep_reclaim(candles, target_ms=4 * 3_600_000)
+    location = m.htf_discount_reversion(candles, target_ms=4 * 3_600_000)
+
+    assert sweep[:4] == [0, 0, 0, 0]
+    assert sweep[4] == 1
+    assert sweep[5] == -1
+    assert location[4] == 1
+    assert location[5] == -1
+
+
+def test_htf_context_fails_closed_when_previous_bucket_is_incomplete():
+    m = _load_module()
+    candles = _candles(12)
+    # Remove one bar from the first 4h bucket.
+    candles = [row for i, row in enumerate(candles) if i != 1]
+    sweep = m.htf_sweep_reclaim(candles, target_ms=4 * 3_600_000)
+    location = m.htf_discount_reversion(candles, target_ms=4 * 3_600_000)
+
+    # The first bar after that incomplete bucket must not synthesize HTF truth.
+    first_bucket = candles[0]["open_time"] // (4 * 3_600_000)
+    for i, row in enumerate(candles):
+        if row["open_time"] // (4 * 3_600_000) == first_bucket + 1:
+            assert sweep[i] == 0
+            assert location[i] == 0
 
 
 def test_warmup_does_not_emit_nonfinite_values():
