@@ -94,9 +94,16 @@ def test_all_baselines_return_bounded_direction_series():
         "htf_sweep_reclaim_4h",
     }
     assert set(matrix) == expected
+    availability = m.compute_baseline_availability_matrix(
+        candles,
+        base_interval_ms=3_600_000,
+    )
+    assert set(availability) == expected
     for name, values in matrix.items():
         assert len(values) == len(candles), name
         _assert_domain(values)
+        assert len(availability[name]) == len(candles), name
+        assert all(isinstance(value, bool) for value in availability[name]), name
 
 
 def test_indicator_history_is_causal_under_future_mutation():
