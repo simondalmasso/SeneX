@@ -73,6 +73,7 @@ class ExternalEvidenceJournal:
         self._lock = threading.Lock()
         self._record_hashes: dict[str, str] = {}
         self._last_hash: str | None = None
+        self._journal_signature: tuple[int, int, int, int] | None = None
         self._load_state()
         integrity = self.verify_chain()
         if not integrity.get("ok", False):
@@ -81,10 +82,17 @@ class ExternalEvidenceJournal:
                 + str(integrity.get("reason") or "UNKNOWN")
             )
 
+    def _current_journal_signature(self) -> tuple[int, int, int, int] | None:
+        if not self.paths.journal.exists():
+            return None
+        stat = self.paths.journal.stat()
+        return (int(stat.st_dev), int(stat.st_ino), int(stat.st_size), int(stat.st_mtime_ns))
+
     def _load_state(self) -> None:
         self._record_hashes.clear()
         self._last_hash = None
         if not self.paths.journal.exists():
+            self._journal_signature = None
             return
         with self.paths.journal.open("r", encoding="utf-8") as fh:
             for raw_line in fh:
@@ -98,6 +106,7 @@ class ExternalEvidenceJournal:
                     self._record_hashes[event_id] = record_hash
                 if record_hash:
                     self._last_hash = record_hash
+        self._journal_signature = self._current_journal_signature()
 
     def _put_blob(self, digest: str, raw: bytes) -> Path:
         target = self.paths.blobs / digest
@@ -178,16 +187,18 @@ class ExternalEvidenceJournal:
         with self._lock:
             lock_path = self.paths.root / ".events.lock"
             with _exclusive_process_lock(lock_path):
-                integrity = self.verify_chain()
-                if not integrity.get("ok", False):
-                    raise RuntimeError(
-                        "external evidence journal integrity failure before append: "
-                        + str(integrity.get("reason") or "UNKNOWN")
-                    )
+                current_signature = self._current_journal_signature()
+                if current_signature != self._journal_signature:
+                    integrity = self.verify_chain()
+                    if not integrity.get("ok", False):
+                        raise RuntimeError(
+                            "external evidence journal integrity failure before append: "
+                            + str(integrity.get("reason") or "UNKNOWN")
+                        )
 
-                # Another process may have appended after this instance was created.
-                # Reload the authoritative tail while holding the process lock.
-                self._load_state()
+                    # Another process or external mutation changed the journal
+                    # since this instance's last successful read/write.
+                    self._load_state()
 
                 if event.event_id in self._record_hashes:
                     return AppendResult(
@@ -213,6 +224,7 @@ class ExternalEvidenceJournal:
 
                 self._last_hash = str(row["record_hash"])
                 self._record_hashes[event.event_id] = self._last_hash
+                self._journal_signature = self._current_journal_signature()
                 return AppendResult(True, event.event_id, self._last_hash)
 
     def verify_chain(self) -> dict[str, Any]:
