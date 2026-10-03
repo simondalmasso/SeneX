@@ -112,10 +112,10 @@ These are descriptive diagnostics only. They are not multiplicity-controlled and
 ## What this actually says
 
 1. There is no stable “obvious winner”.
-2. ATR/trend-family rules are especially unstable across venue/horizon and remain high-redundancy candidates.
+2. ATR/trend-family rules vary materially across the screened windows/horizons and remain high-redundancy candidates; the standalone tables do not identify venue as the cause.
 3. Squeeze release is too sparse for any hit-rate statement.
 4. A candidate that looks positive on 15m can flip negative on 1h.
-5. The raw TraderSpy-vs-Bybit tables use different historical spans, so their performance differences must **not** be attributed to venue. The committed evaluator separately restricts cross-venue diagnostics to common timestamps and excludes only explicitly unavailable warm-up states; initialized neutral/abstain zeros remain part of state agreement.
+5. The raw TraderSpy-vs-Bybit tables use different historical spans, so their performance differences must **not** be attributed to venue. The committed evaluator separately rebuilds both venue series from identical common-timestamp prehistory before computing cross-venue state agreement. It excludes explicitly unavailable warm-up states; initialized neutral/abstain zeros remain part of state agreement.
 6. The strongest small-window 1h reading in the Bybit sample remains the simple momentum baseline, which argues against adding complexity before incremental tests.
 7. Positive mean signed return with sub-50% accuracy is possible because return magnitudes are asymmetric; neither metric alone establishes EDGE.
 
