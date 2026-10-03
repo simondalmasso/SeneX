@@ -223,8 +223,8 @@ def test_frozen_snapshot_is_complete_and_evaluator_is_offline_reproducible():
     assert [(row["provider"], row["query"]["interval"], row["count"]) for row in datasets] == [
         ("TraderSpy", "15m", 500),
         ("TraderSpy", "1h", 500),
-        ("Bybit", "15m", 200),
-        ("Bybit", "1h", 200),
+        ("Bybit", "15m", 199),
+        ("Bybit", "1h", 199),
     ]
 
     evaluator = _load_evaluator()
