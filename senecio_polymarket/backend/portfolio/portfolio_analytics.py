@@ -162,7 +162,10 @@ class PortfolioAnalytics:
             "ending_equity_usd": round(eity := equity_curve[-1], 2),
             "total_pnl_usd": round(total_pnl, 2),
             "total_fees_usd": round(total_fees, 2),
-            "net_pnl_usd": round(total_pnl - total_fees, 2),
+            # TradeJournal.realized_pnl_usd is already net of entry+exit fees
+            # (ExecutionEngine deducts them before persisting the closed trade).
+            # Keep total_fees_usd as an informational decomposition only.
+            "net_pnl_usd": round(total_pnl, 2),
             "total_return_pct": round(
                 (total_pnl / self.cfg["starting_equity_usd"]) * 100, 2
             ),
