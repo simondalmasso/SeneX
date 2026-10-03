@@ -10,8 +10,11 @@ No network, runtime, predictor, GPTrader, execution, or order surface exists.
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable, NamedTuple
 
 
@@ -432,3 +435,94 @@ def experiment_status(
             for item in joined
         }),
     }
+
+
+def read_jsonl(path: str | Path) -> list[dict]:
+    rows: list[dict] = []
+    with Path(path).open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            raw = line.strip()
+            if not raw:
+                continue
+            try:
+                value = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"invalid JSONL at {path}:{line_number}"
+                ) from exc
+            if not isinstance(value, dict):
+                raise ValueError(
+                    f"non-object JSONL row at {path}:{line_number}"
+                )
+            rows.append(value)
+    return rows
+
+
+def run_offline(
+    predictions_path: str | Path,
+    resolutions_path: str | Path | None = None,
+    *,
+    train_fraction: float = 0.67,
+) -> dict[str, object]:
+    rows = read_jsonl(predictions_path)
+    pairs = extract_t0_pairs(rows)
+    resolutions = read_jsonl(resolutions_path) if resolutions_path else []
+    status = experiment_status(pairs, resolutions)
+    if status["status"] != "READY_FOR_CHRONOLOGICAL_CALIBRATION":
+        return status
+
+    joined = join_resolutions(pairs, resolutions)
+    train, test = chronological_market_split(
+        joined,
+        train_fraction=train_fraction,
+    )
+    calibrator = fit_platt(train)
+    metrics = evaluate_paired(test, calibrator)
+    return {
+        "status": "EVALUATED_HOLDOUT",
+        "edge": "UNPROVEN",
+        "pairs": len(pairs),
+        "resolved_pairs": len(joined),
+        "train_rows": len(train),
+        "test_rows": len(test),
+        "train_markets": len({
+            (item.pair.market_slug, item.pair.condition_id)
+            for item in train
+        }),
+        "test_markets": len({
+            (item.pair.market_slug, item.pair.condition_id)
+            for item in test
+        }),
+        "calibrator": {
+            "type": "PLATT_LOGISTIC_ON_RAW_SENEX_UP_SCORE",
+            "intercept": calibrator.intercept,
+            "slope": calibrator.slope,
+            "fit_scope": "TRAIN_ONLY",
+        },
+        "holdout": metrics,
+        "interpretation": (
+            "DIAGNOSTIC_ONLY; EDGE remains UNPROVEN until uncertainty, "
+            "dependence, cost, and prospective replication gates pass"
+        ),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="ORDER097 offline target-aligned market-prior calibration"
+    )
+    parser.add_argument("--predictions", required=True)
+    parser.add_argument("--resolutions")
+    parser.add_argument("--train-fraction", type=float, default=0.67)
+    args = parser.parse_args()
+    result = run_offline(
+        args.predictions,
+        args.resolutions,
+        train_fraction=args.train_fraction,
+    )
+    print(json.dumps(result, sort_keys=True, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
