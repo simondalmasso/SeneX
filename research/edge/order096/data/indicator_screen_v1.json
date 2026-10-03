@@ -8039,7 +8039,9 @@
         "symbol": "BTCUSDT",
         "interval": "15m",
         "category": "linear",
-        "limit": 200
+        "limit": 200,
+        "conservative_drop_latest": true,
+        "finality_note": "provider payload has no isFinal flag; newest returned candle excluded"
       },
       "candles": [
         {
@@ -9633,19 +9635,11 @@
           "low": 84550.6,
           "close": 84597.8,
           "volume": 122.754
-        },
-        {
-          "open_time": 1791009900000,
-          "open": 84597.8,
-          "high": 84597.9,
-          "low": 84500,
-          "close": 84535.9,
-          "volume": 194.887
         }
       ],
-      "count": 200,
+      "count": 199,
       "first_open_time": 1790830800000,
-      "last_open_time": 1791009900000
+      "last_open_time": 1791009000000
     },
     {
       "id": "bybit_linear_btcusdt_1h_200",
@@ -9654,7 +9648,9 @@
         "symbol": "BTCUSDT",
         "interval": "1h",
         "category": "linear",
-        "limit": 200
+        "limit": 200,
+        "conservative_drop_latest": true,
+        "finality_note": "provider payload has no isFinal flag; newest returned candle excluded"
       },
       "candles": [
         {
@@ -11248,19 +11244,11 @@
           "low": 84507.3,
           "close": 84604.4,
           "volume": 305.321
-        },
-        {
-          "open_time": 1791007200000,
-          "open": 84604.4,
-          "high": 84626,
-          "low": 84500,
-          "close": 84535.9,
-          "volume": 470.862
         }
       ],
-      "count": 200,
+      "count": 199,
       "first_open_time": 1790290800000,
-      "last_open_time": 1791007200000
+      "last_open_time": 1791003600000
     }
   ]
 }
