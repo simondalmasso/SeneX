@@ -224,6 +224,7 @@ jobs:
               }
               if not (200 <= dep_status < 300 and 200 <= svc_status < 300):
                   evidence["credential_probes"].append(probe)
+                  print("NF_CREDENTIAL_PROBE=" + json.dumps(probe, sort_keys=True))
                   continue
 
               internal = (dep_data or {}).get("internal") or {}
@@ -246,6 +247,7 @@ jobs:
               )
               probe["build_post_status"] = build_status
               evidence["credential_probes"].append(probe)
+              print("NF_CREDENTIAL_PROBE=" + json.dumps(probe, sort_keys=True))
               if not 200 <= build_status < 300:
                   continue
               candidate_new_build_id = (build_data or {}).get("id")
