@@ -2,6 +2,12 @@
 
 Research-only extension of ORDER097.
 
+## Lineage
+
+As of 2026-10-04, ORDER097 and ORDER098 are merged into `main`. ORDER099 is
+therefore evaluated directly against canonical `main`; it does not vendor or
+fork either dependency.
+
 ## Question
 
 Does frozen SENEX decision-time information add stable out-of-sample information
