@@ -426,3 +426,26 @@ def test_preregistered_market_floor_blocks_199_and_allows_200():
     assert "200 unique resolved markets" in blocker
 
     assert m.minimum_market_gate(200) is None
+
+
+def test_order099_module_cli_help():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "research.edge.order099.tabular_falsification",
+            "--help",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--predictions-manifest" in result.stdout
+    assert "--resolutions-manifest" in result.stdout
