@@ -142,7 +142,7 @@ Then run:
 ```bash
 mkdir -p /data/results/senex-order099
 
-python research/edge/order099/tabular_falsification.py \
+python -m research.edge.order099.tabular_falsification \
   --predictions /data/datasets/senex-order098/t0_predictions.jsonl \
   --predictions-manifest /data/datasets/senex-order098/t0_export_manifest.json \
   --resolutions /data/datasets/senex-order098/resolutions.jsonl \
