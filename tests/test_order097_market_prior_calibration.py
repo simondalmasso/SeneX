@@ -752,3 +752,59 @@ def test_resolution_market_grid_rejects_off_boundary_or_fractional_timestamps(
     )
     with pytest.raises(m.ResolutionContractError, match="grid"):
         m.join_resolutions([pair], [resolution])
+
+
+def test_off_boundary_t0_market_grid_is_rejected():
+    m = _load()
+    row = _row(
+        ts=330,
+        slug="btc-updown-5m-301",
+        condition_id="off-boundary",
+        start_ts=301,
+        end_ts=601,
+    )
+    assert m.extract_t0_pair(row) is None
+
+
+def test_fractional_t0_grid_timestamp_is_not_silently_truncated():
+    m = _load()
+    row = _row(
+        ts=330,
+        slug="btc-updown-5m-300",
+        condition_id="fractional-grid",
+        start_ts=300.5,
+        end_ts=600.5,
+    )
+    assert m.extract_t0_pair(row) is None
+
+
+def test_off_boundary_or_fractional_resolution_grid_is_rejected():
+    m = _load()
+
+    with pytest.raises(m.ResolutionContractError, match="grid"):
+        m.join_resolutions(
+            [],
+            [
+                _resolution(
+                    slug="btc-updown-5m-301",
+                    condition_id="off-boundary",
+                    start_ts=301,
+                    end_ts=601,
+                    resolved_at=700,
+                )
+            ],
+        )
+
+    with pytest.raises(m.ResolutionContractError, match="grid"):
+        m.join_resolutions(
+            [],
+            [
+                _resolution(
+                    slug="btc-updown-5m-300",
+                    condition_id="fractional-grid",
+                    start_ts=300.5,
+                    end_ts=600.5,
+                    resolved_at=700,
+                )
+            ],
+        )
