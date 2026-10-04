@@ -22,6 +22,7 @@ MCP_TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
 PROVIDER_BASE_URL_ENV = "SENEX_DECISION_PROVIDER_BASE_URL"
 PROVIDER_MODEL_ENV = "SENEX_DECISION_PROVIDER_MODEL"
 PROVIDER_API_KEY_ENV = "SENEX_DECISION_PROVIDER_API_KEY"
+PROVIDER_MAX_TOKENS_ENV = "SENEX_DECISION_PROVIDER_MAX_TOKENS"
 BATCH_LIMIT_ENV = "SENEX_GPTRADER_BATCH_LIMIT"
 
 
@@ -369,6 +370,7 @@ class OpenAICompatibleDecisionAdapter:
     model: str
     api_key: str = field(repr=False)
     timeout: float = 30.0
+    max_tokens: int | None = None
     http_post: HttpPost = field(default=_default_http_post, repr=False)
 
     def __post_init__(self) -> None:
@@ -381,6 +383,11 @@ class OpenAICompatibleDecisionAdapter:
             raise ValueError("LLM model is required")
         if not self.api_key:
             raise ValueError("LLM API key is required")
+        if self.max_tokens is not None:
+            if isinstance(self.max_tokens, bool) or not isinstance(self.max_tokens, int):
+                raise ValueError("LLM max_tokens must be an integer")
+            if not 1 <= self.max_tokens <= 1_048_576:
+                raise ValueError("LLM max_tokens must be between 1 and 1048576")
 
     def __repr__(self) -> str:
         return (
@@ -419,6 +426,8 @@ class OpenAICompatibleDecisionAdapter:
                 },
             ],
         }
+        if self.max_tokens is not None:
+            payload["max_tokens"] = int(self.max_tokens)
         try:
             response = self.http_post(
                 self.base_url + "/chat/completions",
@@ -456,7 +465,12 @@ class ExternalDecisionClient:
         if not 1 <= self.batch_limit <= 16:
             raise ValueError("batch_limit must be between 1 and 16")
 
-    def run_once(self, *, run_id: str) -> dict[str, Any]:
+    def run_once(
+        self,
+        *,
+        run_id: str,
+        shadow_only: bool = False,
+    ) -> dict[str, Any]:
         run_id = str(run_id or "").strip()
         if not run_id or len(run_id) > 160:
             raise ValueError("bounded run_id is required")
@@ -514,6 +528,15 @@ class ExternalDecisionClient:
 
         raw_decisions = self.adapter.decide(packets, run_id=run_id)
         decisions = normalize_decisions(raw_decisions, packets)
+        if shadow_only:
+            return {
+                "gate": TaskGate.READY.value,
+                "submitted": False,
+                "applied": 0,
+                "shadow_only": True,
+                "cursor": cursor_in,
+                "decisions": decisions,
+            }
         result = self.mcp.submit_paper_decisions(
             run_id,
             cursor_in,
@@ -552,10 +575,22 @@ def create_external_client_from_env(
         _required_env(env, MCP_URL_ENV),
         token=_required_env(env, MCP_TOKEN_ENV),
     )
+    max_tokens_raw = str(env.get(PROVIDER_MAX_TOKENS_ENV) or "").strip()
+    if max_tokens_raw:
+        try:
+            provider_max_tokens = int(max_tokens_raw)
+        except ValueError:
+            raise ValueError(
+                f"{PROVIDER_MAX_TOKENS_ENV} must be an integer"
+            ) from None
+    else:
+        provider_max_tokens = None
+
     adapter = OpenAICompatibleDecisionAdapter(
         base_url=_required_env(env, PROVIDER_BASE_URL_ENV),
         model=_required_env(env, PROVIDER_MODEL_ENV),
         api_key=_required_env(env, PROVIDER_API_KEY_ENV),
+        max_tokens=provider_max_tokens,
     )
     return ExternalDecisionClient(
         mcp=mcp,
@@ -574,12 +609,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Run one fail-closed GPTrader PAPER decision batch."
     )
     parser.add_argument("--run-id", default=None)
+    parser.add_argument(
+        "--shadow-only",
+        action="store_true",
+        help="Evaluate one sealed packet batch without submitting decisions.",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
     run_id = str(args.run_id or "").strip() or _generated_run_id()
 
     try:
         client = create_external_client_from_env()
-        result = client.run_once(run_id=run_id)
+        if args.shadow_only:
+            result = client.run_once(
+                run_id=run_id,
+                shadow_only=True,
+            )
+        else:
+            result = client.run_once(run_id=run_id)
     except Exception as exc:
         print(_canonical({"error": type(exc).__name__, "status": "ERROR"}))
         return 70
