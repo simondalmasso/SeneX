@@ -35,10 +35,13 @@ The research harness can:
 - enforce the exact BTC 5m market grid;
 - ignore normal SENEX 15m/1h outcome fields;
 - join independently supplied 5m resolutions after market close;
-- split chronologically by complete market identity;
-- fit a minimal train-only Platt calibration;
-- evaluate calibrated SENEX vs market prior on identical holdout rows;
-- return an explicit blocker when labels are absent.
+- preserve Phase 0 totals for all rows, valid pairs, rejected pairs, and unique markets;
+- reject missing, blank, or non-string resolution provenance;
+- split chronologically by complete market identity and purge TRAIN labels not available before the earliest HOLDOUT decision;
+- keep insufficient resolution/training corpora in an explicit blocked state rather than raising an uncaught calibration error;
+- fit market-only and market+SENEX logistic models on identical TRAIN rows;
+- evaluate those nested models on identical HOLDOUT rows so base-rate/intercept fitting cannot masquerade as incremental SENEX information;
+- return explicit blockers when labels are absent or scientifically insufficient.
 
 ## What is not being built
 
