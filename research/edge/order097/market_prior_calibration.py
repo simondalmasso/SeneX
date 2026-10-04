@@ -54,6 +54,19 @@ class PlattCalibrator(NamedTuple):
         return _sigmoid(self.intercept + self.slope * x)
 
 
+class LogisticModel(NamedTuple):
+    intercept: float
+    coefficients: tuple[float, ...]
+
+    def predict(self, *features: float) -> float:
+        if len(features) != len(self.coefficients):
+            raise ValueError("feature width does not match fitted model")
+        z = self.intercept
+        for coefficient, feature in zip(self.coefficients, features):
+            z += coefficient * feature
+        return _sigmoid(z)
+
+
 def _parse_time(value: object, field: str) -> float:
     if isinstance(value, (int, float)) and math.isfinite(float(value)):
         return float(value)
@@ -291,7 +304,7 @@ def chronological_market_split(
     *,
     train_fraction: float = 0.67,
 ) -> tuple[list[JoinedObservation], list[JoinedObservation]]:
-    """Chronological split by complete market groups, never by individual row."""
+    """Chronological market split with a label-availability purge."""
     if not 0.0 < train_fraction < 1.0:
         raise ValueError("train_fraction must be in (0,1)")
     rows = sorted(
@@ -315,13 +328,21 @@ def chronological_market_split(
     cut = int(len(market_keys) * train_fraction)
     cut = min(len(market_keys) - 1, max(1, cut))
     train_keys = set(market_keys[:cut])
-    train = [
+    train_candidates = [
         item for item in rows
         if (item.pair.market_slug, item.pair.condition_id) in train_keys
     ]
     test = [
         item for item in rows
         if (item.pair.market_slug, item.pair.condition_id) not in train_keys
+    ]
+    if not test:
+        raise ValueError("chronological holdout is empty")
+
+    earliest_holdout_decision = min(item.pair.decision_ts for item in test)
+    train = [
+        item for item in train_candidates
+        if item.resolved_at < earliest_holdout_decision
     ]
     return train, test
 
@@ -361,6 +382,131 @@ def fit_platt(
         slope -= learning_rate * grad_slope
 
     return PlattCalibrator(intercept=intercept, slope=slope)
+
+
+def _fit_logistic_features(
+    observations: Iterable[JoinedObservation],
+    feature_rows: Iterable[tuple[float, ...]],
+    *,
+    max_iter: int = 4000,
+    learning_rate: float = 0.02,
+    l2: float = 1e-4,
+) -> LogisticModel:
+    rows = list(observations)
+    features = list(feature_rows)
+    if len(rows) < 8:
+        raise ValueError("at least 8 training observations are required")
+    if len(features) != len(rows):
+        raise ValueError("feature rows must match training observations")
+    labels = {int(item.label_up) for item in rows}
+    if labels != {0, 1}:
+        raise ValueError("training observations require both UP and DOWN labels")
+    if max_iter <= 0 or learning_rate <= 0:
+        raise ValueError("optimizer parameters must be positive")
+    width = len(features[0]) if features else 0
+    if width <= 0 or any(len(row) != width for row in features):
+        raise ValueError("feature matrix is invalid")
+
+    intercept = 0.0
+    coefficients = [0.0] * width
+    n = float(len(rows))
+    for _ in range(max_iter):
+        grad_intercept = 0.0
+        grad_coefficients = [0.0] * width
+        for item, feature_row in zip(rows, features):
+            z = intercept
+            for coefficient, feature in zip(coefficients, feature_row):
+                z += coefficient * feature
+            pred = _sigmoid(z)
+            error = pred - int(item.label_up)
+            grad_intercept += error
+            for index, feature in enumerate(feature_row):
+                grad_coefficients[index] += error * feature
+
+        intercept -= learning_rate * (grad_intercept / n)
+        for index in range(width):
+            gradient = grad_coefficients[index] / n + l2 * coefficients[index]
+            coefficients[index] -= learning_rate * gradient
+
+    return LogisticModel(
+        intercept=intercept,
+        coefficients=tuple(coefficients),
+    )
+
+
+def fit_incremental_models(
+    observations: Iterable[JoinedObservation],
+) -> tuple[LogisticModel, LogisticModel]:
+    """Fit market-only and market+SENEX nested models on identical TRAIN rows."""
+    rows = list(observations)
+    market_features = [
+        (_logit(_probability(item.pair.p_market, "p_market")),)
+        for item in rows
+    ]
+    augmented_features = [
+        (
+            _logit(_probability(item.pair.p_market, "p_market")),
+            _logit(_probability(item.pair.senex_raw_up, "senex_raw_up")),
+        )
+        for item in rows
+    ]
+    market_only = _fit_logistic_features(rows, market_features)
+    market_plus_senex = _fit_logistic_features(rows, augmented_features)
+    return market_only, market_plus_senex
+
+
+def evaluate_incremental_models(
+    observations: Iterable[JoinedObservation],
+    market_only: LogisticModel,
+    market_plus_senex: LogisticModel,
+) -> dict[str, float | int]:
+    """Evaluate nested models on one identical chronological holdout."""
+    rows = list(observations)
+    if not rows:
+        raise ValueError("paired evaluation requires resolved observations")
+
+    labels = [int(item.label_up) for item in rows]
+    market_probabilities = [
+        market_only.predict(_logit(_probability(item.pair.p_market, "p_market")))
+        for item in rows
+    ]
+    augmented_probabilities = [
+        market_plus_senex.predict(
+            _logit(_probability(item.pair.p_market, "p_market")),
+            _logit(_probability(item.pair.senex_raw_up, "senex_raw_up")),
+        )
+        for item in rows
+    ]
+
+    market_brier = _brier(market_probabilities, labels)
+    augmented_brier = _brier(augmented_probabilities, labels)
+    market_log = _log_loss(market_probabilities, labels)
+    augmented_log = _log_loss(augmented_probabilities, labels)
+    market_acc = sum(
+        (p >= 0.5) == bool(y)
+        for p, y in zip(market_probabilities, labels)
+    ) / len(labels)
+    augmented_acc = sum(
+        (p >= 0.5) == bool(y)
+        for p, y in zip(augmented_probabilities, labels)
+    ) / len(labels)
+    markets = {
+        (item.pair.market_slug, item.pair.condition_id)
+        for item in rows
+    }
+    return {
+        "n": len(rows),
+        "n_markets": len(markets),
+        "market_only_brier": market_brier,
+        "market_plus_senex_brier": augmented_brier,
+        "brier_delta_augmented_minus_market_only": augmented_brier - market_brier,
+        "market_only_log_loss": market_log,
+        "market_plus_senex_log_loss": augmented_log,
+        "log_loss_delta_augmented_minus_market_only": augmented_log - market_log,
+        "market_only_directional_accuracy": market_acc,
+        "market_plus_senex_directional_accuracy": augmented_acc,
+        "accuracy_delta_augmented_minus_market_only": augmented_acc - market_acc,
+    }
 
 
 def _brier(probabilities: list[float], labels: list[int]) -> float:
@@ -421,6 +567,8 @@ def evaluate_paired(
 def experiment_status(
     pairs: Iterable[T0Pair],
     resolutions: Iterable[dict],
+    *,
+    train_fraction: float = 0.67,
 ) -> dict[str, object]:
     pairs_list = list(pairs)
     resolutions_list = list(resolutions)
@@ -438,25 +586,69 @@ def experiment_status(
             "pairs": len(pairs_list),
             "resolved_pairs": 0,
         }
+
     joined = join_resolutions(pairs_list, resolutions_list)
+    resolved_markets = len({
+        (item.pair.market_slug, item.pair.condition_id)
+        for item in joined
+    })
     if not joined:
         return {
             "status": "BLOCKED_NO_TARGET_ALIGNED_RESOLUTIONS",
             "edge": "UNPROVEN",
             "pairs": len(pairs_list),
             "resolved_pairs": 0,
+            "resolved_markets": 0,
         }
+
+    try:
+        train, test = chronological_market_split(
+            joined,
+            train_fraction=train_fraction,
+        )
+    except ValueError as exc:
+        return {
+            "status": "BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA",
+            "edge": "UNPROVEN",
+            "pairs": len(pairs_list),
+            "resolved_pairs": len(joined),
+            "resolved_markets": resolved_markets,
+            "blocker_reason": str(exc),
+        }
+
+    if len(train) < 8:
+        return {
+            "status": "BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA",
+            "edge": "UNPROVEN",
+            "pairs": len(pairs_list),
+            "resolved_pairs": len(joined),
+            "resolved_markets": resolved_markets,
+            "train_rows": len(train),
+            "test_rows": len(test),
+            "blocker_reason": "at least 8 causally available training observations are required",
+        }
+
+    if {int(item.label_up) for item in train} != {0, 1}:
+        return {
+            "status": "BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA",
+            "edge": "UNPROVEN",
+            "pairs": len(pairs_list),
+            "resolved_pairs": len(joined),
+            "resolved_markets": resolved_markets,
+            "train_rows": len(train),
+            "test_rows": len(test),
+            "blocker_reason": "training observations require both UP and DOWN labels",
+        }
+
     return {
         "status": "READY_FOR_CHRONOLOGICAL_CALIBRATION",
         "edge": "UNPROVEN",
         "pairs": len(pairs_list),
         "resolved_pairs": len(joined),
-        "resolved_markets": len({
-            (item.pair.market_slug, item.pair.condition_id)
-            for item in joined
-        }),
+        "resolved_markets": resolved_markets,
+        "train_rows": len(train),
+        "test_rows": len(test),
     }
-
 
 def read_jsonl(path: str | Path) -> list[dict]:
     rows: list[dict] = []
@@ -487,23 +679,42 @@ def run_offline(
 ) -> dict[str, object]:
     rows = read_jsonl(predictions_path)
     pairs = extract_t0_pairs(rows)
+    inventory = {
+        "total_rows": len(rows),
+        "valid_pairs": len(pairs),
+        "rejected_pairs": len(rows) - len(pairs),
+        "unique_markets": len({
+            (pair.market_slug, pair.condition_id)
+            for pair in pairs
+        }),
+    }
+
     resolutions = read_jsonl(resolutions_path) if resolutions_path else []
-    status = experiment_status(pairs, resolutions)
+    status = experiment_status(
+        pairs,
+        resolutions,
+        train_fraction=train_fraction,
+    )
     if status["status"] != "READY_FOR_CHRONOLOGICAL_CALIBRATION":
-        return status
+        return {**status, **inventory}
 
     joined = join_resolutions(pairs, resolutions)
     train, test = chronological_market_split(
         joined,
         train_fraction=train_fraction,
     )
-    calibrator = fit_platt(train)
-    metrics = evaluate_paired(test, calibrator)
+    market_only, market_plus_senex = fit_incremental_models(train)
+    metrics = evaluate_incremental_models(
+        test,
+        market_only,
+        market_plus_senex,
+    )
     return {
         "status": "EVALUATED_HOLDOUT",
         "edge": "UNPROVEN",
         "pairs": len(pairs),
         "resolved_pairs": len(joined),
+        **inventory,
         "train_rows": len(train),
         "test_rows": len(test),
         "train_markets": len({
@@ -514,19 +725,28 @@ def run_offline(
             (item.pair.market_slug, item.pair.condition_id)
             for item in test
         }),
-        "calibrator": {
-            "type": "PLATT_LOGISTIC_ON_RAW_SENEX_UP_SCORE",
-            "intercept": calibrator.intercept,
-            "slope": calibrator.slope,
-            "fit_scope": "TRAIN_ONLY",
+        "models": {
+            "market_only": {
+                "type": "LOGISTIC_ON_MARKET_PRIOR_LOGIT",
+                "intercept": market_only.intercept,
+                "coefficients": list(market_only.coefficients),
+                "fit_scope": "TRAIN_ONLY",
+            },
+            "market_plus_senex": {
+                "type": "LOGISTIC_ON_MARKET_PRIOR_PLUS_SENEX_LOGITS",
+                "intercept": market_plus_senex.intercept,
+                "coefficients": list(market_plus_senex.coefficients),
+                "fit_scope": "TRAIN_ONLY",
+            },
         },
         "holdout": metrics,
         "interpretation": (
-            "DIAGNOSTIC_ONLY; EDGE remains UNPROVEN until uncertainty, "
-            "dependence, cost, and prospective replication gates pass"
+            "DIAGNOSTIC_ONLY; incremental comparison is market-only versus "
+            "market+SENEX on identical causally valid rows; EDGE remains "
+            "UNPROVEN until uncertainty, dependence, cost, and prospective "
+            "replication gates pass"
         ),
     }
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(
