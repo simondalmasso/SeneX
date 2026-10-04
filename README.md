@@ -20,7 +20,7 @@ SENEX is not a live trading product. The current production runtime is intention
 | BTC independent 1h authority | 688 observations, 50.29% global win rate |
 | GPTrader treatment | PAPER/HYPOTHETICAL, 0 TAKE decisions, INSUFFICIENT_DATA |
 
-GitHub `main` and H011 are currently aligned at the same exact source commit. This alignment records a deliberate PAPER-only deployment; it does **not** authorize LIVE, real orders, or capital.
+H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may contain later documentation/governance-only commits; such repository drift does **not** imply a runtime change or authorize LIVE, real orders, capital, or an automatic redeploy.
 
 See [Current Status](docs/CURRENT_STATUS.md) for the dated evidence snapshot.
 
