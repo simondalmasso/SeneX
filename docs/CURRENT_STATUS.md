@@ -13,13 +13,15 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | GitHub repository | `simondalmasso/SeneX` |
 | Default branch | `main` |
 | Main state | ORDER097, ORDER098 and ORDER099 merged as research-only tooling |
-| Research experiment | EVALUATED: INCREMENTAL_EDGE_NOT_DEMONSTRATED |
+| Historical research verdict | EVALUATED: INCREMENTAL_EDGE_NOT_DEMONSTRATED |
+| Active follow-up | ORDER100 = COLLECTING_PROSPECTIVE_DATA |
 | H011 source commit | `5e074b230450dd288de01f5e5ad0b2f25efd8e7b` |
 | H011 provenance | exact=true; build digest matches runtime files |
 | Public runtime | H011, GET-only API |
 | ORDER097 | merged; target-aligned nested market-only vs market+SENEX harness |
 | ORDER098 | merged; GET-only T0 export + fail-closed Polymarket 5m resolution corpus |
-| ORDER099 | merged; preregistered tabular/cluster-bootstrap falsification |
+| ORDER099 | merged and evaluated; historical null verdict |
+| ORDER100 | merged; frozen prospective low-disagreement confirmation |
 | ORDER098 corpus | 3,568/3,568 exact markets accepted; 0 rejected |
 | ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
@@ -123,7 +125,7 @@ The research code required for the next falsification experiment is now canonica
 2. **ORDER097** — exact-target causal nested comparison: market-only versus market+SENEX.
 3. **ORDER099** — one-market-one-row weighting, TRAIN-only descriptive cuts, n>=30 exploratory-cell floor, Holm/BH family correction, 10,000-replicate market-cluster bootstrap, practical Brier gain floor 0.005, and a 200-unique-market minimum before any edge verdict.
 
-The remaining blocker is operational data access, not missing analysis code. The preferred source is the authenticated ORDER072 D1 COLD mirror. Credentials must remain in an already-authorized SENEX environment; only the secret-free JSONL + manifests/hashes should move to the research machine or Intern Discovery.
+Historical data access is no longer the blocker: ORDER098/099 were executed. The active constraint is prospective sample accumulation. ORDER100 admits only markets with market_start_ts >= 1791090000 (2026-10-04T05:00:00Z), uses frozen coefficients and disagreement thresholds, and requires at least 300 unique resolved fresh markets in the primary band before any prospective verdict.
 
 
 ## ORDER099 evaluated result
@@ -146,3 +148,7 @@ Verdict: **INCREMENTAL_EDGE_NOT_DEMONSTRATED**.
 This is an evaluated null result, not a data blocker. EDGE remains UNPROVEN
 and the result does not authorize HMM rescue, deployment, LIVE, orders or
 capital.
+
+## ORDER100 prospective state
+
+ORDER100 is merged in `main` and contains no fitting path. A causal smoke run against the historical corpus returned **0 prospective markets**, confirming the cutoff excludes the old sample. The current state is **COLLECTING_PROSPECTIVE_DATA**. No LIVE/capital promotion is authorized by ORDER100 alone.
