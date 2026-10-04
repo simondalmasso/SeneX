@@ -1,3 +1,5 @@
+> **ARCHIVE NOTE (2026-10-04):** This is a normalized historical source document, not a complete runnable recovery bundle. The original text references `worker.js.reference_only` and `coverage_spec.json`, but those raw files were not supplied in this session and were not reconstructed. See `../ARCHIVE_GAPS.md` and `../SOURCE_SHA256SUMS`.
+
 # ORDER075 RECOVERY BUNDLE — LAYOUT & PREFLIGHT (secret-free, read-only provenance)
 
 ## PROVENANCE
