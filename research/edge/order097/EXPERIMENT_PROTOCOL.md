@@ -107,8 +107,8 @@ Stop this line if any is true:
 
 1. valid historical T0 pairs are too sparse to form a real sample;
 2. target-aligned 5m resolutions cannot be reproduced;
-3. train-only calibration fails OOS;
-4. paired Brier/log-loss do not improve over the market prior;
+3. train-only nested calibration fails OOS;
+4. paired Brier/log-loss do not improve for market+SENEX over market-only;
 5. apparent improvement is concentrated in repeated observations of a few markets;
 6. prospective replication removes the advantage.
 
