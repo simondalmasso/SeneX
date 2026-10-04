@@ -431,3 +431,55 @@ def test_direct_http_client_encodes_cursor_and_fails_closed_on_bad_health():
 
     client.get_prediction_batch(cursor="c x", limit=2)
     assert seen[-1] == "https://mcp.example/v1/predictions/next?cursor=c+x&limit=2"
+
+
+def test_shadow_only_evaluates_without_submit():
+    mcp = FakeMCP()
+    adapter = StaticAdapter(_abstain_output())
+    client = ExternalDecisionClient(mcp=mcp, adapter=adapter, batch_limit=2)
+
+    result = client.run_once(run_id="shadow-1", shadow_only=True)
+
+    assert result["gate"] == "READY"
+    assert result["shadow_only"] is True
+    assert result["submitted"] is False
+    assert result["applied"] == 0
+    assert result["cursor"] == "c0"
+    assert result["decisions"][0]["action"] == "ABSTAIN"
+    assert result["decisions"][1]["action"] == "ABSTAIN"
+    assert adapter.calls == 1
+    assert mcp.batch_calls == 1
+    assert mcp.submit_calls == 0
+
+
+def test_main_shadow_only_forwards_no_submit_mode(monkeypatch, capsys):
+    main = getattr(external_client_module, "main", None)
+    assert callable(main)
+
+    seen = {}
+
+    class OneShot:
+        def run_once(self, *, run_id, shadow_only=False):
+            seen["run_id"] = run_id
+            seen["shadow_only"] = shadow_only
+            return {
+                "gate": "READY",
+                "submitted": False,
+                "applied": 0,
+                "shadow_only": shadow_only,
+                "decisions": [],
+            }
+
+    monkeypatch.setattr(
+        external_client_module,
+        "create_external_client_from_env",
+        lambda: OneShot(),
+    )
+    code = main(["--run-id", "r-shadow", "--shadow-only"])
+    captured = capsys.readouterr()
+
+    assert code == 0
+    assert seen == {"run_id": "r-shadow", "shadow_only": True}
+    rendered = json.loads(captured.out)
+    assert rendered["shadow_only"] is True
+    assert rendered["submitted"] is False
