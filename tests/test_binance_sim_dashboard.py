@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN_REAL = ROOT / "senecio_polymarket" / "backend" / "main_real.py"
 APP_JS = ROOT / "senecio_polymarket" / "frontend" / "app.js"
 INDEX_HTML = ROOT / "senecio_polymarket" / "frontend" / "index.html"
+ORACLE_RUNNER = ROOT / "senecio_polymarket" / "backend" / "oracle_runner.py"
 
 
 def test_binance_sim_public_surface_is_get_only():
@@ -59,3 +60,10 @@ def test_dashboard_javascript_parses_when_node_is_available():
     except FileNotFoundError:
         return
     assert result.returncode == 0, result.stderr
+
+
+def test_binance_sim_uses_canonical_persistent_results_resolver():
+    text = ORACLE_RUNNER.read_text(encoding="utf-8")
+    assert "from .portfolio.persistence_paths import resolve_path" in text
+    assert '"binance_sim_lane.json"' in text
+    assert 'env_key="SENEX_BINANCE_SIM_STATE_PATH"' in text
