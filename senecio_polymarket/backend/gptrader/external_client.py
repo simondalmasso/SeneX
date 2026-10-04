@@ -465,7 +465,12 @@ class ExternalDecisionClient:
         if not 1 <= self.batch_limit <= 16:
             raise ValueError("batch_limit must be between 1 and 16")
 
-    def run_once(self, *, run_id: str) -> dict[str, Any]:
+    def run_once(
+        self,
+        *,
+        run_id: str,
+        shadow_only: bool = False,
+    ) -> dict[str, Any]:
         run_id = str(run_id or "").strip()
         if not run_id or len(run_id) > 160:
             raise ValueError("bounded run_id is required")
@@ -523,6 +528,15 @@ class ExternalDecisionClient:
 
         raw_decisions = self.adapter.decide(packets, run_id=run_id)
         decisions = normalize_decisions(raw_decisions, packets)
+        if shadow_only:
+            return {
+                "gate": TaskGate.READY.value,
+                "submitted": False,
+                "applied": 0,
+                "shadow_only": True,
+                "cursor": cursor_in,
+                "decisions": decisions,
+            }
         result = self.mcp.submit_paper_decisions(
             run_id,
             cursor_in,
@@ -595,12 +609,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Run one fail-closed GPTrader PAPER decision batch."
     )
     parser.add_argument("--run-id", default=None)
+    parser.add_argument(
+        "--shadow-only",
+        action="store_true",
+        help="Evaluate one sealed packet batch without submitting decisions.",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
     run_id = str(args.run_id or "").strip() or _generated_run_id()
 
     try:
         client = create_external_client_from_env()
-        result = client.run_once(run_id=run_id)
+        result = client.run_once(
+            run_id=run_id,
+            shadow_only=bool(args.shadow_only),
+        )
     except Exception as exc:
         print(_canonical({"error": type(exc).__name__, "status": "ERROR"}))
         return 70
