@@ -619,10 +619,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         client = create_external_client_from_env()
-        result = client.run_once(
-            run_id=run_id,
-            shadow_only=bool(args.shadow_only),
-        )
+        if args.shadow_only:
+            result = client.run_once(
+                run_id=run_id,
+                shadow_only=True,
+            )
+        else:
+            result = client.run_once(run_id=run_id)
     except Exception as exc:
         print(_canonical({"error": type(exc).__name__, "status": "ERROR"}))
         return 70
