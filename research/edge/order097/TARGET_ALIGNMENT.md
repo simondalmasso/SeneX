@@ -82,6 +82,8 @@ A resolution record must contain:
 
 Requirements:
 
+- `start_ts` and `end_ts` are exact integral epoch seconds; fractional timestamps are invalid
+- `start_ts % 300 == 0`
 - `end_ts - start_ts = 300`
 - slug epoch equals `start_ts`
 - exact slug+condition identity
