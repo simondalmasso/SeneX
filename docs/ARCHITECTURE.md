@@ -94,7 +94,7 @@ The treatment lane remains separate from the native SENEX PAPER control. Current
 
 `backend/research/` contains reusable research utilities including calibration, purged CV, statistical validation, stress testing, Monte Carlo, drift detection and walk-forward analysis.
 
-ORDER097 is deliberately outside the production predictor path. Its purpose is narrower: compare equivalently train-fitted market-only versus market+SENEX models on the exact same BTC Up/Down 5m target and causal holdout rows.
+ORDER097/098/099 are deliberately outside the production predictor path and are now merged research tooling. ORDER098 exports/verifies frozen decision-time T0 evidence and exact public Polymarket 5m resolutions; ORDER097 compares equivalently train-fitted market-only versus market+SENEX models on the exact same BTC Up/Down 5m target and causal holdout rows; ORDER099 adds preregistered tabular falsification, one-market-one-row weighting, multiple-testing controls and unique-market cluster-bootstrap uncertainty. None of these modules is imported by H011 runtime execution.
 
 ## 7. CI/release boundary
 
