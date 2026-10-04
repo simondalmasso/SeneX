@@ -1,10 +1,12 @@
 # SENEX — Current Status
 
-**Evidence snapshot:** 2026-10-04 around 04:15 UTC
+**Evidence snapshot:** 2026-10-04 around 04:15 UTC; deployment addendum verified around 22:45 UTC
 **Mode:** PAPER-only
 **Scientific state:** EDGE=UNPROVEN
 
 This file is a dated presentation snapshot. Fresh GitHub and H011 evidence supersedes it.
+
+> **POST-DEPLOY ADDENDUM — 2026-10-04 ~22:45 UTC:** H011 was deliberately deployed to canonical `main` at `96c41f123175f597788911ab7f52a18ed77c7cdb`. Fresh readback reports exact provenance, READY, PAPER, orders disabled, live capital locked, hard PAPER lock engaged, 17 GET-only public operations, and the isolated BINANCE_SIM lane initialized at `18.63631644 USDT`. No real Binance balance or live-order capability is present.
 
 ## Authority
 
@@ -12,10 +14,10 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | --- | --- |
 | GitHub repository | `simondalmasso/SeneX` |
 | Default branch | `main` |
-| Main state | ORDER097, ORDER098 and ORDER099 merged as research-only tooling |
+| Main state | ORDER097/098/099/100 plus isolated BINANCE_SIM PAPER lane canonical |
 | Historical research verdict | EVALUATED: INCREMENTAL_EDGE_NOT_DEMONSTRATED |
 | Active follow-up | ORDER100 = COLLECTING_PROSPECTIVE_DATA |
-| H011 source commit | `5e074b230450dd288de01f5e5ad0b2f25efd8e7b` |
+| H011 source commit | `96c41f123175f597788911ab7f52a18ed77c7cdb` |
 | H011 provenance | exact=true; build digest matches runtime files |
 | Public runtime | H011, GET-only API |
 | ORDER097 | merged; target-aligned nested market-only vs market+SENEX harness |
@@ -25,7 +27,7 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | ORDER098 corpus | 3,568/3,568 exact markets accepted; 0 rejected |
 | ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
-The main/runtime SHA difference is known and is not, by itself, a deployment defect. The deployed runtime predates #100 plus the documentation/archive and ORDER097/098/099 research-only merges. None of those merges imply a H011 deployment.
+H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may advance with later documentation/governance-only commits; that SHA drift is not a runtime defect and does not authorize LIVE, real orders, capital, or an automatic redeploy.
 
 ## H011 safety
 
@@ -41,7 +43,30 @@ provenance_exact=true
 readiness=READY
 ```
 
-The public API currently exposes 15 GET operations and no POST/PUT/PATCH/DELETE operations.
+The public API currently exposes 17 GET operations and no POST/PUT/PATCH/DELETE operations.
+
+## BINANCE_SIM isolated PAPER lane
+
+Fresh H011 readback after deployment:
+
+```text
+lane_id=BINANCE_SIM_18_63631644
+venue=BINANCE_SIMULATED
+account_label=SIMULATED / PAPER — NOT BINANCE BALANCE
+starting_bankroll_usdt=18.63631644
+cash_usdt=18.63631644
+equity_usdt=18.63631644
+simulation_only=true
+live_orders_possible=false
+hard_paper_lock=true
+open_position=null
+closed_trade_count=0
+total_simulated_orders=0
+EDGE=UNPROVEN
+research_verdict=INCREMENTAL_EDGE_NOT_DEMONSTRATED
+```
+
+The lane has its own isolated ledger and follows SENEX BTC signals only after deployment. A null open position and zero trades are valid until a later directional SENEX signal occurs. PAPER PnL from this lane is operational simulation evidence only; it is not scientific proof of edge.
 
 ## BTC scientific authority
 
@@ -103,7 +128,7 @@ edge=UNPROVEN
 3. Production code, dormant/legacy code and testnet capability were not clearly separated in the root documentation.
 4. Journal history and current execution-engine epoch are easy to conflate.
 5. `LiveGate` thresholds are useful diagnostics, but passing them would not establish economic EDGE or authorize live capital.
-6. H011 has not deployed #100; this is known drift and does not authorize an automatic deploy.
+6. H011 was deployed from canonical `main` at `96c41f...`; later docs/governance commits may advance `main` without requiring a runtime redeploy. Any future runtime deploy still requires an explicit operational gate and post-deploy acceptance.
 
 ## Immediate gates
 
