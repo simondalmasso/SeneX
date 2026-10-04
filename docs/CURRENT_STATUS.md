@@ -27,7 +27,7 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | ORDER098 corpus | 3,568/3,568 exact markets accepted; 0 rejected |
 | ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
-GitHub `main` and H011 are currently aligned at the exact deployed commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. That alignment was a deliberate PAPER-only deployment and does not authorize LIVE, real orders, or capital.
+H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may advance with later documentation/governance-only commits; that SHA drift is not a runtime defect and does not authorize LIVE, real orders, capital, or an automatic redeploy.
 
 ## H011 safety
 
