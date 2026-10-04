@@ -23,6 +23,7 @@ Use --live flag to optionally verify real connectivity.
 
 import time
 import os
+import math
 import logging
 from typing import Optional, Dict, List, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -432,6 +433,9 @@ class ExchangeConnector:
                 # handles V2/V3 fapi endpoints automatically.
                 if name == "binance_testnet":
                     instance.set_sandbox_mode(True)
+                    # SENEX-owned marker: do not rely on undocumented ccxt
+                    # attributes when authorizing a testnet order.
+                    instance._senex_testnet_sandbox_enabled = True
                     # Verify URLs point to testnet (defense-in-depth)
                     fapi_urls = [
                         instance.urls.get('api', {}).get('fapiPublic', ''),
@@ -1051,27 +1055,48 @@ class ExchangeConnector:
 
         ex = self.exchanges[exchange_name]
 
-        # SAFETY: Verify we are NOT on mainnet (multi-layer defense)
-        is_testnet = (
-            exchange_name == "binance_testnet"
-            or getattr(ex, 'isSandboxModeEnabled', False)
-            or getattr(ex, 'sandbox', False)
-        )
-        # Defense-in-depth: also verify the actual fapi URLs point to testnet
+        # SAFETY: all three conditions are mandatory.  A friendly exchange
+        # name alone is never sufficient evidence of sandbox routing.
         fapi_private = ex.urls.get("api", {}).get("fapiPrivate", "")
-        if not is_testnet and "testnet" not in fapi_private:
+        sandbox_marker = bool(
+            getattr(ex, "_senex_testnet_sandbox_enabled", False)
+        )
+        url_is_testnet = (
+            isinstance(fapi_private, str)
+            and "testnet" in fapi_private.lower()
+        )
+        if (
+            exchange_name != "binance_testnet"
+            or not sandbox_marker
+            or not url_is_testnet
+        ):
             raise RuntimeError(
-                f"SAFETY ABORT: place_market_order called on NON-TESTNET exchange "
-                f"'{exchange_name}'. This would place REAL orders with REAL money. "
-                f"Use --mode testnet with --exchange binance_testnet only."
+                "SAFETY ABORT: TESTNET order guard failed. "
+                "Required: exchange_name=binance_testnet, SENEX sandbox marker, "
+                "and a testnet Binance Futures private URL."
             )
+
+        normalized_side = str(side or "").strip().lower()
+        if normalized_side not in {"buy", "sell"}:
+            raise ValueError("side must be exactly 'buy' or 'sell'")
+
+        if isinstance(amount, bool):
+            raise ValueError("amount must be a finite positive number")
+        try:
+            normalized_amount = float(amount)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "amount must be a finite positive number"
+            ) from exc
+        if not math.isfinite(normalized_amount) or normalized_amount <= 0.0:
+            raise ValueError("amount must be a finite positive number")
 
         # Get expected price from ticker before order
         ticker = ex.fetch_ticker(symbol)
         expected_price = float(ticker.get("last") or ticker.get("close") or 0)
 
         # Place market order
-        order = ex.create_market_order(symbol, side, amount, params=params or {})
+        order = ex.create_market_order(\n            symbol, normalized_side, normalized_amount, params=params or {}\n        )
 
         # Binance testnet often returns None for average/price/cost in the initial
         # create_order response. Fetch the order again to get real fill data.
@@ -1098,7 +1123,7 @@ class ExchangeConnector:
 
         fill_price = float(raw_avg if raw_avg is not None else
                            (raw_price if raw_price is not None else expected_price))
-        fill_amount = float(raw_filled if raw_filled is not None else amount)
+        fill_amount = float(\n            raw_filled if raw_filled is not None else normalized_amount\n        )
         fill_cost = float(raw_cost if raw_cost is not None else fill_price * fill_amount)
         order_id = str(order.get("id") or "UNKNOWN")
         fees = order.get("fees") or []
@@ -1107,12 +1132,12 @@ class ExchangeConnector:
         slippage_bps = 0.0
         if expected_price > 0:
             slippage_bps = (fill_price - expected_price) / expected_price * 10000
-            if side == "sell":
+            if normalized_side == "sell":
                 slippage_bps = -slippage_bps  # Negative slippage = worse for seller
 
         result = {
             "order_id": order_id,
-            "side": side,
+            "side": normalized_side,
             "symbol": symbol,
             "expected_price": round(expected_price, 2),
             "fill_price": round(fill_price, 2),
@@ -1124,7 +1149,7 @@ class ExchangeConnector:
             "exchange": exchange_name,
             "is_testnet": True,
         }
-        logger.info(f"TESTNET ORDER: {side} {fill_amount} {symbol} @ {fill_price} "
+        logger.info(f"TESTNET ORDER: {normalized_side} {fill_amount} {symbol} @ {fill_price} "
                     f"(expected {expected_price}, slippage={slippage_bps:.2f}bps) id={order_id}")
         return result
 
