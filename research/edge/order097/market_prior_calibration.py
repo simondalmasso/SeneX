@@ -443,14 +443,32 @@ def fit_incremental_models(
         (_logit(_probability(item.pair.p_market, "p_market")),)
         for item in rows
     ]
-    augmented_features = [
-        (
-            _logit(_probability(item.pair.p_market, "p_market")),
-            _logit(_probability(item.pair.senex_raw_up, "senex_raw_up")),
-        )
+    senex_features = [
+        _logit(_probability(item.pair.senex_raw_up, "senex_raw_up"))
         for item in rows
     ]
+    augmented_features = [
+        (market_feature[0], senex_feature)
+        for market_feature, senex_feature in zip(
+            market_features,
+            senex_features,
+        )
+    ]
     market_only = _fit_logistic_features(rows, market_features)
+
+    # A zero-variance SENEX feature contains no incremental information and is
+    # collinear with the intercept. Force the nested model to be exactly the
+    # market-only fit rather than letting finite optimizer steps assign a
+    # spurious coefficient to a constant score.
+    if senex_features and max(senex_features) == min(senex_features):
+        return (
+            market_only,
+            LogisticModel(
+                intercept=market_only.intercept,
+                coefficients=(market_only.coefficients[0], 0.0),
+            ),
+        )
+
     market_plus_senex = _fit_logistic_features(rows, augmented_features)
     return market_only, market_plus_senex
 
