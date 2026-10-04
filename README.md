@@ -8,7 +8,7 @@ SENEX is not a live trading product. The current production runtime is intention
 
 | Surface | Verified state |
 | --- | --- |
-| GitHub authority | `main`; ORDER097/098/099/100 and the isolated BINANCE_SIM PAPER lane are canonical |
+| GitHub authority | `main`; ORDER097/098/099/100, BINANCE_SIM PAPER, and ORDER126 offline-only provider prep are canonical |
 | H011 deployed runtime | `96c41f123175f597788911ab7f52a18ed77c7cdb` |
 | Runtime provenance | exact internal artifact identity |
 | Public API | 17 GET endpoints, no POST/PUT/PATCH/DELETE |
@@ -20,7 +20,7 @@ SENEX is not a live trading product. The current production runtime is intention
 | BTC independent 1h authority | 688 observations, 50.29% global win rate |
 | GPTrader treatment | PAPER/HYPOTHETICAL, 0 TAKE decisions, INSUFFICIENT_DATA |
 
-H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may contain later documentation/governance-only commits; such repository drift does **not** imply a runtime change or authorize LIVE, real orders, capital, or an automatic redeploy.
+H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may contain later documentation/governance changes and dormant research-only code that is not deployed to H011 (for example ORDER126 offline provider preparation). Such repository drift does **not** imply a runtime change or authorize LIVE, real orders, capital, paid provider calls, or an automatic redeploy.
 
 See [Current Status](docs/CURRENT_STATUS.md) for the dated evidence snapshot.
 
@@ -163,6 +163,7 @@ Until explicitly superseded:
 
 - no merge solely to reduce SHA drift;
 - no H011/Northflank deploy or restart without an owner gate;
+- no paid/cost-incurring external-provider network calls without explicit owner authorization; ORDER126's NVIDIA profile is offline-only by code;
 - no LIVE enablement;
 - no real orders or capital;
 - no treating raw `up_prob` as a calibrated probability;

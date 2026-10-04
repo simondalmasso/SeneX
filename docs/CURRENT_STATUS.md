@@ -14,7 +14,7 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | --- | --- |
 | GitHub repository | `simondalmasso/SeneX` |
 | Default branch | `main` |
-| Main state | ORDER097/098/099/100 plus isolated BINANCE_SIM PAPER lane canonical |
+| Main state | ORDER097/098/099/100, isolated BINANCE_SIM PAPER lane, and ORDER126 offline-only provider prep canonical |
 | Historical research verdict | EVALUATED: INCREMENTAL_EDGE_NOT_DEMONSTRATED |
 | Active follow-up | ORDER100 = COLLECTING_PROSPECTIVE_DATA |
 | H011 source commit | `96c41f123175f597788911ab7f52a18ed77c7cdb` |
@@ -24,10 +24,11 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | ORDER098 | merged; GET-only T0 export + fail-closed Polymarket 5m resolution corpus |
 | ORDER099 | merged and evaluated; historical null verdict |
 | ORDER100 | merged; frozen prospective low-disagreement confirmation |
+| ORDER126 | merged; NVIDIA DeepSeek V4.1 Flash profile PREPARED/OFFLINE-ONLY under zero-cost owner lock; no provider network enabled |
 | ORDER098 corpus | 3,568/3,568 exact markets accepted; 0 rejected |
 | ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
-H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may advance with later documentation/governance-only commits; that SHA drift is not a runtime defect and does not authorize LIVE, real orders, capital, or an automatic redeploy.
+H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may advance with later documentation/governance changes and dormant research-only code that is not deployed to H011. That SHA drift is not a runtime defect and does not authorize LIVE, real orders, capital, paid provider calls, or an automatic redeploy.
 
 ## H011 safety
 
@@ -67,6 +68,24 @@ research_verdict=INCREMENTAL_EDGE_NOT_DEMONSTRATED
 ```
 
 The lane has its own isolated ledger and follows SENEX BTC signals only after deployment. A null open position and zero trades are valid until a later directional SENEX signal occurs. PAPER PnL from this lane is operational simulation evidence only; it is not scientific proof of edge.
+
+## ORDER126 zero-cost provider research
+
+Canonical `main` contains the converged ORDER126 provider preparation from PR #133. It is intentionally **not deployed to H011** and does not require a H011 redeploy.
+
+```text
+provider=NVIDIA_NIM / deepseek-ai/deepseek-v4.1-flash
+status=PREPARED / OFFLINE-ONLY
+zero_cost_owner_lock=true
+real_provider_network=DISABLED_BY_CODE
+NVIDIA_API_KEY alone cannot enable network
+MCP submit during provider-specific probe=false
+LIVE=false
+capital=0
+EDGE=UNPROVEN
+```
+
+The generic GPTrader client also has bounded `SENEX_DECISION_PROVIDER_MAX_TOKENS` and `--shadow-only` support. Those capabilities are dormant unless separately configured and do not authorize any paid provider call. Any future real external-provider request requires a new explicit owner decision and reviewed code change.
 
 ## BTC scientific authority
 
@@ -128,7 +147,7 @@ edge=UNPROVEN
 3. Production code, dormant/legacy code and testnet capability were not clearly separated in the root documentation.
 4. Journal history and current execution-engine epoch are easy to conflate.
 5. `LiveGate` thresholds are useful diagnostics, but passing them would not establish economic EDGE or authorize live capital.
-6. H011 was deployed from canonical `main` at `96c41f...`; later docs/governance commits may advance `main` without requiring a runtime redeploy. Any future runtime deploy still requires an explicit operational gate and post-deploy acceptance.
+6. H011 was deployed from canonical `main` at `96c41f...`; later docs/governance and dormant research-only commits may advance `main` without requiring a runtime redeploy. Any future runtime deploy still requires an explicit operational gate and post-deploy acceptance.
 
 ## Immediate gates
 
