@@ -183,12 +183,13 @@ def test_resolution_must_match_slug_condition_and_grid():
         )
 
 
-def test_resolution_requires_explicit_provenance_source():
+@pytest.mark.parametrize("source", [None, "", "   ", 123])
+def test_resolution_requires_explicit_string_provenance_source(source):
     m = _load()
     pair = m.extract_t0_pair(_row())
     assert pair is not None
     resolution = _resolution()
-    resolution["source"] = ""
+    resolution["source"] = source
     with pytest.raises(m.ResolutionContractError, match="source"):
         m.join_resolutions([pair], [resolution])
 
