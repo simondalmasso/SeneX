@@ -86,9 +86,14 @@ Requirements:
 - slug epoch equals `start_ts`
 - exact slug+condition identity
 - `resolved_at >= end_ts`
+- `source` is a non-empty string identifying the resolution evidence
 - outcome is binary UP/DOWN
 
 Conflicting evidence for the same identity raises an error. Missing labels produce a blocker, not a synthetic label.
+
+For chronological calibration, target alignment also includes information availability: every label used in TRAIN must satisfy `resolved_at < earliest HOLDOUT decision_ts`. Earlier market end time alone is not sufficient.
+
+Incremental attribution uses equivalently fitted nested models on the same TRAIN/HOLDOUT rows: a market-only model versus a market+SENEX model. A SENEX-only calibrated model may be retained as a diagnostic, but it cannot establish incremental information over the market prior.
 
 ## Current repository finding
 
