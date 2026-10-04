@@ -443,6 +443,18 @@ async def public_paper_trades(limit: int = Query(default=20, ge=1, le=50)):
     }
 
 
+@app.get("/api/paper/binance-sim/state")
+async def public_binance_sim_state():
+    """Isolated 18.63631644 USDT simulated wallet. GET-only, never live."""
+    return oracle_runner.get_binance_sim_state()
+
+
+@app.get("/api/paper/binance-sim/trades")
+async def public_binance_sim_trades(limit: int = Query(default=20, ge=1, le=50)):
+    """Bounded closed-trade tape for the isolated simulated wallet."""
+    return oracle_runner.get_binance_sim_trades(limit=int(limit))
+
+
 # ---------- ORDER086 GPTrader PAPER observability (GET-only) ----------
 
 
