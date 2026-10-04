@@ -22,6 +22,7 @@ MCP_TOKEN_ENV = "SENEX_GPTRADER_MCP_TOKEN"
 PROVIDER_BASE_URL_ENV = "SENEX_DECISION_PROVIDER_BASE_URL"
 PROVIDER_MODEL_ENV = "SENEX_DECISION_PROVIDER_MODEL"
 PROVIDER_API_KEY_ENV = "SENEX_DECISION_PROVIDER_API_KEY"
+PROVIDER_MAX_TOKENS_ENV = "SENEX_DECISION_PROVIDER_MAX_TOKENS"
 BATCH_LIMIT_ENV = "SENEX_GPTRADER_BATCH_LIMIT"
 
 
@@ -369,6 +370,7 @@ class OpenAICompatibleDecisionAdapter:
     model: str
     api_key: str = field(repr=False)
     timeout: float = 30.0
+    max_tokens: int | None = None
     http_post: HttpPost = field(default=_default_http_post, repr=False)
 
     def __post_init__(self) -> None:
@@ -381,6 +383,11 @@ class OpenAICompatibleDecisionAdapter:
             raise ValueError("LLM model is required")
         if not self.api_key:
             raise ValueError("LLM API key is required")
+        if self.max_tokens is not None:
+            if isinstance(self.max_tokens, bool) or not isinstance(self.max_tokens, int):
+                raise ValueError("LLM max_tokens must be an integer")
+            if not 1 <= self.max_tokens <= 1_048_576:
+                raise ValueError("LLM max_tokens must be between 1 and 1048576")
 
     def __repr__(self) -> str:
         return (
@@ -419,6 +426,8 @@ class OpenAICompatibleDecisionAdapter:
                 },
             ],
         }
+        if self.max_tokens is not None:
+            payload["max_tokens"] = int(self.max_tokens)
         try:
             response = self.http_post(
                 self.base_url + "/chat/completions",
@@ -552,10 +561,22 @@ def create_external_client_from_env(
         _required_env(env, MCP_URL_ENV),
         token=_required_env(env, MCP_TOKEN_ENV),
     )
+    max_tokens_raw = str(env.get(PROVIDER_MAX_TOKENS_ENV) or "").strip()
+    if max_tokens_raw:
+        try:
+            provider_max_tokens = int(max_tokens_raw)
+        except ValueError:
+            raise ValueError(
+                f"{PROVIDER_MAX_TOKENS_ENV} must be an integer"
+            ) from None
+    else:
+        provider_max_tokens = None
+
     adapter = OpenAICompatibleDecisionAdapter(
         base_url=_required_env(env, PROVIDER_BASE_URL_ENV),
         model=_required_env(env, PROVIDER_MODEL_ENV),
         api_key=_required_env(env, PROVIDER_API_KEY_ENV),
+        max_tokens=provider_max_tokens,
     )
     return ExternalDecisionClient(
         mcp=mcp,
