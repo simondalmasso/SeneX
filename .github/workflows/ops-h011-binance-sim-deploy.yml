@@ -6,6 +6,12 @@ on:
       - ops/h011-binance-sim-deploy-20261004
     paths:
       - .github/workflows/ops-h011-binance-sim-deploy.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ops-h011-binance-sim-deploy.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
