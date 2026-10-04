@@ -1,7 +1,7 @@
 # SENEX — Current Status
 
-**Evidence snapshot:** 2026-10-04 around 01:15 UTC  
-**Mode:** PAPER-only  
+**Evidence snapshot:** 2026-10-04 around 01:15 UTC
+**Mode:** PAPER-only
 **Scientific state:** EDGE=UNPROVEN
 
 This file is a dated presentation snapshot. Fresh GitHub and H011 evidence supersedes it.
@@ -111,4 +111,3 @@ No current evidence authorizes:
 - deployment solely to reconcile SHAs;
 - treating raw `up_prob` as a calibrated probability;
 - claiming incremental Polymarket edge before ORDER097 obtains target-aligned 5m labels.
-
