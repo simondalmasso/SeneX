@@ -307,6 +307,84 @@ def test_platt_calibration_is_fit_on_train_and_paired_metrics_use_same_rows():
     assert metrics["senex_brier"] < metrics["market_brier"]
 
 
+def _resolved_market_case(
+    m,
+    market_i,
+    *,
+    outcome="UP",
+    obs_count=1,
+    resolved_delay=60,
+    p_market=0.55,
+    p_senex=0.55,
+):
+    from datetime import datetime, timezone
+
+    base = 1791069900
+    start = base + market_i * 300
+    end = start + 300
+    slug = f"btc-updown-5m-{start}"
+    condition_id = f"cond-{market_i}"
+    pairs = []
+    for obs_i in range(obs_count):
+        ts_epoch = start + 30 + obs_i * 30
+        ts = datetime.fromtimestamp(
+            ts_epoch, timezone.utc
+        ).isoformat().replace("+00:00", "Z")
+        pair = m.extract_t0_pair(
+            _row(
+                prediction_id=market_i * 100 + obs_i,
+                ts=ts,
+                slug=slug,
+                condition_id=condition_id,
+                start_ts=start,
+                end_ts=end,
+                p_market=p_market,
+                p_senex=p_senex,
+            )
+        )
+        assert pair is not None
+        pairs.append(pair)
+    resolved_at = datetime.fromtimestamp(
+        end + resolved_delay, timezone.utc
+    ).isoformat().replace("+00:00", "Z")
+    resolution = _resolution(
+        slug=slug,
+        condition_id=condition_id,
+        start_ts=start,
+        end_ts=end,
+        outcome=outcome,
+        resolved_at=resolved_at,
+    )
+    return pairs, resolution
+
+
+@pytest.mark.parametrize(
+    "market_count,outcomes",
+    [
+        (1, ["UP"]),
+        (10, ["UP", "DOWN"] * 5),
+        (12, ["UP"] * 12),
+    ],
+)
+def test_status_keeps_insufficient_resolution_sets_blocked(market_count, outcomes):
+    m = _load()
+    pairs = []
+    resolutions = []
+    for market_i in range(market_count):
+        market_pairs, resolution = _resolved_market_case(
+            m,
+            market_i,
+            outcome=outcomes[market_i],
+        )
+        pairs.extend(market_pairs)
+        resolutions.append(resolution)
+
+    status = m.experiment_status(pairs, resolutions)
+
+    assert status["status"] == "BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA"
+    assert status["edge"] == "UNPROVEN"
+
+
 def test_status_reports_missing_5m_labels_instead_of_edge():
     m = _load()
     pairs = [m.extract_t0_pair(_row())]
