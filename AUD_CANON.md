@@ -1,5 +1,8 @@
 # AUD_CANON.md
 
+> **HISTORICAL / NOT CURRENT AUTHORITY** — This document preserves earlier SENEX operating context. It does not describe the current repository/runtime state. Start with [README.md](README.md) and [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); fresh GitHub/H011 evidence supersedes this file.
+
+
 PROJECT=SENEX  
 PURPOSE=Sistema de investigación/observabilidad de mercado y ejecución PAPER-only; EDGE sigue no probado.  
 REPO=https://github.com/simondalmasso/SeneX  
