@@ -1,0 +1,373 @@
+name: H011 BINANCE_SIM PAPER Deploy
+
+on:
+  push:
+    branches:
+      - ops/h011-binance-sim-deploy-20261004
+    paths:
+      - .github/workflows/ops-h011-binance-sim-deploy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    environment: northflank-readonly-audit
+    env:
+      TARGET_SHA: 96c41f123175f597788911ab7f52a18ed77c7cdb
+      PROJECT_ID: seneciobot
+      SERVICE_ID: senecio-h011
+      PROD_URL: https://h011-web--senecio-h011--wbjggn89fnf8.code.run
+      NF_TOKEN: ${{ secrets.NORTHFLANK_SENEX_MAINTENANCE_TOKEN }}
+    steps:
+      - name: Checkout exact canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact target and install
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$TARGET_SHA"
+          python -m pip install --require-hashes -r senecio_polymarket/requirements.lock
+          python -m pip install "pytest==8.3.5"
+
+      - name: Exact-main regression and safety preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pytest -q tests
+          python -m compileall -q senecio_polymarket tests
+          git diff --check HEAD^ HEAD || true
+          python - <<'PY'
+          from pathlib import Path
+          from senecio_polymarket.backend.main_real import app, SAFE_PUBLIC_METHODS
+          from senecio_polymarket.backend.paper_lock import safety_projection
+
+          safety = safety_projection()
+          assert safety["trade_mode"] == "PAPER"
+          assert safety["orders_enabled"] is False
+          assert safety["live_capital_locked"] is True
+          assert safety["hard_paper_lock"] is True
+
+          lane = Path("senecio_polymarket/backend/binance_sim_lane.py").read_text(encoding="utf-8").lower()
+          for forbidden in (
+              "import ccxt", "from ccxt", "requests.", "httpx.",
+              "create_order", "create_market_order", "place_market_order",
+              "fetch_balance", "withdraw", "api_key", "secret_key", "private_key",
+          ):
+              assert forbidden not in lane, forbidden
+
+          schema = app.openapi()
+          unsafe = []
+          for route, methods in schema.get("paths", {}).items():
+              for method in methods:
+                  if method.upper() not in SAFE_PUBLIC_METHODS:
+                      unsafe.append(f"{method.upper()} {route}")
+          assert not unsafe, unsafe
+          assert "/api/paper/binance-sim/state" in schema["paths"]
+          assert "/api/paper/binance-sim/trades" in schema["paths"]
+          print("EXACT_MAIN_PREFLIGHT=PASS")
+          PY
+
+      - name: Build exact image locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --build-arg "NF_GIT_SHA=$TARGET_SHA" --tag "senex-deploy:$TARGET_SHA" .
+          test "$(docker image inspect --format '{{.Config.User}}' "senex-deploy:$TARGET_SHA")" = "senex:senex"
+          echo "LOCAL_DOCKER_EXACT_BUILD=PASS"
+
+      - name: Build and deploy exact main to Northflank with rollback
+        shell: bash
+        run: |
+          set +x
+          set -euo pipefail
+          test -n "${NF_TOKEN:-}"
+          echo "::add-mask::$NF_TOKEN"
+          mkdir -p deploy-evidence
+          python - <<'PY'
+          import datetime, hashlib, json, os, time, urllib.error, urllib.request
+          from pathlib import Path
+
+          token = os.environ["NF_TOKEN"].strip()
+          if token.lower().startswith("bearer "):
+              token = token[7:].strip()
+          target = os.environ["TARGET_SHA"]
+          project = os.environ["PROJECT_ID"]
+          service = os.environ["SERVICE_ID"]
+          prod = os.environ["PROD_URL"].rstrip("/")
+          api = "https://api.northflank.com/v1"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+              "User-Agent": "senex-binance-sim-deploy/1",
+          }
+          evidence = {
+              "target_sha": target,
+              "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "requests": [],
+              "secret_values_exported": False,
+              "owner_requested_purpose": "isolated BINANCE_SIM PAPER dashboard lane",
+          }
+
+          def call(method, path, payload=None, timeout=60):
+              body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
+              req = urllib.request.Request(api + path, headers=headers, data=body, method=method)
+              raw = b""
+              status = 0
+              try:
+                  with urllib.request.urlopen(req, timeout=timeout) as r:
+                      status = r.status
+                      raw = r.read()
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  raw = exc.read()
+              digest = hashlib.sha256(raw).hexdigest()
+              evidence["requests"].append({
+                  "method": method, "path": path, "status": status,
+                  "bytes": len(raw), "body_sha256": digest,
+              })
+              try:
+                  obj = json.loads(raw.decode() or "{}")
+              except Exception:
+                  obj = {}
+              if not 200 <= status < 300:
+                  raise RuntimeError(f"{method} {path} status={status} body_sha256={digest}")
+              return obj.get("data", obj) if isinstance(obj, dict) else obj
+
+          def public_json(path, timeout=30):
+              req = urllib.request.Request(prod + path, headers={"User-Agent": "senex-binance-sim-accept/1"})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return r.status, json.loads(r.read().decode())
+
+          def public_text(path, timeout=30):
+              req = urllib.request.Request(prod + path, headers={"User-Agent": "senex-binance-sim-accept/1"})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return r.status, r.read().decode("utf-8", errors="replace")
+
+          # Pre-deploy safety + immutable rollback identity.
+          old_health_status, old_health = public_json("/healthz")
+          old_safety = old_health.get("safety") or {}
+          assert old_health_status == 200
+          assert old_safety.get("trade_mode") == "PAPER"
+          assert old_safety.get("orders_enabled") is False
+          assert old_safety.get("live_capital_locked") is True
+          assert old_safety.get("hard_paper_lock") is True
+
+          dep_path = f"/projects/{project}/services/{service}/deployment"
+          svc_path = f"/projects/{project}/services/{service}"
+          old_dep = call("GET", dep_path)
+          old_svc = call("GET", svc_path)
+          old_internal = old_dep.get("internal") or {}
+          build_service = old_internal.get("id")
+          old_build_id = old_internal.get("buildId")
+          old_deployed_sha = old_internal.get("deployedSHA")
+          old_branch = old_internal.get("branch") or "main"
+          if not build_service or not old_build_id or not old_deployed_sha:
+              raise RuntimeError("missing rollback deployment identity")
+          assert old_svc.get("disabledCI") is True
+          assert old_svc.get("disabledCD") in (True, None)
+
+          evidence["before"] = {
+              "source_commit": (old_health.get("provenance") or {}).get("source_commit"),
+              "build_service_id": build_service,
+              "build_id": old_build_id,
+              "deployed_sha": old_deployed_sha,
+              "branch": old_branch,
+              "disabled_ci": old_svc.get("disabledCI"),
+              "disabled_cd": old_svc.get("disabledCD"),
+          }
+
+          # Exact target build.
+          build_path = f"/projects/{project}/services/{build_service}/build"
+          build = call("POST", build_path, {"branch": "main", "sha": target})
+          new_build_id = build.get("id")
+          if not new_build_id or build.get("sha") != target:
+              raise RuntimeError(f"unexpected build response: id={new_build_id} sha={build.get('sha')}")
+          evidence["new_build_id"] = new_build_id
+
+          build_detail_path = f"/projects/{project}/services/{build_service}/build/{new_build_id}"
+          deadline = time.time() + 2400
+          while time.time() < deadline:
+              b = call("GET", build_detail_path)
+              status = str(b.get("status") or "").upper()
+              if status == "SUCCESS":
+                  if b.get("sha") != target:
+                      raise RuntimeError("successful build SHA mismatch")
+                  break
+              if status in {"FAILURE", "CRASHED", "ABORTED", "SUBMISSION_FAILURE", "UNSCHEDULABLE"}:
+                  raise RuntimeError(f"Northflank build failed: {status}")
+              time.sleep(10)
+          else:
+              raise RuntimeError("Northflank build timed out")
+
+          deployed = False
+          try:
+              call("POST", dep_path, {
+                  "internal": {
+                      "id": build_service,
+                      "branch": "main",
+                      "buildSHA": target,
+                      "buildId": new_build_id,
+                  }
+              })
+              deployed = True
+
+              deadline = time.time() + 1800
+              while time.time() < deadline:
+                  dep = call("GET", dep_path)
+                  svc = call("GET", svc_path)
+                  internal = dep.get("internal") or {}
+                  dstatus = str(((svc.get("status") or {}).get("deployment") or {}).get("status") or "").upper()
+                  if (
+                      internal.get("deployedSHA") == target
+                      and internal.get("buildId") == new_build_id
+                      and dstatus == "COMPLETED"
+                  ):
+                      break
+                  if dstatus == "FAILED":
+                      raise RuntimeError("Northflank deployment failed")
+                  time.sleep(10)
+              else:
+                  raise RuntimeError("Northflank deployment timed out")
+
+              # Public acceptance: provenance, hard locks, new lane, GET-only API, dashboard.
+              last_error = None
+              accepted = None
+              deadline = time.time() + 1200
+              while time.time() < deadline:
+                  try:
+                      hs, health = public_json("/healthz")
+                      rs, ready = public_json("/readyz")
+                      ss, sim = public_json("/api/paper/binance-sim/state")
+                      os_, openapi = public_json("/openapi.json")
+                      hs2, html = public_text("/")
+                      safety = health.get("safety") or {}
+                      provenance = health.get("provenance") or {}
+                      assert hs == 200
+                      assert provenance.get("source_commit") == target
+                      assert provenance.get("exact") is True
+                      assert safety.get("trade_mode") == "PAPER"
+                      assert safety.get("orders_enabled") is False
+                      assert safety.get("live_capital_locked") is True
+                      assert safety.get("hard_paper_lock") is True
+                      assert rs == 200
+                      assert ss == 200 and sim.get("status") == "OK"
+                      assert sim.get("lane_id") == "BINANCE_SIM_18_63631644"
+                      assert abs(float(sim.get("starting_bankroll_usdt")) - 18.63631644) < 1e-12
+                      assert sim.get("simulation_only") is True
+                      assert sim.get("live_orders_possible") is False
+                      assert sim.get("hard_paper_lock") is True
+                      assert sim.get("research_verdict") == "INCREMENTAL_EDGE_NOT_DEMONSTRATED"
+                      unsafe = []
+                      for route, methods in (openapi.get("paths") or {}).items():
+                          for method in methods:
+                              if method.upper() not in {"GET", "HEAD", "OPTIONS"}:
+                                  unsafe.append(f"{method.upper()} {route}")
+                      assert not unsafe, unsafe
+                      assert "/api/paper/binance-sim/state" in (openapi.get("paths") or {})
+                      assert hs2 == 200 and "BINANCE-SIM PAPER" in html and "18.63631644 USDT" in html
+                      accepted = {
+                          "source_commit": target,
+                          "provenance_exact": True,
+                          "ready": True,
+                          "paper_lock": True,
+                          "orders_enabled": False,
+                          "live_capital_locked": True,
+                          "binance_sim": {
+                              "status": sim.get("status"),
+                              "lane_id": sim.get("lane_id"),
+                              "starting_bankroll_usdt": sim.get("starting_bankroll_usdt"),
+                              "cash_usdt": sim.get("cash_usdt"),
+                              "equity_usdt": sim.get("equity_usdt"),
+                              "simulation_only": sim.get("simulation_only"),
+                              "live_orders_possible": sim.get("live_orders_possible"),
+                              "open_position": sim.get("open_position"),
+                              "total_simulated_orders": sim.get("total_simulated_orders"),
+                          },
+                          "public_mutation_routes": 0,
+                          "dashboard_panel_present": True,
+                      }
+                      break
+                  except Exception as exc:
+                      last_error = f"{type(exc).__name__}: {exc}"
+                      time.sleep(10)
+              if accepted is None:
+                  raise RuntimeError(f"public acceptance failed: {last_error}")
+
+              evidence["after"] = accepted
+              evidence["result"] = "PASS"
+          except Exception as deploy_exc:
+              evidence["deployment_error"] = f"{type(deploy_exc).__name__}: {deploy_exc}"
+              if deployed:
+                  rollback_payload = {
+                      "internal": {
+                          "id": build_service,
+                          "branch": old_branch,
+                          "buildSHA": old_deployed_sha,
+                          "buildId": old_build_id,
+                      }
+                  }
+                  try:
+                      call("POST", dep_path, rollback_payload)
+                      rb_deadline = time.time() + 1200
+                      rollback_ok = False
+                      while time.time() < rb_deadline:
+                          dep = call("GET", dep_path)
+                          svc = call("GET", svc_path)
+                          internal = dep.get("internal") or {}
+                          dstatus = str(((svc.get("status") or {}).get("deployment") or {}).get("status") or "").upper()
+                          if internal.get("deployedSHA") == old_deployed_sha and dstatus == "COMPLETED":
+                              rollback_ok = True
+                              break
+                          time.sleep(10)
+                      evidence["rollback"] = {
+                          "attempted": True,
+                          "ok": rollback_ok,
+                          "deployed_sha": old_deployed_sha,
+                          "build_id": old_build_id,
+                      }
+                  except Exception as rb_exc:
+                      evidence["rollback"] = {
+                          "attempted": True,
+                          "ok": False,
+                          "error": f"{type(rb_exc).__name__}: {rb_exc}",
+                      }
+              raise
+          finally:
+              evidence["completed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+              encoded = json.dumps(evidence, sort_keys=True, indent=2).encode() + b"\n"
+              Path("deploy-evidence/receipt.json").write_bytes(encoded)
+              Path("deploy-evidence/SHA256SUMS").write_text(
+                  hashlib.sha256(encoded).hexdigest() + "  receipt.json\n",
+                  encoding="utf-8",
+              )
+              assert token.encode() not in encoded
+
+          print(json.dumps({
+              "result": evidence.get("result"),
+              "target_sha": target,
+              "new_build_id": new_build_id,
+              "after": evidence.get("after"),
+              "secret_values_exported": False,
+          }, sort_keys=True))
+          PY
+          (cd deploy-evidence && sha256sum -c SHA256SUMS)
+
+      - name: Upload deployment receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: h011-binance-sim-deploy-${{ env.TARGET_SHA }}
+          path: deploy-evidence/
+          if-no-files-found: warn
+          retention-days: 30
