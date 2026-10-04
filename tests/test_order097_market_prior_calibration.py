@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 from pathlib import Path
 
@@ -330,3 +331,185 @@ def test_research_module_has_no_runtime_or_order_side_effects():
     )
     for token in forbidden:
         assert token not in text
+
+
+def _write_jsonl(path, rows):
+    path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def _aligned_market_fixture(m, market_count=12, *, senex_raw=0.5, market_prior=0.8):
+    predictions = []
+    resolutions = []
+    base = 1791069900
+    from datetime import datetime, timezone
+
+    for market_i in range(market_count):
+        start = base + market_i * 300
+        end = start + 300
+        slug = f"btc-updown-5m-{start}"
+        condition_id = f"fixture-cond-{market_i}"
+        decision = datetime.fromtimestamp(start + 30, timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+        predictions.append(
+            _row(
+                prediction_id=market_i,
+                ts=decision,
+                slug=slug,
+                condition_id=condition_id,
+                start_ts=start,
+                end_ts=end,
+                p_market=market_prior,
+                p_senex=senex_raw,
+            )
+        )
+        resolutions.append(
+            _resolution(
+                slug=slug,
+                condition_id=condition_id,
+                start_ts=start,
+                end_ts=end,
+                outcome="UP" if market_i % 2 else "DOWN",
+                resolved_at=datetime.fromtimestamp(
+                    end + 1, timezone.utc
+                ).isoformat().replace("+00:00", "Z"),
+            )
+        )
+    return predictions, resolutions
+
+
+@pytest.mark.parametrize("bad_source", [None, "", "   ", 123, [], {}])
+def test_resolution_source_must_be_nonempty_string(bad_source):
+    m = _load()
+    pair = m.extract_t0_pair(_row())
+    assert pair is not None
+    resolution = _resolution()
+    resolution["source"] = bad_source
+    with pytest.raises(m.ResolutionContractError, match="source"):
+        m.join_resolutions([pair], [resolution])
+
+
+def test_partial_resolution_corpus_returns_explicit_blocker(tmp_path):
+    m = _load()
+    predictions_path = tmp_path / "predictions.jsonl"
+    resolutions_path = tmp_path / "resolutions.jsonl"
+    _write_jsonl(predictions_path, [_row()])
+    _write_jsonl(resolutions_path, [_resolution()])
+
+    result = m.run_offline(predictions_path, resolutions_path)
+
+    assert result["status"] == "BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA"
+    assert result["edge"] == "UNPROVEN"
+    assert result["resolved_pairs"] == 1
+
+
+def test_phase0_inventory_preserves_denominator_in_blocker_output(tmp_path):
+    m = _load()
+    predictions_path = tmp_path / "predictions.jsonl"
+    valid_a = _row(prediction_id=1)
+    valid_b = _row(
+        prediction_id=2,
+        ts="2026-10-03T23:30:30Z",
+        slug="btc-updown-5m-1791070200",
+        condition_id="cond-2",
+        start_ts=1791070200,
+        end_ts=1791070500,
+    )
+    invalid = _row(prediction_id=3)
+    invalid["_audit"]["external_markets_v1"]["polymarket"]["eligible_for_prediction"] = False
+    _write_jsonl(predictions_path, [valid_a, valid_b, invalid])
+
+    result = m.run_offline(predictions_path)
+
+    assert result["total_rows"] == 3
+    assert result["valid_pairs"] == 2
+    assert result["rejected_pairs"] == 1
+    assert result["unique_markets"] == 2
+    assert result["status"] == "BLOCKED_TARGET_LABEL_5M_NOT_PERSISTED"
+
+
+def test_chronological_split_purges_training_labels_unavailable_at_holdout():
+    m = _load()
+    base = 1791069900
+    observations = []
+    for market_i in range(3):
+        start = base + market_i * 300
+        end = start + 300
+        pair = m.T0Pair(
+            prediction_id=market_i,
+            decision_ts=start + 30,
+            market_slug=f"btc-updown-5m-{start}",
+            condition_id=f"cond-{market_i}",
+            market_start_ts=start,
+            market_end_ts=end,
+            market_horizon_seconds=300,
+            p_market=0.5,
+            senex_raw_up=0.5,
+        )
+        resolved_at = end + 1
+        if market_i == 1:
+            resolved_at = base + 3 * 300 + 120
+        observations.append(
+            m.JoinedObservation(
+                pair=pair,
+                label_up=market_i % 2,
+                resolved_at=resolved_at,
+            )
+        )
+
+    train, holdout = m.chronological_market_split(observations, train_fraction=0.67)
+
+    earliest_holdout_decision = min(item.pair.decision_ts for item in holdout)
+    assert train
+    assert all(item.resolved_at < earliest_holdout_decision for item in train)
+    assert all(item.pair.condition_id != "cond-1" for item in train)
+
+
+def test_nested_models_compare_market_only_vs_market_plus_senex_on_same_rows(tmp_path):
+    m = _load()
+    predictions, resolutions = _aligned_market_fixture(
+        m,
+        market_count=18,
+        senex_raw=0.5,
+        market_prior=0.8,
+    )
+    predictions_path = tmp_path / "predictions.jsonl"
+    resolutions_path = tmp_path / "resolutions.jsonl"
+    _write_jsonl(predictions_path, predictions)
+    _write_jsonl(resolutions_path, resolutions)
+
+    result = m.run_offline(predictions_path, resolutions_path, train_fraction=0.67)
+
+    assert result["status"] == "EVALUATED_HOLDOUT"
+    assert result["models"]["market_only"]["fit_scope"] == "TRAIN_ONLY"
+    assert result["models"]["market_plus_senex"]["fit_scope"] == "TRAIN_ONLY"
+    assert result["holdout"]["n"] == result["test_rows"]
+    assert result["holdout"]["market_only_brier"] == pytest.approx(
+        result["holdout"]["market_plus_senex_brier"], abs=1e-10
+    )
+    assert result["holdout"]["brier_delta_augmented_minus_market_only"] == pytest.approx(
+        0.0, abs=1e-10
+    )
+
+
+def test_constant_senex_cannot_gain_incremental_credit_from_intercept_recalibration(tmp_path):
+    m = _load()
+    predictions, resolutions = _aligned_market_fixture(
+        m,
+        market_count=18,
+        senex_raw=0.5,
+        market_prior=0.85,
+    )
+    predictions_path = tmp_path / "predictions.jsonl"
+    resolutions_path = tmp_path / "resolutions.jsonl"
+    _write_jsonl(predictions_path, predictions)
+    _write_jsonl(resolutions_path, resolutions)
+
+    result = m.run_offline(predictions_path, resolutions_path, train_fraction=0.67)
+
+    assert result["status"] == "EVALUATED_HOLDOUT"
+    assert result["holdout"]["brier_delta_augmented_minus_market_only"] >= -1e-10
+    assert result["holdout"]["log_loss_delta_augmented_minus_market_only"] >= -1e-10
