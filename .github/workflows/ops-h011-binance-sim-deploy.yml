@@ -23,6 +23,7 @@ jobs:
     environment: northflank-readonly-audit
     env:
       TARGET_SHA: 96c41f123175f597788911ab7f52a18ed77c7cdb
+      NF_TEAM_ID: 6a32fd953f19ee4079ccf395
       PROJECT_ID: seneciobot
       SERVICE_ID: senecio-h011
       PROD_URL: https://h011-web--senecio-h011--wbjggn89fnf8.code.run
@@ -110,7 +111,8 @@ jobs:
           project = os.environ["PROJECT_ID"]
           service = os.environ["SERVICE_ID"]
           prod = os.environ["PROD_URL"].rstrip("/")
-          api = "https://api.northflank.com/v1"
+          team = os.environ["NF_TEAM_ID"]
+          api = f"https://api.northflank.com/v1/teams/{team}"
           headers = {
               "Authorization": f"Bearer {token}",
               "Accept": "application/json",
