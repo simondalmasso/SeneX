@@ -139,6 +139,65 @@ def test_invalid_or_non_5m_t0_context_fails_closed(mutator):
     assert m.extract_t0_pair(row) is None
 
 
+@pytest.mark.parametrize(
+    "start_ts,end_ts,slug",
+    [
+        (
+            1791069901,
+            1791070201,
+            "btc-updown-5m-1791069901",
+        ),
+        (
+            1791069900.5,
+            1791070200.5,
+            "btc-updown-5m-1791069900",
+        ),
+    ],
+)
+def test_t0_rejects_off_boundary_or_fractional_market_grid(
+    start_ts,
+    end_ts,
+    slug,
+):
+    m = _load()
+    row = _row(
+        start_ts=start_ts,
+        end_ts=end_ts,
+        slug=slug,
+    )
+    assert m.extract_t0_pair(row) is None
+
+
+@pytest.mark.parametrize(
+    "start_ts,end_ts,slug",
+    [
+        (
+            1791069901,
+            1791070201,
+            "btc-updown-5m-1791069901",
+        ),
+        (
+            1791069900.5,
+            1791070200.5,
+            "btc-updown-5m-1791069900",
+        ),
+    ],
+)
+def test_resolution_rejects_off_boundary_or_fractional_market_grid(
+    start_ts,
+    end_ts,
+    slug,
+):
+    m = _load()
+    resolution = _resolution(
+        start_ts=start_ts,
+        end_ts=end_ts,
+        slug=slug,
+    )
+    with pytest.raises(m.ResolutionContractError, match="market.*grid"):
+        m.join_resolutions([], [resolution])
+
+
 def test_circular_polymarket_influence_is_rejected():
     m = _load()
     row = _row()
