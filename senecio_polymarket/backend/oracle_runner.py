@@ -740,17 +740,28 @@ _portfolio_coordinator = None
 _binance_sim_lane = None
 
 
+def _binance_sim_state_path() -> Path:
+    """Choose persistent H011 storage when mounted, else local writable fallback."""
+    explicit = (os.environ.get("SENEX_BINANCE_SIM_STATE_PATH") or "").strip()
+    if explicit:
+        return Path(explicit)
+    persistent_root = Path("/app/polymarket/results")
+    if persistent_root.is_dir() and os.access(persistent_root, os.W_OK):
+        return persistent_root / "binance-sim" / "lane.json"
+    return PREDICTIONS_PATH.parent / "binance_sim_lane.json"
+
+
 def _get_binance_sim_lane():
     """Lazily instantiate the isolated simulated USDT wallet."""
     global _binance_sim_lane
     if _binance_sim_lane is None:
         try:
             from .binance_sim_lane import BinanceSimLane
-            _binance_sim_lane = BinanceSimLane(
-                state_path=PREDICTIONS_PATH.parent / "binance_sim_lane.json"
-            )
+            state_path = _binance_sim_state_path()
+            _binance_sim_lane = BinanceSimLane(state_path=state_path)
             log.info(
-                "BINANCE_SIM PAPER lane initialized: bankroll=18.63631644 USDT"
+                "BINANCE_SIM PAPER lane initialized: bankroll=18.63631644 USDT state=%s",
+                state_path,
             )
         except Exception as exc:
             log.exception("failed to init BINANCE_SIM PAPER lane: %s", exc)
