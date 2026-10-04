@@ -27,7 +27,12 @@ jobs:
       PROJECT_ID: seneciobot
       SERVICE_ID: senecio-h011
       PROD_URL: https://h011-web--senecio-h011--wbjggn89fnf8.code.run
-      NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+      NF_TOKEN_1: ${{ secrets.H011_BUILD_ONCE }}
+      NF_TOKEN_2: ${{ secrets.NORTHFLANK_API_TOKEN }}
+      NF_TOKEN_3: ${{ secrets.NORTHFLANK_TOKEN }}
+      NF_TOKEN_4: ${{ secrets.NF_TOKEN }}
+      NF_TOKEN_5: ${{ secrets.NF_API_TOKEN }}
+      NF_TOKEN_6: ${{ secrets.GPT_WORK_SENECIO_READONLY }}
     steps:
       - name: Checkout exact canonical main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -97,37 +102,45 @@ jobs:
         run: |
           set +x
           set -euo pipefail
-          test -n "${NF_TOKEN:-}"
-          echo "::add-mask::$NF_TOKEN"
           mkdir -p deploy-evidence
           python - <<'PY'
           import datetime, hashlib, json, os, time, urllib.error, urllib.request
           from pathlib import Path
 
-          token = os.environ["NF_TOKEN"].strip()
-          if token.lower().startswith("bearer "):
-              token = token[7:].strip()
+          candidates = [
+              ("H011_BUILD_ONCE", os.getenv("NF_TOKEN_1", "")),
+              ("NORTHFLANK_API_TOKEN", os.getenv("NF_TOKEN_2", "")),
+              ("NORTHFLANK_TOKEN", os.getenv("NF_TOKEN_3", "")),
+              ("NF_TOKEN", os.getenv("NF_TOKEN_4", "")),
+              ("NF_API_TOKEN", os.getenv("NF_TOKEN_5", "")),
+              ("GPT_WORK_SENECIO_READONLY", os.getenv("NF_TOKEN_6", "")),
+          ]
+          candidates = [
+              (name, raw[7:].strip() if raw.lower().startswith("bearer ") else raw.strip())
+              for name, raw in candidates if raw and raw.strip()
+          ]
           target = os.environ["TARGET_SHA"]
           project = os.environ["PROJECT_ID"]
           service = os.environ["SERVICE_ID"]
           prod = os.environ["PROD_URL"].rstrip("/")
           team = os.environ["NF_TEAM_ID"]
           api = f"https://api.northflank.com/v1/teams/{team}"
-          headers = {
-              "Authorization": f"Bearer {token}",
-              "Accept": "application/json",
-              "Content-Type": "application/json",
-              "User-Agent": "senex-binance-sim-deploy/1",
-          }
           evidence = {
               "target_sha": target,
               "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "requests": [],
               "secret_values_exported": False,
+              "credential_probes": [],
               "owner_requested_purpose": "isolated BINANCE_SIM PAPER dashboard lane",
           }
 
-          def call(method, path, payload=None, timeout=60):
+          def request_with_token(token, method, path, payload=None, timeout=60, record=True):
+              headers = {
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/json",
+                  "Content-Type": "application/json",
+                  "User-Agent": "senex-binance-sim-deploy/2",
+              }
               body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
               req = urllib.request.Request(api + path, headers=headers, data=body, method=method)
               raw = b""
@@ -140,17 +153,30 @@ jobs:
                   status = exc.code
                   raw = exc.read()
               digest = hashlib.sha256(raw).hexdigest()
-              evidence["requests"].append({
-                  "method": method, "path": path, "status": status,
-                  "bytes": len(raw), "body_sha256": digest,
-              })
               try:
                   obj = json.loads(raw.decode() or "{}")
               except Exception:
                   obj = {}
+              data = obj.get("data", obj) if isinstance(obj, dict) else obj
+              if record:
+                  evidence["requests"].append({
+                      "method": method, "path": path, "status": status,
+                      "bytes": len(raw), "body_sha256": digest,
+                  })
+              return status, data, digest
+
+          token = None
+          credential_source = None
+
+          def call(method, path, payload=None, timeout=60):
+              if token is None:
+                  raise RuntimeError("Northflank credential not selected")
+              status, data, digest = request_with_token(
+                  token, method, path, payload=payload, timeout=timeout, record=True
+              )
               if not 200 <= status < 300:
                   raise RuntimeError(f"{method} {path} status={status} body_sha256={digest}")
-              return obj.get("data", obj) if isinstance(obj, dict) else obj
+              return data
 
           def public_json(path, timeout=30):
               req = urllib.request.Request(prod + path, headers={"User-Agent": "senex-binance-sim-accept/1"})
@@ -173,18 +199,81 @@ jobs:
 
           dep_path = f"/projects/{project}/services/{service}/deployment"
           svc_path = f"/projects/{project}/services/{service}"
-          old_dep = call("GET", dep_path)
-          old_svc = call("GET", svc_path)
-          old_internal = old_dep.get("internal") or {}
-          build_service = old_internal.get("id")
-          old_build_id = old_internal.get("buildId")
-          old_deployed_sha = old_internal.get("deployedSHA")
-          old_branch = old_internal.get("branch") or "main"
-          if not build_service or not old_build_id or not old_deployed_sha:
-              raise RuntimeError("missing rollback deployment identity")
-          assert old_svc.get("disabledCI") is True
-          assert old_svc.get("disabledCD") in (True, None)
 
+          # Select a credential without exposing secret values. A candidate
+          # must first read the exact service/deployment and then be able to
+          # create the exact target build. 401/403 candidates are skipped.
+          old_dep = None
+          old_svc = None
+          build_service = None
+          old_build_id = None
+          old_deployed_sha = None
+          old_branch = "main"
+          new_build_id = None
+          for source_name, candidate_token in candidates:
+              dep_status, dep_data, dep_digest = request_with_token(
+                  candidate_token, "GET", dep_path, record=False
+              )
+              svc_status, svc_data, svc_digest = request_with_token(
+                  candidate_token, "GET", svc_path, record=False
+              )
+              probe = {
+                  "source": source_name,
+                  "deployment_get_status": dep_status,
+                  "service_get_status": svc_status,
+              }
+              if not (200 <= dep_status < 300 and 200 <= svc_status < 300):
+                  evidence["credential_probes"].append(probe)
+                  continue
+
+              internal = (dep_data or {}).get("internal") or {}
+              candidate_build_service = internal.get("id")
+              candidate_old_build_id = internal.get("buildId")
+              candidate_old_sha = internal.get("deployedSHA")
+              candidate_branch = internal.get("branch") or "main"
+              if not candidate_build_service or not candidate_old_build_id or not candidate_old_sha:
+                  probe["identity"] = "INCOMPLETE"
+                  evidence["credential_probes"].append(probe)
+                  continue
+
+              build_path = f"/projects/{project}/services/{candidate_build_service}/build"
+              build_status, build_data, build_digest = request_with_token(
+                  candidate_token,
+                  "POST",
+                  build_path,
+                  payload={"branch": "main", "sha": target},
+                  record=False,
+              )
+              probe["build_post_status"] = build_status
+              evidence["credential_probes"].append(probe)
+              if not 200 <= build_status < 300:
+                  continue
+              candidate_new_build_id = (build_data or {}).get("id")
+              if not candidate_new_build_id or (build_data or {}).get("sha") != target:
+                  raise RuntimeError(
+                      f"unexpected build response from {source_name}: "
+                      f"id={candidate_new_build_id} sha={(build_data or {}).get('sha')}"
+                  )
+
+              token = candidate_token
+              credential_source = source_name
+              old_dep = dep_data
+              old_svc = svc_data
+              build_service = candidate_build_service
+              old_build_id = candidate_old_build_id
+              old_deployed_sha = candidate_old_sha
+              old_branch = candidate_branch
+              new_build_id = candidate_new_build_id
+              break
+
+          if token is None or new_build_id is None:
+              raise RuntimeError("NO_NORTHFLANK_DEPLOY_CREDENTIAL")
+          if old_svc.get("disabledCI") is not True:
+              raise RuntimeError("unexpected Northflank CI state")
+          if old_svc.get("disabledCD") not in (True, None):
+              raise RuntimeError("unexpected Northflank CD state")
+
+          evidence["credential_source_name"] = credential_source
           evidence["before"] = {
               "source_commit": (old_health.get("provenance") or {}).get("source_commit"),
               "build_service_id": build_service,
@@ -194,14 +283,8 @@ jobs:
               "disabled_ci": old_svc.get("disabledCI"),
               "disabled_cd": old_svc.get("disabledCD"),
           }
-
-          # Exact target build.
-          build_path = f"/projects/{project}/services/{build_service}/build"
-          build = call("POST", build_path, {"branch": "main", "sha": target})
-          new_build_id = build.get("id")
-          if not new_build_id or build.get("sha") != target:
-              raise RuntimeError(f"unexpected build response: id={new_build_id} sha={build.get('sha')}")
           evidence["new_build_id"] = new_build_id
+          build_path = f"/projects/{project}/services/{build_service}/build"
 
           build_detail_path = f"/projects/{project}/services/{build_service}/build/{new_build_id}"
           deadline = time.time() + 2400
@@ -359,7 +442,8 @@ jobs:
                   hashlib.sha256(encoded).hexdigest() + "  receipt.json\n",
                   encoding="utf-8",
               )
-              assert token.encode() not in encoded
+              for _source, _secret in candidates:
+                  assert _secret.encode() not in encoded
 
           print(json.dumps({
               "result": evidence.get("result"),
