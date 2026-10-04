@@ -591,3 +591,40 @@ def test_constant_senex_cannot_gain_incremental_credit_from_intercept_recalibrat
     assert result["status"] == "EVALUATED_HOLDOUT"
     assert result["holdout"]["brier_delta_augmented_minus_market_only"] >= -1e-10
     assert result["holdout"]["log_loss_delta_augmented_minus_market_only"] >= -1e-10
+
+
+def test_constant_non_neutral_senex_feature_has_exactly_zero_incremental_effect():
+    m = _load()
+    observations = []
+    for i in range(12):
+        pair = m.T0Pair(
+            prediction_id=i,
+            decision_ts=1000 + i,
+            market_slug=f"constant-senex-{i}",
+            condition_id=f"constant-cond-{i}",
+            market_start_ts=900 + i * 10,
+            market_end_ts=1200 + i * 10,
+            market_horizon_seconds=300,
+            p_market=0.85,
+            senex_raw_up=0.80,
+        )
+        observations.append(
+            m.JoinedObservation(
+                pair=pair,
+                label_up=1 if i < 8 else 0,
+                resolved_at=1300 + i * 10,
+            )
+        )
+
+    market_only, market_plus_senex = m.fit_incremental_models(observations)
+    market_logit = math.log(0.85 / 0.15)
+    senex_logit = math.log(0.80 / 0.20)
+
+    assert market_plus_senex.coefficients[1] == pytest.approx(0.0, abs=1e-12)
+    assert market_plus_senex.predict(
+        market_logit,
+        senex_logit,
+    ) == pytest.approx(
+        market_only.predict(market_logit),
+        abs=1e-12,
+    )
