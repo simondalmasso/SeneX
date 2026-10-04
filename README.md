@@ -8,18 +8,19 @@ SENEX is not a live trading product. The current production runtime is intention
 
 | Surface | Verified state |
 | --- | --- |
-| GitHub authority | `main`; ORDER097/098/099 are merged research tooling |
-| H011 deployed runtime | `5e074b230450dd288de01f5e5ad0b2f25efd8e7b` |
+| GitHub authority | `main`; ORDER097/098/099/100 and the isolated BINANCE_SIM PAPER lane are canonical |
+| H011 deployed runtime | `96c41f123175f597788911ab7f52a18ed77c7cdb` |
 | Runtime provenance | exact internal artifact identity |
-| Public API | 15 GET endpoints, no POST/PUT/PATCH/DELETE |
+| Public API | 17 GET endpoints, no POST/PUT/PATCH/DELETE |
 | Trade mode | PAPER |
 | Real orders | disabled |
 | Live capital | locked |
+| BINANCE_SIM | isolated PAPER wallet; start `18.63631644 USDT`; not a Binance balance; no live orders |
 | Predictive edge | UNPROVEN |
 | BTC independent 1h authority | 688 observations, 50.29% global win rate |
 | GPTrader treatment | PAPER/HYPOTHETICAL, 0 TAKE decisions, INSUFFICIENT_DATA |
 
-The GitHub/runtime SHA difference is known and intentional. `main` now contains documentation, archive, accounting, and research-tooling changes that have not been deployed to H011. Repository freshness does **not** imply a deployment or authorize one.
+GitHub `main` and H011 are currently aligned at the same exact source commit. This alignment records a deliberate PAPER-only deployment; it does **not** authorize LIVE, real orders, or capital.
 
 See [Current Status](docs/CURRENT_STATUS.md) for the dated evidence snapshot.
 
@@ -34,6 +35,7 @@ SENEX combines:
 - PAPER portfolio/risk/execution simulation;
 - execution realism, shadow-live diagnostics, and trade journaling;
 - GPTrader as a separate PAPER treatment arm;
+- BINANCE_SIM as a separate isolated PAPER wallet/ledger that follows SENEX BTC signals without Binance credentials or real-order capability;
 - runtime provenance, readiness, and fail-closed safety controls;
 - research tooling for calibration, walk-forward validation, purged CV, stress testing, and falsification.
 
