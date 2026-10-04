@@ -4,7 +4,7 @@
 
 `H0`: after honest calibration, SENEX contains no incremental predictive information over the decision-time Polymarket 5m prior on the same BTC Up/Down 5m contracts.
 
-`H1`: a train-only calibrated mapping of the frozen SENEX T0 score improves out-of-sample predictive scoring on the same contracts.
+`H1`: adding the frozen SENEX T0 score to an equivalently train-fitted market-prior model improves out-of-sample predictive scoring on the same contracts.
 
 A null result is a successful result.
 
@@ -39,24 +39,27 @@ Default research split: 67% earlier markets / 33% later markets.
 
 No shuffling.
 
-## Phase 3 — SENEX calibration
+Every TRAIN label must have been observable before the earliest HOLDOUT decision. Training rows with `resolved_at >= earliest_holdout_decision` are purged rather than allowed to leak future resolution information.
 
-The raw `up_prob` is not accepted as P(UP).
+## Phase 3 — nested calibration
 
-Fit one minimal baseline mapping on TRAIN only:
+The raw `up_prob` is not accepted as P(UP), and the market prior may not be left raw while SENEX alone receives fitted intercept/base-rate correction.
 
-`Platt/logistic(raw SENEX up score -> P(5m UP))`
+Fit both models on the identical TRAIN rows:
+
+- market-only: `logistic(logit(Polymarket T0 prior) -> P(5m UP))`;
+- augmented: `logistic(logit(Polymarket T0 prior), logit(SENEX raw score) -> P(5m UP))`.
 
 No parameter search, feature search, indicator stack or regime slicing is permitted in v1.
 
-The point is to answer one question: does the existing SENEX score contain incremental information?
+The point is to answer one question: does the existing SENEX score add information conditional on the decision-time market prior?
 
 ## Phase 4 — paired holdout
 
 On exactly the same holdout rows compare:
 
-- Polymarket T0 prior;
-- calibrated SENEX score.
+- train-fitted market-only model;
+- train-fitted market+SENEX model.
 
 Primary diagnostics:
 
@@ -66,9 +69,9 @@ Primary diagnostics:
 
 Report deltas as:
 
-`SENEX - MARKET`
+`MARKET_PLUS_SENEX - MARKET_ONLY`
 
-so negative Brier/log-loss delta is better for SENEX.
+so negative Brier/log-loss delta is better for the augmented model.
 
 These are not yet an EDGE declaration.
 
@@ -89,6 +92,7 @@ Required before an EDGE claim:
 
 ```text
 BLOCKED_TARGET_LABEL_5M_NOT_PERSISTED
+BLOCKED_INSUFFICIENT_TARGET_ALIGNED_DATA
 READY_FOR_CHRONOLOGICAL_CALIBRATION
 EVALUATED_HOLDOUT
 INCREMENTAL_SIGNAL_CANDIDATE
