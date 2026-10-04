@@ -63,7 +63,7 @@ Con los mismos datos de mercado (87.5d OKX): breakeven @20bps = 0.903 (1h) → 0
 - GATE F2→F3: PnL simulado L3 > ALWAYS_ABSTAIN y > FOLLOW_ALL con CI-block excluyendo 0, en AMBAS cohortes.
 
 ### FASE 3 — TESTNET (semanas 16-22, $0)
-- La infra YA existe: `exchange_connector` con BINANCE_TESTNET_KEY/SECRET + set_sandbox_mode(True) + guards verificados por CI. 
+- La infra YA existe: `exchange_connector` con BINANCE_TESTNET_KEY/SECRET + set_sandbox_mode(True) + guards verificados por CI.
 - 4-6 semanas de órdenes testnet reales a 24h: mide fills, slippage real, rechazos, downtime operacional — nada de PnL (testnet no tiene economía real), TODO de ejecución.
 - GATE F3→F4: fill-rate ≥95%, slippage real ≤ el modelado en L3, cero violaciones de riesgo, LiveGate v2 verde 4 semanas seguidas.
 
