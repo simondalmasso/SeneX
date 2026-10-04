@@ -142,7 +142,7 @@ Then run:
 ```bash
 mkdir -p /data/results/senex-order099
 
-python research/edge/order099/tabular_falsification.py \
+python -m research.edge.order099.tabular_falsification \
   --predictions /data/datasets/senex-order098/t0_predictions.jsonl \
   --predictions-manifest /data/datasets/senex-order098/t0_export_manifest.json \
   --resolutions /data/datasets/senex-order098/resolutions.jsonl \
@@ -184,3 +184,32 @@ A null result is a valid successful experiment.
 Do not add features after seeing the holdout merely to rescue a failed result.
 Do not tune SHORT here; the current 1h directional authority and this exact 5m
 Polymarket target are different scientific questions.
+
+
+## Evaluated result — 2026-10-04
+
+The frozen protocol has now been executed on the complete accepted corpus.
+
+- 3,570 projected T0 rows.
+- 3,568 exact Polymarket BTC 5m markets accepted; 0 rejected.
+- 27 rows excluded by the anti-circularity guard because
+  `polymarket_context_v1.directional_use` was not explicitly `False`.
+- 3,541 unique markets remained admissible.
+- 2,372 TRAIN markets and 1,169 untouched HOLDOUT markets.
+- 10,000 unique-market bootstrap replicates, seed 7.
+
+Primary nested holdout:
+
+```text
+Delta Brier (market+SENEX - market-only) = -0.0004168530
+95% market-cluster bootstrap CI          = [-0.00221158, +0.00142532]
+
+Delta log-loss                          = -0.0008649904
+95% market-cluster bootstrap CI          = [-0.00491631, +0.00321430]
+
+Preregistered practical Brier threshold = -0.005
+Verdict                                 = INCREMENTAL_EDGE_NOT_DEMONSTRATED
+```
+
+Corrected subgroup findings are exploratory and do not override the primary
+nested holdout + bootstrap verdict. EDGE remains UNPROVEN.

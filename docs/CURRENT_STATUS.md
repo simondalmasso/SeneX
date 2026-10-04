@@ -13,14 +13,14 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | GitHub repository | `simondalmasso/SeneX` |
 | Default branch | `main` |
 | Main state | ORDER097, ORDER098 and ORDER099 merged as research-only tooling |
-| Research experiment | BLOCKED_DATA until the authorized full T0 export is executed |
+| Research experiment | EVALUATED: INCREMENTAL_EDGE_NOT_DEMONSTRATED |
 | H011 source commit | `5e074b230450dd288de01f5e5ad0b2f25efd8e7b` |
 | H011 provenance | exact=true; build digest matches runtime files |
 | Public runtime | H011, GET-only API |
 | ORDER097 | merged; target-aligned nested market-only vs market+SENEX harness |
 | ORDER098 | merged; GET-only T0 export + fail-closed Polymarket 5m resolution corpus |
 | ORDER099 | merged; preregistered tabular/cluster-bootstrap falsification |
-| Current data blocker | execute authorized T0 export from persisted D1 COLD audit, then build exact resolutions |
+| ORDER098 corpus | 3,568/3,568 exact markets accepted; 0 rejected |
 | ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
 The main/runtime SHA difference is known and is not, by itself, a deployment defect. The deployed runtime predates #100 plus the documentation/archive and ORDER097/098/099 research-only merges. None of those merges imply a H011 deployment.
@@ -122,3 +122,25 @@ The research code required for the next falsification experiment is now canonica
 3. **ORDER099** — one-market-one-row weighting, TRAIN-only descriptive cuts, n>=30 exploratory-cell floor, Holm/BH family correction, 10,000-replicate market-cluster bootstrap, practical Brier gain floor 0.005, and a 200-unique-market minimum before any edge verdict.
 
 The remaining blocker is operational data access, not missing analysis code. The preferred source is the authenticated ORDER072 D1 COLD mirror. Credentials must remain in an already-authorized SENEX environment; only the secret-free JSONL + manifests/hashes should move to the research machine or Intern Discovery.
+
+
+## ORDER099 evaluated result
+
+The frozen experiment has now been executed from persisted historical T0 audit
+evidence and exact public Polymarket BTC 5m resolutions.
+
+Primary HOLDOUT: 1,169 unique markets.
+
+- market-only Brier = 0.1498170;
+- market+SENEX Brier = 0.1494001;
+- delta = -0.0004169;
+- 95% unique-market bootstrap CI = [-0.0022116, +0.0014253];
+- log-loss delta = -0.0008650;
+- 95% CI = [-0.0049163, +0.0032143];
+- preregistered practical Brier threshold = -0.005.
+
+Verdict: **INCREMENTAL_EDGE_NOT_DEMONSTRATED**.
+
+This is an evaluated null result, not a data blocker. EDGE remains UNPROVEN
+and the result does not authorize HMM rescue, deployment, LIVE, orders or
+capital.

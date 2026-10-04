@@ -19,10 +19,17 @@ import argparse
 import hashlib
 import json
 import math
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[3]
+    repo_root_text = str(repo_root)
+    if repo_root_text not in sys.path:
+        sys.path.insert(0, repo_root_text)
 
 import numpy as np
 from scipy.stats import binomtest

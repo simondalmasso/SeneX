@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -426,3 +428,15 @@ def test_preregistered_market_floor_blocks_199_and_allows_200():
     assert "200 unique resolved markets" in blocker
 
     assert m.minimum_market_gate(200) is None
+
+
+def test_direct_cli_help_runs_from_repo_root():
+    result = subprocess.run(
+        [sys.executable, str(O99_PATH), "--help"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "ORDER099 preregistered tabular falsification" in result.stdout
