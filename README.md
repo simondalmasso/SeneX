@@ -93,7 +93,7 @@ SENEX intentionally distinguishes:
 
 Current BTC 1h authority is rejected globally. LONG is above its simple directional threshold, while SHORT and global gates fail; the Wilson lower bound also fails. This is not evidence of deployable economic edge.
 
-The ORDER097/098/099 scientific stack is merged and has now been executed on persisted historical T0 audit evidence plus exact public Polymarket BTC 5m resolutions. The preregistered result is **INCREMENTAL_EDGE_NOT_DEMONSTRATED**: on 1,169 untouched HOLDOUT markets, market+SENEX improved Brier by only 0.0004169 versus market-only, with a 95% market-cluster bootstrap interval crossing zero and far short of the preregistered 0.005 practical-improvement floor. EDGE therefore remains **UNPROVEN**.
+The ORDER097/098/099 scientific stack is merged and has now been executed on persisted historical T0 audit evidence plus exact public Polymarket BTC 5m resolutions. The preregistered result is **INCREMENTAL_EDGE_NOT_DEMONSTRATED**: on 1,169 untouched HOLDOUT markets, market+SENEX improved Brier by only 0.0004169 versus market-only, with a 95% market-cluster bootstrap interval crossing zero and far short of the preregistered 0.005 practical-improvement floor. EDGE therefore remains **UNPROVEN**. ORDER100 is the frozen prospective follow-up and is currently **COLLECTING_PROSPECTIVE_DATA**; only markets starting at or after 2026-10-04T05:00:00Z are admissible.
 
 ## Repository map
 
