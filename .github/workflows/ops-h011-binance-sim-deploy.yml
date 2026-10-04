@@ -124,7 +124,7 @@ jobs:
           service = os.environ["SERVICE_ID"]
           prod = os.environ["PROD_URL"].rstrip("/")
           team = os.environ["NF_TEAM_ID"]
-          api = f"https://api.northflank.com/v1/teams/{team}"
+          api = "https://api.northflank.com/v1"  # project-scoped API route
           evidence = {
               "target_sha": target,
               "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
