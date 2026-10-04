@@ -1096,7 +1096,9 @@ class ExchangeConnector:
         expected_price = float(ticker.get("last") or ticker.get("close") or 0)
 
         # Place market order
-        order = ex.create_market_order(\n            symbol, normalized_side, normalized_amount, params=params or {}\n        )
+        order = ex.create_market_order(
+            symbol, normalized_side, normalized_amount, params=params or {}
+        )
 
         # Binance testnet often returns None for average/price/cost in the initial
         # create_order response. Fetch the order again to get real fill data.
@@ -1123,7 +1125,9 @@ class ExchangeConnector:
 
         fill_price = float(raw_avg if raw_avg is not None else
                            (raw_price if raw_price is not None else expected_price))
-        fill_amount = float(\n            raw_filled if raw_filled is not None else normalized_amount\n        )
+        fill_amount = float(
+            raw_filled if raw_filled is not None else normalized_amount
+        )
         fill_cost = float(raw_cost if raw_cost is not None else fill_price * fill_amount)
         order_id = str(order.get("id") or "UNKNOWN")
         fees = order.get("fees") or []
