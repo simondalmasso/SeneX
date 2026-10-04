@@ -1,6 +1,6 @@
 # SENEX — Current Status
 
-**Evidence snapshot:** 2026-10-04 around 01:15 UTC
+**Evidence snapshot:** 2026-10-04 around 04:15 UTC
 **Mode:** PAPER-only
 **Scientific state:** EDGE=UNPROVEN
 
@@ -12,18 +12,18 @@ This file is a dated presentation snapshot. Fresh GitHub and H011 evidence super
 | --- | --- |
 | GitHub repository | `simondalmasso/SeneX` |
 | Default branch | `main` |
-| Main head | `a181dc901d02664345124ad08b4079a7114b0707` |
-| Main head change | PortfolioAnalytics fee double-subtraction fix (#100) |
+| Main state | ORDER097, ORDER098 and ORDER099 merged as research-only tooling |
+| Research experiment | BLOCKED_DATA until the authorized full T0 export is executed |
 | H011 source commit | `5e074b230450dd288de01f5e5ad0b2f25efd8e7b` |
 | H011 provenance | exact=true; build digest matches runtime files |
 | Public runtime | H011, GET-only API |
-| Open ORDER097 PR | #102, research-only, unmerged |
-| ORDER097 head | `291f64ef7827d4473eb92bfa25277e24f8c8b396` |
-| ORDER097 exact-head CI | `37165461381` = SUCCESS |
-| ORDER097 unresolved review threads | 0 |
-| ORDER097 remaining blocker | target-aligned historical 5m resolution corpus not persisted |
+| ORDER097 | merged; target-aligned nested market-only vs market+SENEX harness |
+| ORDER098 | merged; GET-only T0 export + fail-closed Polymarket 5m resolution corpus |
+| ORDER099 | merged; preregistered tabular/cluster-bootstrap falsification |
+| Current data blocker | execute authorized T0 export from persisted D1 COLD audit, then build exact resolutions |
+| ORDER099 evidence floor | at least 200 unique resolved markets before any edge verdict |
 
-The main/runtime SHA difference is known and is not, by itself, a deployment defect. The deployed runtime predates the reporting-only accounting correction in #100.
+The main/runtime SHA difference is known and is not, by itself, a deployment defect. The deployed runtime predates #100 plus the documentation/archive and ORDER097/098/099 research-only merges. None of those merges imply a H011 deployment.
 
 ## H011 safety
 
@@ -82,7 +82,7 @@ paper_only=true
 simulation_only=true
 live=false
 orders_enabled=false
-packet_count=1086
+packet_count=1110
 take_count=0
 abstain_count=16
 closed_hypothetical_positions=0
@@ -110,4 +110,15 @@ No current evidence authorizes:
 - capital;
 - deployment solely to reconcile SHAs;
 - treating raw `up_prob` as a calibrated probability;
-- claiming incremental Polymarket edge before ORDER097 obtains target-aligned 5m labels.
+- claiming incremental Polymarket edge before the ORDER098 artifacts are exported/verified and ORDER097/099 produce an evaluated causal holdout verdict;
+- using HMM/regime complexity to rescue a failed or data-blocked tabular result.
+
+## Merged scientific stack
+
+The research code required for the next falsification experiment is now canonical in `main`:
+
+1. **ORDER098** — GET-only export of persisted T0 audit evidence, manifest/hash lineage, and exact public Polymarket 5m resolution collection.
+2. **ORDER097** — exact-target causal nested comparison: market-only versus market+SENEX.
+3. **ORDER099** — one-market-one-row weighting, TRAIN-only descriptive cuts, n>=30 exploratory-cell floor, Holm/BH family correction, 10,000-replicate market-cluster bootstrap, practical Brier gain floor 0.005, and a 200-unique-market minimum before any edge verdict.
+
+The remaining blocker is operational data access, not missing analysis code. The preferred source is the authenticated ORDER072 D1 COLD mirror. Credentials must remain in an already-authorized SENEX environment; only the secret-free JSONL + manifests/hashes should move to the research machine or Intern Discovery.
