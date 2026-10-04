@@ -67,6 +67,24 @@ class LogisticModel(NamedTuple):
         return _sigmoid(z)
 
 
+def _epoch_second(value: object, field: str) -> int:
+    """Parse an exact integral epoch second without truncating fractions."""
+    if isinstance(value, bool):
+        raise ValueError(f"{field} is not an exact epoch second")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            raise ValueError(f"{field} is not an exact epoch second")
+        return int(value)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw or not raw.isdigit():
+            raise ValueError(f"{field} is not an exact epoch second")
+        return int(raw)
+    raise ValueError(f"{field} is not an exact epoch second")
+
+
 def _parse_time(value: object, field: str) -> float:
     if isinstance(value, (int, float)) and math.isfinite(float(value)):
         return float(value)
@@ -175,9 +193,11 @@ def extract_t0_pair(row: dict) -> T0Pair | None:
         return None
 
     try:
-        start_ts = int(poly.get("start_ts"))
-        end_ts = int(poly.get("end_ts"))
-    except (TypeError, ValueError):
+        start_ts = _epoch_second(poly.get("start_ts"), "market_start_ts")
+        end_ts = _epoch_second(poly.get("end_ts"), "market_end_ts")
+    except ValueError:
+        return None
+    if start_ts % TARGET_HORIZON_SECONDS != 0:
         return None
     if end_ts - start_ts != TARGET_HORIZON_SECONDS:
         return None
@@ -225,11 +245,15 @@ def _resolution_record(raw: dict) -> tuple[tuple[str, str], dict]:
         raise ResolutionContractError("resolution market identity is missing")
 
     try:
-        start_ts = int(raw.get("start_ts"))
-        end_ts = int(raw.get("end_ts"))
-    except (TypeError, ValueError) as exc:
+        start_ts = _epoch_second(raw.get("start_ts"), "resolution_start_ts")
+        end_ts = _epoch_second(raw.get("end_ts"), "resolution_end_ts")
+    except ValueError as exc:
         raise ResolutionContractError("resolution market grid is invalid") from exc
-    if end_ts - start_ts != TARGET_HORIZON_SECONDS or _slug_start(slug) != start_ts:
+    if (
+        start_ts % TARGET_HORIZON_SECONDS != 0
+        or end_ts - start_ts != TARGET_HORIZON_SECONDS
+        or _slug_start(slug) != start_ts
+    ):
         raise ResolutionContractError("resolution market identity/grid is not BTC 5m")
 
     outcome = str(raw.get("outcome") or "").upper()
