@@ -57,9 +57,30 @@ python -m pytest -q \
 
 This uses no NVIDIA credential and no network.
 
+## Trial privacy boundary
+
+NVIDIA's trial/free API experience warns that model inputs/outputs may be
+recorded and that confidential information should not be uploaded unless
+expressly permitted.
+
+Therefore the Free Endpoint is approved here only for:
+
+- public repository code/diffs/docs;
+- synthetic sealed-packet fixtures;
+- explicitly public-safe/redacted packet projections.
+
+Do **not** send the full proprietary T0 packet/audit payload to the trial
+endpoint merely because the model supports a very large context window.
+
+A real full-packet prospective shadow requires either:
+
+1. an explicitly approved provider/privacy arrangement; or
+2. a separately reviewed public-safe packet projection.
+
 ## Stage 1 — real NVIDIA shadow probe, no submit
 
-In an external worker with secrets injected by the platform:
+For the NVIDIA Free Endpoint, use only synthetic/public-safe input. In an
+external worker with secrets injected by the platform:
 
 ```bash
 export SENEX_DECISION_PROVIDER_BASE_URL="https://integrate.api.nvidia.com/v1"
