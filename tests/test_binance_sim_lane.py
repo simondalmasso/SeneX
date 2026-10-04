@@ -158,3 +158,22 @@ def test_flat_signal_still_closes_existing_position_on_time_stop(tmp_path):
     assert event["action"] == "CLOSE"
     assert event["reason"] == "TIME_STOP"
     assert lane.public_state()["open_position"] is None
+
+
+def test_module_has_no_live_exchange_or_secret_capability():
+    source = MODULE_PATH.read_text(encoding="utf-8").lower()
+    for forbidden in (
+        "import ccxt",
+        "from ccxt",
+        "requests.",
+        "httpx.",
+        "create_order",
+        "create_market_order",
+        "place_market_order",
+        "fetch_balance",
+        "withdraw",
+        "api_key",
+        "secret_key",
+        "private_key",
+    ):
+        assert forbidden not in source, forbidden
