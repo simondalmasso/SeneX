@@ -27,7 +27,7 @@ jobs:
       PROJECT_ID: seneciobot
       SERVICE_ID: senecio-h011
       PROD_URL: https://h011-web--senecio-h011--wbjggn89fnf8.code.run
-      NF_TOKEN: ${{ secrets.NORTHFLANK_SENEX_MAINTENANCE_TOKEN }}
+      NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
     steps:
       - name: Checkout exact canonical main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
