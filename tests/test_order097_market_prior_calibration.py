@@ -628,3 +628,68 @@ def test_constant_non_neutral_senex_feature_has_exactly_zero_incremental_effect(
         market_only.predict(market_logit),
         abs=1e-12,
     )
+
+
+@pytest.mark.parametrize(
+    "slug,start_ts,end_ts",
+    [
+        ("btc-updown-5m-1791069901", 1791069901, 1791070201),
+        ("btc-updown-5m-1791069900", 1791069900.5, 1791070200.5),
+    ],
+)
+def test_t0_market_grid_requires_exact_300_second_epoch_boundary(
+    slug,
+    start_ts,
+    end_ts,
+):
+    m = _load()
+    row = _row(slug=slug, start_ts=start_ts, end_ts=end_ts)
+    assert m.extract_t0_pair(row) is None
+
+
+@pytest.mark.parametrize(
+    "slug,start_ts,end_ts,pair_start,pair_end",
+    [
+        (
+            "btc-updown-5m-1791069901",
+            1791069901,
+            1791070201,
+            1791069901,
+            1791070201,
+        ),
+        (
+            "btc-updown-5m-1791069900",
+            1791069900.5,
+            1791070200.5,
+            1791069900,
+            1791070200,
+        ),
+    ],
+)
+def test_resolution_market_grid_rejects_off_boundary_or_fractional_timestamps(
+    slug,
+    start_ts,
+    end_ts,
+    pair_start,
+    pair_end,
+):
+    m = _load()
+    pair = m.T0Pair(
+        prediction_id="grid-contract",
+        decision_ts=pair_start + 30,
+        market_slug=slug,
+        condition_id="cond-grid",
+        market_start_ts=pair_start,
+        market_end_ts=pair_end,
+        market_horizon_seconds=300,
+        p_market=0.5,
+        senex_raw_up=0.5,
+    )
+    resolution = _resolution(
+        slug=slug,
+        condition_id="cond-grid",
+        start_ts=start_ts,
+        end_ts=end_ts,
+    )
+    with pytest.raises(m.ResolutionContractError, match="grid"):
+        m.join_resolutions([pair], [resolution])
