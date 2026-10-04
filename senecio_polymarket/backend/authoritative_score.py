@@ -28,6 +28,7 @@ MAX_ECE = 0.10
 INDEPENDENT_HORIZON_S = 3600.0
 CONFIDENCE_SEMANTICS = "RAW_CONVICTION"
 CONFIDENCE_PROBABILITY_SEMANTICS = "UNVALIDATED"
+DIRECTIONAL_GATE_SEMANTICS = "OPERATIONAL_POINT_ESTIMATE"
 
 
 def _normalize_symbol(value: Any) -> str:
@@ -183,6 +184,10 @@ def _gate(bucket: dict[str, Any], *, min_n: int, threshold_pct: float) -> dict[s
     win_rate_pct = float(bucket.get("win_rate_pct") or 0.0)
     return {
         "pass": bool(n >= min_n and win_rate_pct >= threshold_pct),
+        "gate_semantics": DIRECTIONAL_GATE_SEMANTICS,
+        "uncertainty_adjusted": False,
+        "edge_evidence": False,
+        "statistical_evidence_gate": "quality.gates.wilson_lower_95",
         "win_rate_pct": win_rate_pct,
         "n": n,
         "threshold_pct": threshold_pct,
@@ -493,6 +498,9 @@ def build_authoritative_score(
             "direction_n": MIN_DIRECTION_N,
             "n_source": "INDEPENDENT_NONOVERLAP_1H",
         },
+        "directional_gate_semantics": DIRECTIONAL_GATE_SEMANTICS,
+        "directional_gates_are_edge_evidence": False,
+        "statistical_edge_evidence_gate": "quality.gates.wilson_lower_95",
         "quality_thresholds": {
             "min_wilson_lower_95": MIN_WILSON_LOWER,
             "max_brier": MAX_BRIER,

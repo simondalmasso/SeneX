@@ -47,11 +47,13 @@ Current independent, non-overlapping 1h cohort:
 
 | Bucket | W / N | Win rate | Gate |
 | --- | ---: | ---: | --- |
-| LONG | 145 / 270 | 53.70% | simple directional gate PASS |
-| SHORT | 201 / 418 | 48.09% | FAIL |
-| GLOBAL | 346 / 688 | 50.29% | FAIL |
+| LONG | 145 / 270 | 53.70% | operational point-estimate gate PASS; not edge evidence |
+| SHORT | 201 / 418 | 48.09% | operational point-estimate gate FAIL |
+| GLOBAL | 346 / 688 | 50.29% | operational point-estimate gate FAIL |
 
 The 95% Wilson lower bound for the global cohort is approximately **0.465634**, below the required 0.50 evidence threshold.
+
+Directional `long_1h` / `short_1h` / `global_1h` `pass` fields are operational point-estimate thresholds used by PAPER control logic. They are not uncertainty-adjusted and are not statistical EDGE evidence. The uncertainty-aware evidence gate is the separate 95% Wilson lower-bound check under `quality.gates.wilson_lower_95`.
 
 The runtime therefore reports `score_status=REJECTED`. Raw model conviction is explicitly not a validated probability; Brier/ECE authority remains disabled.
 
