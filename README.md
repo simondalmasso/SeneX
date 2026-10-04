@@ -93,7 +93,7 @@ SENEX intentionally distinguishes:
 
 Current BTC 1h authority is rejected globally. LONG is above its simple directional threshold, while SHORT and global gates fail; the Wilson lower bound also fails. This is not evidence of deployable economic edge.
 
-The ORDER097/098/099 scientific stack is now merged into `main`: ORDER098 exports and verifies the persisted decision-time T0 audit plus exact Polymarket 5m resolutions; ORDER097 performs the target-aligned market-only vs market+SENEX nested comparison; ORDER099 adds preregistered tabular falsification, unique-market weighting, multiple-testing controls and market-cluster bootstrap uncertainty. The code is ready, but the real experiment remains **BLOCKED_DATA** until the authorized T0 export is executed and the resulting secret-free artifacts satisfy the frozen lineage/coverage contracts.
+The ORDER097/098/099 scientific stack is merged and has now been executed on persisted historical T0 audit evidence plus exact public Polymarket BTC 5m resolutions. The preregistered result is **INCREMENTAL_EDGE_NOT_DEMONSTRATED**: on 1,169 untouched HOLDOUT markets, market+SENEX improved Brier by only 0.0004169 versus market-only, with a 95% market-cluster bootstrap interval crossing zero and far short of the preregistered 0.005 practical-improvement floor. EDGE therefore remains **UNPROVEN**.
 
 ## Repository map
 
