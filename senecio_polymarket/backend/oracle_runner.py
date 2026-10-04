@@ -746,8 +746,13 @@ def _get_binance_sim_lane():
     if _binance_sim_lane is None:
         try:
             from .binance_sim_lane import BinanceSimLane
+            from .portfolio.persistence_paths import resolve_path
             _binance_sim_lane = BinanceSimLane(
-                state_path=PREDICTIONS_PATH.parent / "binance_sim_lane.json"
+                state_path=resolve_path(
+                    "binance_sim_lane.json",
+                    str(PREDICTIONS_PATH.parent / "binance_sim_lane.json"),
+                    env_key="SENEX_BINANCE_SIM_STATE_PATH",
+                )
             )
             log.info(
                 "BINANCE_SIM PAPER lane initialized: bankroll=18.63631644 USDT"
