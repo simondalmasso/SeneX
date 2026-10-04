@@ -284,6 +284,13 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         except Exception as pe_err:
             log.warning("portfolio routing failed (non-fatal): %s", pe_err)
 
+        # Isolated owner-requested PAPER wallet. This is deliberately separate
+        # from ACT-XXV and structurally incapable of real exchange orders.
+        try:
+            _route_to_binance_sim(prediction)
+        except Exception as sim_err:
+            log.warning("binance-sim PAPER routing failed (non-fatal): %s", sim_err)
+
         log.info(
             "prediction logged: %s %s conf=%.4f ev=%.8f price=%s exchange=%s",
             prediction.get("symbol"),
@@ -728,6 +735,75 @@ _tasks: list[asyncio.Task] = []
 # Lazily initialized on first use to avoid import-time side effects.
 _portfolio_coordinator = None
 
+# Isolated owner-requested PAPER wallet. It has its own local ledger and never
+# shares ACT-XXV positions/cash/journal state.
+_binance_sim_lane = None
+
+
+def _get_binance_sim_lane():
+    """Lazily instantiate the isolated simulated USDT wallet."""
+    global _binance_sim_lane
+    if _binance_sim_lane is None:
+        try:
+            from .binance_sim_lane import BinanceSimLane
+            _binance_sim_lane = BinanceSimLane(
+                state_path=PREDICTIONS_PATH.parent / "binance_sim_lane.json"
+            )
+            log.info(
+                "BINANCE_SIM PAPER lane initialized: bankroll=18.63631644 USDT"
+            )
+        except Exception as exc:
+            log.exception("failed to init BINANCE_SIM PAPER lane: %s", exc)
+            return None
+    return _binance_sim_lane
+
+
+def get_binance_sim_state() -> dict[str, Any]:
+    """Read-only public projection of the isolated simulated wallet."""
+    lane = _get_binance_sim_lane()
+    if lane is None:
+        return {
+            "status": "UNAVAILABLE",
+            "lane_id": "BINANCE_SIM_18_63631644",
+            "simulation_only": True,
+            "live_orders_possible": False,
+            "hard_paper_lock": True,
+        }
+    return lane.public_state()
+
+
+def get_binance_sim_trades(limit: int = 20) -> dict[str, Any]:
+    """Read-only bounded closed-trade tape for the isolated wallet."""
+    lane = _get_binance_sim_lane()
+    if lane is None:
+        return {
+            "status": "UNAVAILABLE",
+            "lane_id": "BINANCE_SIM_18_63631644",
+            "simulation_only": True,
+            "live_orders_possible": False,
+            "trades": [],
+            "count": 0,
+            "limit": max(1, min(int(limit), 50)),
+        }
+    return lane.public_trades(limit=int(limit))
+
+
+def _route_to_binance_sim(prediction: dict[str, Any]) -> None:
+    """Feed one persisted BTC prediction into the isolated PAPER wallet."""
+    lane = _get_binance_sim_lane()
+    if lane is None:
+        return
+    result = lane.on_prediction(prediction)
+    action = result.get("action")
+    if action in {"OPEN", "CLOSE"}:
+        log.info(
+            "BINANCE_SIM PAPER %s direction=%s pnl=%s notional=%s",
+            action,
+            result.get("direction"),
+            result.get("net_pnl_usdt"),
+            result.get("notional_usdt"),
+        )
+
 
 def _get_portfolio_coordinator():
     """Lazily instantiate the PortfolioCoordinator (ACT-XXV)."""
@@ -931,13 +1007,16 @@ async def stop() -> None:
             pass
     _tasks.clear()
     # ACT-XXV: stop portfolio coordinator (generates shadow report)
-    global _portfolio_coordinator
+    global _portfolio_coordinator, _binance_sim_lane
     if _portfolio_coordinator is not None:
         try:
             await _portfolio_coordinator.stop()
         except Exception as e:
             log.warning("portfolio coordinator stop error: %s", e)
         _portfolio_coordinator = None
+    # The isolated PAPER wallet persists its own local JSON ledger on every
+    # state transition. Dropping the singleton here is enough for clean stop.
+    _binance_sim_lane = None
     # Close Supabase HTTP client
     try:
         from . import supabase_client

@@ -17,7 +17,9 @@
   const apr = (value) => value == null || !Number.isFinite(Number(value))
     ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
   const money = (value, digits = 0) => value == null || !Number.isFinite(Number(value))
-    ? '—' : `$${Number(value).toLocaleString(undefined, {maximumFractionDigits: digits})}`;
+    ? '—' : `${Number(value).toLocaleString(undefined, {maximumFractionDigits: digits})}`;
+  const usdt = (value, digits = 8) => value == null || !Number.isFinite(Number(value))
+    ? 'UNKNOWN' : `${Number(value).toFixed(digits)} USDT`;
   const clock = (value) => {
     if (!value) return '—';
     let numeric = Number(value);
@@ -489,6 +491,73 @@
     }
   }
 
+  function renderBinanceSim(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const pos = data.open_position && typeof data.open_position === 'object'
+      ? data.open_position : null;
+    const rows = Array.isArray(data.recent_trades) ? data.recent_trades : [];
+
+    $('#binance-sim-start').textContent = usdt(data.starting_bankroll_usdt, 8);
+    $('#binance-sim-cash').textContent = usdt(data.cash_usdt, 8);
+    $('#binance-sim-equity').textContent = usdt(data.equity_usdt, 8);
+    $('#binance-sim-open').textContent = pos ? '1' : '0';
+    $('#binance-sim-direction').textContent = pos ? String(pos.direction || 'UNKNOWN') : '—';
+    $('#binance-sim-notional').textContent = pos ? usdt(pos.notional_usdt, 8) : '—';
+    $('#binance-sim-upnl').textContent = pos ? usdt(data.unrealized_pnl_usdt, 8) : '—';
+    $('#binance-sim-rpnl').textContent = usdt(data.realized_pnl_usdt, 8);
+    $('#binance-sim-closed').textContent = data.closed_trade_count == null ? 'UNKNOWN' : String(data.closed_trade_count);
+    $('#binance-sim-orders').textContent = data.total_simulated_orders == null ? 'UNKNOWN' : String(data.total_simulated_orders);
+
+    setValueClass('#binance-sim-upnl', Number(data.unrealized_pnl_usdt) < 0 ? 'neg' : (pos ? 'pos' : ''));
+    setValueClass('#binance-sim-rpnl', Number(data.realized_pnl_usdt) < 0 ? 'neg' : (data.realized_pnl_usdt != null ? 'pos' : ''));
+
+    const signal = data.last_signal || {};
+    const risk = data.risk_policy || {};
+    $('#binance-sim-meta').textContent =
+      `[API_DERIVED] ${data.status || 'UNKNOWN'} · ${data.account_label || 'SIMULATED / PAPER'}`;
+    $('#binance-sim-detail').textContent =
+      `EDGE=${data.edge || 'UNPROVEN'} · research=${data.research_verdict || 'UNKNOWN'} · last signal ${signal.direction || '—'} @ ${signal.reference_price == null ? '—' : money(signal.reference_price, 2)} · stop ${risk.stop_pct == null ? '—' : pct(risk.stop_pct)} · target ${risk.target_pct == null ? '—' : pct(risk.target_pct)} · 1 isolated position max · NO Binance API / NO real orders`;
+
+    const body = $('#binance-sim-trades-body');
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="7" class="placeholder">No closed isolated PAPER trades yet</td></tr>';
+    } else {
+      body.innerHTML = rows.map((row) => {
+        const pnl = Number(row.net_pnl_usdt);
+        const pnlClass = Number.isFinite(pnl) ? (pnl > 0 ? 'pnl-pos' : (pnl < 0 ? 'pnl-neg' : 'pnl-flat')) : 'pnl-flat';
+        return '<tr>' +
+          '<td>' + clock(row.closed_at) + '</td>' +
+          '<td>' + esc(row.direction || '?') + '</td>' +
+          '<td class="num">' + usdt(row.notional_usdt, 6) + '</td>' +
+          '<td class="num">' + (row.entry_price == null ? '?' : money(row.entry_price, 2)) + '</td>' +
+          '<td class="num">' + (row.exit_price == null ? '?' : money(row.exit_price, 2)) + '</td>' +
+          '<td class="num ' + pnlClass + '">' + usdt(row.net_pnl_usdt, 8) + '</td>' +
+          '<td>' + esc(row.exit_reason || '?') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    $('#binance-sim-panel').dataset.claimClass =
+      data.status === 'OK' ? 'API_DERIVED' : 'UNKNOWN/STALE';
+  }
+
+  async function refreshBinanceSim() {
+    try {
+      const payload = await getJSON('/api/paper/binance-sim/state');
+      renderBinanceSim(payload);
+    } catch (error) {
+      ['#binance-sim-cash', '#binance-sim-equity', '#binance-sim-open',
+       '#binance-sim-direction', '#binance-sim-notional', '#binance-sim-upnl',
+       '#binance-sim-rpnl', '#binance-sim-closed', '#binance-sim-orders']
+        .forEach((sel) => { $(sel).textContent = 'UNKNOWN'; });
+      $('#binance-sim-meta').textContent =
+        `[UNKNOWN/STALE] BINANCE-SIM PAPER ERROR · ${error.message || error}`;
+      $('#binance-sim-detail').textContent =
+        'SIMULATED / PAPER — NOT BINANCE BALANCE · API unavailable · NO real orders';
+      $('#binance-sim-panel').dataset.claimClass = 'UNKNOWN/STALE';
+    }
+  }
+
   function renderGPTrader(payload) {
     const data = payload && typeof payload === 'object' ? payload : {};
     const show = (value) => value == null ? 'UNKNOWN' : String(value);
@@ -569,12 +638,14 @@
     refreshScore,
     refreshPredictions,
     refreshPaper,
+    refreshBinanceSim,
     refreshGPTrader,
     refreshGPTraderTrades,
     renderScore,
     renderContext,
     renderPredictions,
     renderPaper,
+    renderBinanceSim,
     renderGPTrader,
     renderGPTraderTrades,
     paperView,
@@ -586,12 +657,14 @@
   refreshScore();
   refreshPredictions();
   refreshPaper();
+  refreshBinanceSim();
   refreshGPTrader();
   refreshGPTraderTrades();
   setInterval(refreshContext, 2000);
   setInterval(refreshScore, 10000);
   setInterval(refreshPredictions, 60000);
   setInterval(refreshPaper, 5000);
+  setInterval(refreshBinanceSim, 5000);
   setInterval(refreshGPTrader, 5000);
   setInterval(refreshGPTraderTrades, 5000);
   setInterval(renderDomainHealth, 1000);
