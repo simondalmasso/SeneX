@@ -128,7 +128,7 @@ edge=UNPROVEN
 3. Production code, dormant/legacy code and testnet capability were not clearly separated in the root documentation.
 4. Journal history and current execution-engine epoch are easy to conflate.
 5. `LiveGate` thresholds are useful diagnostics, but passing them would not establish economic EDGE or authorize live capital.
-6. H011 is now aligned to canonical `main` at `96c41f...`; future deploys still require an explicit operational gate and post-deploy acceptance.
+6. H011 was deployed from canonical `main` at `96c41f...`; later docs/governance commits may advance `main` without requiring a runtime redeploy. Any future runtime deploy still requires an explicit operational gate and post-deploy acceptance.
 
 ## Immediate gates
 
