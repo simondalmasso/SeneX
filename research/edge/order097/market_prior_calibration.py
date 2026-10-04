@@ -222,9 +222,10 @@ def _resolution_record(raw: dict) -> tuple[tuple[str, str], dict]:
     outcome = str(raw.get("outcome") or "").upper()
     if outcome not in {"UP", "DOWN"}:
         raise ResolutionContractError("resolution outcome must be UP or DOWN")
-    source = str(raw.get("source") or "").strip()
-    if not source:
-        raise ResolutionContractError("resolution source is missing")
+    source_raw = raw.get("source")
+    if not isinstance(source_raw, str) or not source_raw.strip():
+        raise ResolutionContractError("resolution source is missing or invalid")
+    source = source_raw.strip()
     try:
         resolved_at = _parse_time(raw.get("resolved_at"), "resolved_at")
     except ValueError as exc:
