@@ -1,0 +1,213 @@
+PRAGMA foreign_keys=ON;
+
+CREATE TABLE IF NOT EXISTS order075_runs (
+  run_id TEXT PRIMARY KEY,
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  mode TEXT NOT NULL CHECK(mode='PAPER_SHADOW'),
+  schema_version TEXT NOT NULL,
+  collector_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  config_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS order075_market_registry (
+  registry_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  observed_at_ms INTEGER NOT NULL,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  horizon_s INTEGER NOT NULL,
+  market_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  token_yes TEXT NOT NULL,
+  token_no TEXT NOT NULL,
+  event_start_ms INTEGER NOT NULL,
+  event_expiry_ms INTEGER NOT NULL,
+  resolution_source TEXT,
+  question TEXT,
+  slug TEXT,
+  fees_enabled INTEGER,
+  taker_fee_rate REAL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_poly_market_events (
+  event_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  asset TEXT,
+  horizon_s INTEGER,
+  market_id TEXT,
+  condition_id TEXT,
+  token_id TEXT,
+  outcome TEXT,
+  price REAL,
+  size REAL,
+  side TEXT,
+  best_bid REAL,
+  best_ask REAL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_poly_books (
+  book_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  horizon_s INTEGER NOT NULL,
+  market_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  token_id TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  best_bid REAL,
+  best_ask REAL,
+  bid_depth_5 REAL,
+  ask_depth_5 REAL,
+  book_hash TEXT,
+  bids_json TEXT NOT NULL,
+  asks_json TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_binance_ticks (
+  tick_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  exchange_ts_ms INTEGER,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  stream TEXT NOT NULL,
+  best_bid REAL,
+  best_bid_qty REAL,
+  best_ask REAL,
+  best_ask_qty REAL,
+  mid REAL,
+  microprice REAL,
+  trade_price REAL,
+  trade_qty REAL,
+  trade_side TEXT,
+  volume REAL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_crossvenue_join (
+  join_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  market_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  horizon_s INTEGER NOT NULL,
+  poly_event_key TEXT,
+  poly_implied_probability REAL,
+  poly_price_change REAL,
+  binance_mid REAL,
+  binance_return_1s REAL,
+  binance_return_5s REAL,
+  binance_return_30s REAL,
+  binance_return_60s REAL,
+  fair_value_estimate REAL,
+  fair_value_delta_bps REAL,
+  lead_lag_ms REAL,
+  book_response_latency_ms REAL,
+  clock_offset_ms REAL,
+  network_latency_ms REAL,
+  join_tolerance_ms INTEGER NOT NULL,
+  timing_quality TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_opportunities (
+  opportunity_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  horizon_s INTEGER NOT NULL,
+  market_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  token_yes TEXT NOT NULL,
+  token_no TEXT NOT NULL,
+  yes_best_bid REAL,
+  yes_best_ask REAL,
+  no_best_bid REAL,
+  no_best_ask REAL,
+  yes_depth REAL,
+  no_depth REAL,
+  gross_cost REAL,
+  fee_cost REAL,
+  slippage_cost REAL,
+  net_cost REAL,
+  net_edge_bps REAL,
+  simulated_fill_yes REAL,
+  simulated_fill_no REAL,
+  legging_failure INTEGER NOT NULL,
+  time_between_legs_ms INTEGER,
+  capacity_usd REAL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_paper_fills (
+  fill_key TEXT PRIMARY KEY,
+  opportunity_key TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  market_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  leg TEXT NOT NULL,
+  status TEXT NOT NULL,
+  requested_shares REAL NOT NULL,
+  filled_shares REAL NOT NULL,
+  vwap REAL,
+  notional REAL,
+  fee REAL,
+  slippage REAL,
+  latency_ms INTEGER,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS order075_metrics (
+  metric_key TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_ts_ms INTEGER,
+  receive_ts_ms INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  schema_version TEXT NOT NULL,
+  window_name TEXT NOT NULL,
+  metric_name TEXT NOT NULL,
+  metric_value REAL,
+  unit TEXT,
+  dimensions_json TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_o75_poly_events_market_time ON order075_poly_market_events(market_id, receive_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_o75_poly_books_market_time ON order075_poly_books(market_id, receive_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_o75_binance_symbol_time ON order075_binance_ticks(symbol, receive_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_o75_join_market_time ON order075_crossvenue_join(market_id, receive_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_o75_opp_market_time ON order075_opportunities(market_id, receive_ts_ms);
+CREATE INDEX IF NOT EXISTS idx_o75_fills_opp ON order075_paper_fills(opportunity_key);
+CREATE INDEX IF NOT EXISTS idx_o75_metrics_name_time ON order075_metrics(metric_name, receive_ts_ms);
