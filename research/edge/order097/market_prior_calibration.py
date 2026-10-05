@@ -1,3 +1,5 @@
+[Reading 930 lines from start (total: 930 lines, 0 remaining)]
+
 """ORDER097 target-aligned SENEX-vs-Polymarket incremental EDGE research.
 
 Pure offline functions only. This module deliberately refuses to use the
@@ -426,16 +428,25 @@ def _newton_refine_logistic(
         hessian = hessian + np.diag(penalty)
         return objective, gradient, hessian
 
-    objective, gradient, hessian = state(beta)
-    if float(np.max(np.abs(gradient))) <= tolerance:
-        return [float(value) for value in beta]
-
-    for _ in range(max_iter):
+    def newton_step_and_decrement(
+        gradient: np.ndarray,
+        hessian: np.ndarray,
+    ) -> tuple[np.ndarray, float]:
         try:
             step = np.linalg.solve(hessian, gradient)
         except np.linalg.LinAlgError:
             step = np.linalg.lstsq(hessian, gradient, rcond=None)[0]
+        decrement_sq = float(gradient @ step)
+        if not math.isfinite(decrement_sq):
+            return step, math.inf
+        return step, math.sqrt(max(0.0, decrement_sq))
 
+    objective, gradient, hessian = state(beta)
+    step, decrement = newton_step_and_decrement(gradient, hessian)
+    if decrement <= tolerance:
+        return [float(value) for value in beta]
+
+    for _ in range(max_iter):
         alpha = 1.0
         accepted = False
         while alpha >= 1e-8:
@@ -454,7 +465,8 @@ def _newton_refine_logistic(
 
         if not accepted:
             raise RuntimeError("logistic optimizer refinement failed line search")
-        if float(np.max(np.abs(gradient))) <= tolerance:
+        step, decrement = newton_step_and_decrement(gradient, hessian)
+        if decrement <= tolerance:
             return [float(value) for value in beta]
 
     raise RuntimeError("logistic optimizer failed to converge")
@@ -918,3 +930,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
