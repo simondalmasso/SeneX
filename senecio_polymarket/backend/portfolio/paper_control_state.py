@@ -289,40 +289,40 @@ def _journal_number(
     value = row.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise PaperControlStateError(
-            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+            f"PAPER_CONTROL_JOURNAL_SCHEMA:{key.upper()}"
         )
     result = float(value)
     if not math.isfinite(result):
         raise PaperControlStateError(
-            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+            f"PAPER_CONTROL_JOURNAL_SCHEMA:{key.upper()}"
         )
     if nonnegative and result < 0:
         raise PaperControlStateError(
-            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+            f"PAPER_CONTROL_JOURNAL_SCHEMA:{key.upper()}"
         )
     if positive and result <= 0:
         raise PaperControlStateError(
-            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+            f"PAPER_CONTROL_JOURNAL_SCHEMA:{key.upper()}"
         )
     return result
 
 
 def validate_closed_journal_row(row: Any) -> dict[str, Any]:
     if not isinstance(row, dict):
-        raise PaperControlStateError("PAPER_CONTROL_JOURNAL_CORRUPT:ROW")
+        raise PaperControlStateError("PAPER_CONTROL_JOURNAL_SCHEMA:ROW")
     _validate_finite_tree(row, "JOURNAL_ROW")
 
     for key in ("trade_id", "symbol", "direction", "entry_ts", "exit_ts", "exit_reason"):
         value = row.get(key)
         if not isinstance(value, str) or not value.strip():
             raise PaperControlStateError(
-                f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+                f"PAPER_CONTROL_JOURNAL_SCHEMA:{key.upper()}"
             )
 
     direction = str(row["direction"]).upper()
     if direction not in ("LONG", "SHORT"):
         raise PaperControlStateError(
-            "PAPER_CONTROL_JOURNAL_CORRUPT:DIRECTION"
+            "PAPER_CONTROL_JOURNAL_SCHEMA:DIRECTION"
         )
     exit_reason = str(row["exit_reason"]).upper()
     if exit_reason not in {
@@ -333,14 +333,14 @@ def validate_closed_journal_row(row: Any) -> dict[str, Any]:
         "KILL_SWITCH",
     }:
         raise PaperControlStateError(
-            "PAPER_CONTROL_JOURNAL_CORRUPT:EXIT_REASON"
+            "PAPER_CONTROL_JOURNAL_SCHEMA:EXIT_REASON"
         )
 
     entry_dt = _parse_ts(row["entry_ts"])
     exit_dt = _parse_ts(row["exit_ts"])
     if entry_dt is None or exit_dt is None or exit_dt < entry_dt:
         raise PaperControlStateError(
-            "PAPER_CONTROL_JOURNAL_CORRUPT:TIMESTAMPS"
+            "PAPER_CONTROL_JOURNAL_SCHEMA:TIMESTAMPS"
         )
 
     _journal_number(row, "qty", positive=True)
@@ -353,7 +353,7 @@ def validate_closed_journal_row(row: Any) -> dict[str, Any]:
     total_fee = _journal_number(row, "total_fees_usd", nonnegative=True)
     if abs((entry_fee + exit_fee) - total_fee) > 0.01:
         raise PaperControlStateError(
-            "PAPER_CONTROL_JOURNAL_CORRUPT:FEE_RECONCILIATION"
+            "PAPER_CONTROL_JOURNAL_SCHEMA:FEE_RECONCILIATION"
         )
 
     return row
@@ -383,7 +383,7 @@ def load_strict_closed_journal(path: Path) -> list[dict[str, Any]]:
                 trade_id = str(row["trade_id"])
                 if trade_id in seen_ids:
                     raise PaperControlStateError(
-                        "PAPER_CONTROL_JOURNAL_CORRUPT:DUPLICATE_TRADE_ID"
+                        "PAPER_CONTROL_JOURNAL_DUPLICATE:TRADE_ID"
                     )
                 seen_ids.add(trade_id)
                 rows.append(row)
