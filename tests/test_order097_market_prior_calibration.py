@@ -858,7 +858,8 @@ def test_logistic_refinement_is_scale_aware_when_l2_is_zero():
     prediction_id = 0
     scaled = 1e-10
 
-    # Symmetric non-separable fixture with finite optimum:
+    # Symmetric non-separable fixture with finite optimum. The prediction
+    # contract must be invariant to the arbitrary units used for this feature.
     # P(y=1 | +scaled) = 0.55 and P(y=1 | -scaled) = 0.45.
     for feature, positives in ((scaled, 55), (-scaled, 45)):
         for index in range(100):
