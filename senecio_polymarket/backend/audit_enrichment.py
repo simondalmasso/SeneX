@@ -195,7 +195,6 @@ def enrich_prediction(prediction: dict, *, runtime_meta: Optional[dict] = None) 
         # We rebuild from scratch each time so callers can pass updated
         # runtime_meta on a re-enrichment pass.
         pipeline = audit.get("pipeline") if isinstance(audit.get("pipeline"), dict) else {}
-        action_vector = audit.get("action_vector") if isinstance(audit.get("action_vector"), dict) else {}
         execution_state = audit.get("execution_state") if isinstance(audit.get("execution_state"), dict) else {}
 
         s1 = _extract_step1(pipeline)

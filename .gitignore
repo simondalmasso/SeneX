@@ -5,3 +5,21 @@ __pycache__/
 .senex-provenance/
 senecio_polymarket/oracle/senecio_output/
 data/
+
+# Local secrets and virtual environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Local analysis/build artifacts
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+.DS_Store

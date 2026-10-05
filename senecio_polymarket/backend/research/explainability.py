@@ -347,7 +347,6 @@ class Explainer:
 
     def _compute_attributions(self, row: np.ndarray) -> np.ndarray:
         """Return (n_features,) array of signed attributions."""
-        n_feat = len(self.feature_names)
         # SHAP path
         if self._explainer_kind in ("shap_tree", "shap_kernel") and self._shap_explainer is not None:
             try:

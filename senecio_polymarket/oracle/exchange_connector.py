@@ -1,14 +1,19 @@
 """
 LIVE_BRIDGE_LAYER_v1: exchange_connector.py — Dual-Exchange Public Data Connector
 
-Purpose: Connect to Binance + Bybit via ccxt REST API for public market data only.
-This is a SHADOW OBSERVATION LAYER — it reads market reality. It does not act on it.
+Purpose: Connect to public exchange market-data APIs. The default connector is a
+SHADOW OBSERVATION LAYER. A separately guarded Binance testnet experiment path
+can place testnet-only orders; it is not part of the H011 public runtime.
 
 CRITICAL CONSTRAINTS:
-    - NO_REAL_ORDERS:  This module MUST NEVER place an order. It only reads data.
-    - NO_API_KEYS:     Only public endpoints (orderbook, ticker, trades, funding).
-    - PAPER_ONLY:      Even "execution" is simulated. Records what WOULD have happened.
-    - OBSERVATION_STREAM_ONLY: Output is a data stream, not trading commands.
+    - NO_MAINNET_ORDERS: Mainnet order routing is forbidden.
+    - PUBLIC_DATA_DEFAULT: Normal exchange instances use public market-data endpoints.
+    - TESTNET_KEYS_ONLY: Authentication is accepted only for the explicit
+      binance_testnet instance.
+    - VERIFIED_TESTNET_ROUTING: Any testnet order call revalidates effective
+      futures URLs before reaching the exchange order method.
+    - OBSERVATION_STREAM_DEFAULT: Market-data output is observational, not a
+      trading command.
 
 Architecture:
     - Two ccxt exchange instances (binance, bybit)
@@ -282,10 +287,12 @@ class NormalizedOrderbook:
 class ExchangeConnector:
     """Dual-exchange public data connector.
 
-    Connects to Binance + Bybit via ccxt REST API.
-    Public endpoints only — NO authentication, NO orders.
+    Connects to supported exchanges via ccxt REST API.
 
-    This is a SENSOR. It reads market reality. It does not act on it.
+    Normal exchange instances are public-data sensors. The explicit
+    binance_testnet instance is the only authenticated/order-capable path,
+    and place_market_order revalidates testnet routing before any order call.
+    Mainnet order routing is forbidden.
 
     Architecture:
         - Two ccxt exchange instances (binance, bybit)
@@ -1051,19 +1058,27 @@ class ExchangeConnector:
 
         ex = self.exchanges[exchange_name]
 
-        # SAFETY: Verify we are NOT on mainnet (multi-layer defense)
-        is_testnet = (
-            exchange_name == "binance_testnet"
-            or getattr(ex, 'isSandboxModeEnabled', False)
-            or getattr(ex, 'sandbox', False)
+        # SAFETY: order execution requires both the explicit testnet alias and
+        # effective ccxt futures URLs that still point to testnet at call time.
+        # The alias alone is not sufficient: the exchange object may have been
+        # replaced or mutated after initialization.
+        api_urls = ex.urls.get("api", {})
+        fapi_urls = (
+            api_urls.get("fapiPublic", ""),
+            api_urls.get("fapiPrivate", ""),
         )
-        # Defense-in-depth: also verify the actual fapi URLs point to testnet
-        fapi_private = ex.urls.get("api", {}).get("fapiPrivate", "")
-        if not is_testnet and "testnet" not in fapi_private:
+        effective_testnet = (
+            exchange_name == "binance_testnet"
+            and all(
+                isinstance(url, str) and "testnet" in url.lower()
+                for url in fapi_urls
+            )
+        )
+        if not effective_testnet:
             raise RuntimeError(
-                f"SAFETY ABORT: place_market_order called on NON-TESTNET exchange "
-                f"'{exchange_name}'. This would place REAL orders with REAL money. "
-                f"Use --mode testnet with --exchange binance_testnet only."
+                f"SAFETY ABORT: place_market_order called without verified "
+                f"Binance testnet routing for '{exchange_name}'. "
+                f"Refusing any market-order path."
             )
 
         # Get expected price from ticker before order
@@ -2020,7 +2035,6 @@ def _run_mock_tests():
     print("\n[Test 23] Depth metrics precision (known orderbook)...")
     try:
         # Create a known orderbook where we can verify the math
-        mid = 10000.0
         known_ob = {
             "bids": [
                 [9999.5, 1.0],   # within 0.5% of mid -> depth = 9999.5
@@ -2046,9 +2060,7 @@ def _run_mock_tests():
         # Spread = 10000.5 - 9999.5 = 1.0 -> 1.0/10000 * 10000 = 1.0 bps
         assert metrics["spread_bps"] == 1.0, f"Expected spread=1.0 bps, got {metrics['spread_bps']}"
 
-        # Threshold: 0.5% from mid
-        bid_threshold = 10000.0 * (1 - 0.005)  # = 9950.0
-        ask_threshold = 10000.0 * (1 + 0.005)  # = 10050.0
+        # Threshold: 0.5% from mid gives 9950.0 / 10050.0.
 
         # Bid depth: levels with price >= 9950.0
         # 9999.5 * 1.0 = 9999.5

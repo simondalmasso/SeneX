@@ -140,7 +140,7 @@ class VPINEstimator:
     def ingest_candle(self, ohlcv_row: list) -> None:
         """Add a single OHLCV row [ts, o, h, l, c, vol] to the VPIN stream."""
         try:
-            o, h, l, c, v = float(ohlcv_row[1]), float(ohlcv_row[2]), float(ohlcv_row[3]), float(ohlcv_row[4]), float(ohlcv_row[5])
+            _o, h, l, c, v = float(ohlcv_row[1]), float(ohlcv_row[2]), float(ohlcv_row[3]), float(ohlcv_row[4]), float(ohlcv_row[5])
         except (IndexError, ValueError, TypeError):
             return
         if v <= 0 or h <= l:

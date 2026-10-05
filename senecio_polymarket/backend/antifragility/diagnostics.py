@@ -453,7 +453,7 @@ class AnomalyClusterer:
 
     def fit_and_score(self, x: np.ndarray | list[float]) -> dict:
         """Update model AND return anomaly score."""
-        cluster = self.partial_fit(x)
+        self.partial_fit(x)
         return self.score(x)
 
     def cluster_summary(self) -> list[dict]:

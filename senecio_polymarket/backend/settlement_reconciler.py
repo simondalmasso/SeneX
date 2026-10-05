@@ -171,7 +171,7 @@ async def reconcile_once() -> dict[str, int]:
     eligible: list[dict[str, Any]] = []
     for row in rows:
         try:
-            row_id = int(row.get("id") or 0)
+            _row_id = int(row.get("id") or 0)
         except (TypeError, ValueError):
             continue
         if row.get("outcome") not in {"WIN", "LOSS"}:

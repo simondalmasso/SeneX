@@ -100,8 +100,6 @@ def generate_synthetic_predictions(n: int, output_path: str):
     """
     rng = random.Random(42)  # Deterministic seed
     symbols = ["ETHUSDT", "BTCUSDT", "SOLUSDT", "BNBUSDT"]
-    regimes = ["RANGING", "TRENDING", "HIGH_VOL"]
-    signal_names = ["orderflow", "volume_delta", "bidask", "funding", "oi", "price_momentum"]
 
     base_time = datetime(2026, 6, 12, 0, 0, 0, tzinfo=timezone.utc)
 
