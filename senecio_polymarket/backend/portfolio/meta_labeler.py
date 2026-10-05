@@ -216,6 +216,64 @@ class MetaLabeler:
         self._outcomes[direction].append(result)
         self._counts[direction][result] = self._counts[direction].get(result, 0) + 1
 
+    def persistent_state(self) -> dict[str, Any]:
+        """Return the decision-relevant outcome memory for restart continuity."""
+        return {
+            "outcomes": {
+                direction: list(self._outcomes[direction])
+                for direction in ("LONG", "SHORT")
+            },
+            "counts": {
+                direction: dict(self._counts[direction])
+                for direction in ("LONG", "SHORT")
+            },
+        }
+
+    def restore_persistent_state(self, state: dict[str, Any]) -> None:
+        if not isinstance(state, dict):
+            raise ValueError("META_LABELER_STATE_CORRUPT")
+        outcomes = state.get("outcomes")
+        counts = state.get("counts")
+        if not isinstance(outcomes, dict) or not isinstance(counts, dict):
+            raise ValueError("META_LABELER_STATE_CORRUPT")
+
+        restored_outcomes: dict[str, deque] = {}
+        restored_counts: dict[str, dict[str, int]] = {}
+        for direction in ("LONG", "SHORT"):
+            values = outcomes.get(direction)
+            count_row = counts.get(direction)
+            if not isinstance(values, list) or not isinstance(count_row, dict):
+                raise ValueError("META_LABELER_STATE_CORRUPT")
+            if len(values) > 20:
+                raise ValueError("META_LABELER_STATE_CORRUPT")
+            normalized: list[str] = []
+            for value in values:
+                token = str(value).upper()
+                if token not in ("WIN", "LOSS"):
+                    raise ValueError("META_LABELER_STATE_CORRUPT")
+                normalized.append(token)
+
+            win_count = count_row.get("WIN")
+            loss_count = count_row.get("LOSS")
+            if (
+                type(win_count) is not int
+                or type(loss_count) is not int
+                or win_count < 0
+                or loss_count < 0
+            ):
+                raise ValueError("META_LABELER_STATE_CORRUPT")
+            if win_count < normalized.count("WIN") or loss_count < normalized.count("LOSS"):
+                raise ValueError("META_LABELER_STATE_CORRUPT")
+
+            restored_outcomes[direction] = deque(normalized, maxlen=20)
+            restored_counts[direction] = {
+                "WIN": win_count,
+                "LOSS": loss_count,
+            }
+
+        self._outcomes = restored_outcomes
+        self._counts = restored_counts
+
     def stats(self) -> dict[str, Any]:
         return {
             "counts": dict(self._counts),

@@ -66,6 +66,18 @@ def test_restart_restores_execution_risk_and_last_prices(tmp_path: Path) -> None
     first.start()
     first.execution_engine.cash = 9974.94
     first.execution_engine.closed_positions = [_closed_position()]
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(
+            {
+                "trade_id": "pos-closed",
+                "symbol": "BTCUSDT",
+                "direction": "LONG",
+                "realized_pnl_usd": -1.25,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     first.execution_engine._order_count_offset = 7
     first.risk_kernel.state.current_equity = 9974.94
     first.risk_kernel.state.peak_equity = 10000.0
@@ -255,3 +267,208 @@ def test_failed_coordinator_start_never_publishes_partial_singleton(monkeypatch)
     state = paper_view.paper_state(last_prices={})
     assert state["status"] == "NO_PORTFOLIO_PIPELINE"
     assert state["execution"]["status"] == "UNKNOWN"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def test_crash_after_journal_fsync_fails_closed_on_restart(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    first = PortfolioCoordinator(config=cfg)
+    first.start()
+    pos = Position(
+        position_id="pos-crash",
+        symbol="BTCUSDT",
+        direction="LONG",
+        qty=1.0,
+        avg_entry_price=100.0,
+        entry_ts="2026-10-05T00:00:00+00:00",
+        stop_price=95.0,
+        target_price=105.0,
+        status="OPEN",
+        risk_usd=100.0,
+        proposal_id=1001,
+    )
+    first.execution_engine.positions[pos.symbol] = pos
+    first.execution_engine.cash = 9900.0
+    first.trade_journal.on_audit_event(
+        {"event": "POSITION_OPEN", "position": pos.to_dict()}
+    )
+    first._persist_control_state()
+
+    def _crash_after_journal(event: dict) -> None:
+        first.trade_journal.on_audit_event(event)
+        if event.get("event") == "POSITION_EXIT":
+            raise SystemExit("SIMULATED_CRASH_AFTER_JOURNAL_FSYNC")
+
+    first.execution_engine.set_audit_listener(_crash_after_journal)
+    with pytest.raises(SystemExit, match="SIMULATED_CRASH_AFTER_JOURNAL_FSYNC"):
+        first.execution_engine.check_exits(
+            "BTCUSDT",
+            110.0,
+            "2026-10-05T01:01:00+00:00",
+        )
+
+    rows = first.trade_journal.fetch_all()
+    assert [row["trade_id"] for row in rows] == ["pos-crash"]
+
+    restarted = PortfolioCoordinator(config=cfg)
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_JOURNAL_MISMATCH"):
+        restarted.start()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_last_price_rejected_before_save(tmp_path: Path, bad: float) -> None:
+    cfg = _config(tmp_path)
+    coord = PortfolioCoordinator(config=cfg)
+    coord.start()
+    coord._last_prices = {"BTCUSDT": bad}
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT"):
+        coord._persist_control_state()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_risk_value_rejected_before_save(tmp_path: Path, bad: float) -> None:
+    cfg = _config(tmp_path)
+    coord = PortfolioCoordinator(config=cfg)
+    coord.start()
+    coord.risk_kernel.state.current_equity = bad
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT"):
+        coord._persist_control_state()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_position_value_rejected_before_save(tmp_path: Path, bad: float) -> None:
+    cfg = _config(tmp_path)
+    coord = PortfolioCoordinator(config=cfg)
+    coord.start()
+    pos = _open_position("pos-bad")
+    pos.qty = bad
+    coord.execution_engine.positions[pos.symbol] = pos
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT"):
+        coord._persist_control_state()
+
+
+def test_noninteger_counters_rejected_on_restore(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    first = PortfolioCoordinator(config=cfg)
+    first.start()
+    state_path = Path(cfg["paper_control_state_path"])
+
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    payload["execution"]["total_orders"] = 1.5
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT:TOTAL_ORDERS"):
+        PortfolioCoordinator(config=cfg).start()
+
+    payload["execution"]["total_orders"] = 0
+    payload["risk_state"]["proposals_evaluated"] = 1.5
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT:PROPOSALS_EVALUATED"):
+        PortfolioCoordinator(config=cfg).start()
+
+
+def test_nonfinite_json_constant_rejected_on_restore(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    first = PortfolioCoordinator(config=cfg)
+    first.start()
+    state_path = Path(cfg["paper_control_state_path"])
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    payload["last_prices"] = {"BTCUSDT": float("nan")}
+    state_path.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_STATE_CORRUPT"):
+        PortfolioCoordinator(config=cfg).start()
+
+
+def test_meta_labeler_decision_state_survives_restart(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    first = PortfolioCoordinator(config=cfg)
+    first.start()
+    for _ in range(3):
+        first.meta_labeler.record_outcome("LONG", "LOSS")
+
+    before_stats = first.meta_labeler.stats()
+    before_label = first.meta_labeler.evaluate(
+        direction="LONG",
+        conviction=0.80,
+        regime_4h="BULL",
+        vol_pct=0.01,
+        spread_bps=1.0,
+        entry_price=100.0,
+        stop_price=98.0,
+        target_price=104.0,
+        expected_ev_bps=20.0,
+    )
+    first._persist_control_state()
+
+    second = PortfolioCoordinator(config=cfg)
+    second.start()
+    after_stats = second.meta_labeler.stats()
+    after_label = second.meta_labeler.evaluate(
+        direction="LONG",
+        conviction=0.80,
+        regime_4h="BULL",
+        vol_pct=0.01,
+        spread_bps=1.0,
+        entry_price=100.0,
+        stop_price=98.0,
+        target_price=104.0,
+        expected_ev_bps=20.0,
+    )
+
+    assert before_stats == after_stats
+    assert before_label.take_trade == after_label.take_trade
+    assert before_label.confidence_mult == after_label.confidence_mult
+    assert before_label.confidence_mult == pytest.approx(0.55)
+
+
+def test_microstructure_decision_state_survives_restart(tmp_path: Path) -> None:
+    cfg = _config(tmp_path)
+    first = PortfolioCoordinator(config=cfg)
+    first.start()
+
+    for bid, ask in (
+        (100.0, 100.0),
+        (140.0, 80.0),
+        (170.0, 60.0),
+        (210.0, 45.0),
+        (250.0, 30.0),
+    ):
+        first.microstructure.ingest_top_of_book(bid, ask)
+    first.microstructure.ingest_funding_oi(0.0007, 12.0)
+    first.microstructure.liq.ingest_high_volume_node(100.0, 1_000_000.0)
+
+    before_stats = first.microstructure.stats()
+    first._persist_control_state()
+
+    second = PortfolioCoordinator(config=cfg)
+    second.start()
+    after_stats = second.microstructure.stats()
+
+    # Feed the exact same next observation to both instances. The decision
+    # must be identical if the rolling information state survived restart.
+    first.microstructure.ingest_top_of_book(280.0, 20.0)
+    second.microstructure.ingest_top_of_book(280.0, 20.0)
+    before_report = first.microstructure.evaluate(
+        current_price=100.0,
+        direction="LONG",
+    )
+    after_report = second.microstructure.evaluate(
+        current_price=100.0,
+        direction="LONG",
+    )
+
+    assert before_stats == after_stats
+    assert before_report.toxic_score == after_report.toxic_score
+    assert before_report.action == after_report.action
+    assert before_report.size_scale == after_report.size_scale

@@ -24,6 +24,43 @@ class PaperControlStateError(RuntimeError):
     pass
 
 
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON constant: {value}")
+
+
+def _validate_finite_tree(value: Any, path: str = "ROOT") -> None:
+    """Reject NaN/Infinity anywhere in the durable scientific state."""
+    if value is None or isinstance(value, (str, bool)):
+        return
+    if type(value) is int:
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise PaperControlStateError(
+                f"PAPER_CONTROL_STATE_CORRUPT:NONFINITE:{path}"
+            )
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_finite_tree(item, f"{path}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _validate_finite_tree(item, f"{path}.{key}")
+        return
+    raise PaperControlStateError(
+        f"PAPER_CONTROL_STATE_CORRUPT:UNSUPPORTED_TYPE:{path}"
+    )
+
+
+def _require_exact_nonnegative_int(value: Any, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_STATE_CORRUPT:{label}"
+        )
+    return value
+
+
 def _fsync_parent(path: Path) -> None:
     if os.name == "nt":
         return
@@ -51,7 +88,10 @@ class PaperControlStateStore:
 
     def load(self) -> dict[str, Any]:
         try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            raw = json.loads(
+                self.path.read_text(encoding="utf-8"),
+                parse_constant=_reject_json_constant,
+            )
         except Exception as exc:
             raise PaperControlStateError(
                 f"PAPER_CONTROL_STATE_CORRUPT:{type(exc).__name__}"
@@ -62,7 +102,15 @@ class PaperControlStateStore:
     def save(self, payload: dict[str, Any]) -> None:
         self._validate(payload)
         tmp = self.path.with_name(self.path.name + ".tmp")
-        encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        encoded = (
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
         try:
             with open(tmp, "wb", buffering=0) as handle:
                 handle.write(encoded)
@@ -85,35 +133,88 @@ class PaperControlStateStore:
             raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:VERSION")
         if payload.get("paper_only") is not True:
             raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:PAPER_ONLY")
+
         execution = payload.get("execution")
         risk = payload.get("risk_state")
+        last_prices = payload.get("last_prices")
+        meta_state = payload.get("meta_labeler_state")
+        micro_state = payload.get("microstructure_state")
         if not isinstance(execution, dict) or not isinstance(risk, dict):
             raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:SECTIONS")
+        if not isinstance(last_prices, dict):
+            raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:LAST_PRICES")
+        if not isinstance(meta_state, dict):
+            raise PaperControlStateError(
+                "PAPER_CONTROL_STATE_CORRUPT:META_LABELER_STATE"
+            )
+        if not isinstance(micro_state, dict):
+            raise PaperControlStateError(
+                "PAPER_CONTROL_STATE_CORRUPT:MICROSTRUCTURE_STATE"
+            )
+
+        _validate_finite_tree(payload)
+
         for key in ("cash", "starting_cash"):
-            try:
-                value = float(execution[key])
-            except Exception as exc:
-                raise PaperControlStateError(
-                    f"PAPER_CONTROL_STATE_CORRUPT:{key.upper()}"
-                ) from exc
-            if not math.isfinite(value):
+            value = execution.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise PaperControlStateError(
                     f"PAPER_CONTROL_STATE_CORRUPT:{key.upper()}"
                 )
-        if not isinstance(execution.get("open_positions"), list):
+            if not math.isfinite(float(value)):
+                raise PaperControlStateError(
+                    f"PAPER_CONTROL_STATE_CORRUPT:{key.upper()}"
+                )
+
+        open_positions = execution.get("open_positions")
+        closed_positions = execution.get("closed_positions")
+        if not isinstance(open_positions, list):
             raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:OPEN_POSITIONS")
-        if not isinstance(execution.get("closed_positions"), list):
+        if not isinstance(closed_positions, list):
             raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:CLOSED_POSITIONS")
-        try:
-            total_orders = int(execution.get("total_orders", 0))
-        except Exception as exc:
-            raise PaperControlStateError(
-                "PAPER_CONTROL_STATE_CORRUPT:TOTAL_ORDERS"
-            ) from exc
-        if total_orders < 0:
-            raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:TOTAL_ORDERS")
-        if not isinstance(payload.get("last_prices"), dict):
-            raise PaperControlStateError("PAPER_CONTROL_STATE_CORRUPT:LAST_PRICES")
+
+        _require_exact_nonnegative_int(
+            execution.get("total_orders", 0),
+            "TOTAL_ORDERS",
+        )
+        for key in (
+            "consecutive_losses",
+            "proposals_evaluated",
+            "proposals_approved",
+            "proposals_rejected",
+        ):
+            _require_exact_nonnegative_int(
+                risk.get(key, 0),
+                key.upper(),
+            )
+
+        for collection_name, rows in (
+            ("OPEN_POSITIONS", open_positions),
+            ("CLOSED_POSITIONS", closed_positions),
+        ):
+            for index, row in enumerate(rows):
+                if not isinstance(row, dict):
+                    raise PaperControlStateError(
+                        f"PAPER_CONTROL_STATE_CORRUPT:{collection_name}"
+                    )
+                if "time_stop_minutes" in row:
+                    _require_exact_nonnegative_int(
+                        row["time_stop_minutes"],
+                        f"{collection_name}_{index}_TIME_STOP_MINUTES",
+                    )
+
+        for symbol, price in last_prices.items():
+            if not isinstance(symbol, str):
+                raise PaperControlStateError(
+                    "PAPER_CONTROL_STATE_CORRUPT:LAST_PRICES"
+                )
+            if isinstance(price, bool) or not isinstance(price, (int, float)):
+                raise PaperControlStateError(
+                    "PAPER_CONTROL_STATE_CORRUPT:LAST_PRICES"
+                )
+            if not math.isfinite(float(price)):
+                raise PaperControlStateError(
+                    "PAPER_CONTROL_STATE_CORRUPT:LAST_PRICES"
+                )
 
 
 def position_from_state(data: dict[str, Any]) -> Position:

@@ -118,6 +118,10 @@ class PortfolioCoordinator:
         self._control_state_restored = False
         self._control_state_migration = "NONE"
         self._control_order_count_semantics = "EXACT"
+        self._decision_state_migration = {
+            "meta_labeler": "NONE",
+            "microstructure": "NONE",
+        }
         self.portfolio_analytics = portfolio_analytics or PortfolioAnalytics(config=self.cfg)
         self.shadow_live = shadow_live or ShadowLive(config=self.cfg)
         self.live_gate = live_gate or LiveGate()
@@ -453,6 +457,7 @@ class PortfolioCoordinator:
                 "restored": self._control_state_restored,
                 "migration": self._control_state_migration,
                 "order_count_semantics": self._control_order_count_semantics,
+                "decision_state_migration": dict(self._decision_state_migration),
             },
         }
 
@@ -522,6 +527,16 @@ class PortfolioCoordinator:
                 str(symbol): float(price)
                 for symbol, price in self._last_prices.items()
             },
+            "meta_labeler_state": self.meta_labeler.persistent_state(),
+            "microstructure_state": self.microstructure.persistent_state(),
+            "decision_state_migration": getattr(
+                self,
+                "_decision_state_migration",
+                {
+                    "meta_labeler": "NATIVE",
+                    "microstructure": "NATIVE",
+                },
+            ),
         }
 
     def _persist_control_state(self) -> None:
@@ -529,11 +544,75 @@ class PortfolioCoordinator:
             raise RuntimeError("PAPER_CONTROL_STATE_REFUSES_NON_PAPER_MODE")
         if self.execution_engine.cfg.get("allow_live", False):
             raise RuntimeError("PAPER_CONTROL_STATE_REFUSES_LIVE_CAPABILITY")
-        self._control_state_store.save(self._control_state_payload())
+        payload = self._control_state_payload()
+        self._assert_journal_state_consistency(payload)
+        self._control_state_store.save(payload)
+
+    def _assert_journal_state_consistency(self, payload: dict[str, Any]) -> None:
+        """Fail closed if the state file and durable closed-trade journal disagree."""
+        rows = self.trade_journal.fetch_all()
+        journal_by_id: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            trade_id = str(row.get("trade_id") or "")
+            if not trade_id or trade_id in journal_by_id:
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:JOURNAL_IDENTITY"
+                )
+            journal_by_id[trade_id] = row
+
+        execution = payload.get("execution") or {}
+        open_rows = execution.get("open_positions") or []
+        closed_rows = execution.get("closed_positions") or []
+        open_ids = {
+            str(row.get("position_id") or "")
+            for row in open_rows
+            if isinstance(row, dict)
+        }
+        closed_by_id: dict[str, dict[str, Any]] = {}
+        for row in closed_rows:
+            if not isinstance(row, dict):
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:CLOSED_POSITION"
+                )
+            position_id = str(row.get("position_id") or "")
+            if not position_id or position_id in closed_by_id:
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:CLOSED_IDENTITY"
+                )
+            closed_by_id[position_id] = row
+
+        if open_ids.intersection(journal_by_id):
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:OPEN_ALREADY_CLOSED"
+            )
+        if set(closed_by_id) != set(journal_by_id):
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:CLOSED_ID_SET"
+            )
+
+        for position_id, position in closed_by_id.items():
+            journal = journal_by_id[position_id]
+            if str(position.get("symbol") or "") != str(journal.get("symbol") or ""):
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:SYMBOL"
+                )
+            if str(position.get("direction") or "").upper() != str(
+                journal.get("direction") or ""
+            ).upper():
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:DIRECTION"
+                )
+            state_pnl = float(position.get("realized_pnl") or 0.0)
+            journal_pnl = float(journal.get("realized_pnl_usd") or 0.0)
+            if abs(state_pnl - journal_pnl) > 1e-9:
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:REALIZED_PNL"
+                )
 
     def _restore_or_initialize_control_state(self) -> None:
         if self._control_state_store.exists():
             payload = self._control_state_store.load()
+            self._assert_journal_state_consistency(payload)
             self._apply_control_state(payload)
             self._control_state_restored = True
             if self._control_state_migration == "NONE":
@@ -556,6 +635,26 @@ class PortfolioCoordinator:
                 max_daily_loss_pct=float(self.risk_kernel.cfg["max_daily_loss_pct"]),
                 max_drawdown_pct=float(self.risk_kernel.cfg["max_drawdown_pct"]),
             )
+            # MetaLabeler can be reconstructed from the durable closed-trade
+            # sequence because its decision state depends only on outcomes.
+            for row in rows:
+                direction = str(row.get("direction") or "").upper()
+                if direction not in ("LONG", "SHORT"):
+                    continue
+                pnl = float(row.get("realized_pnl_usd") or 0.0)
+                self.meta_labeler.record_outcome(
+                    direction,
+                    "WIN" if pnl > 0 else "LOSS",
+                )
+            payload["meta_labeler_state"] = self.meta_labeler.persistent_state()
+            # Legacy deployments did not persist VPIN/OFI/liquidation history.
+            # Do not invent it. Establish an explicit one-time reset boundary.
+            payload["microstructure_state"] = self.microstructure.persistent_state()
+            payload["decision_state_migration"] = {
+                "meta_labeler": "RECONSTRUCTED_FROM_JOURNAL",
+                "microstructure": "RESET_AT_LEGACY_BOOTSTRAP",
+            }
+            self._assert_journal_state_consistency(payload)
             self._control_state_store.save(payload)
             self._apply_control_state(payload)
             self._control_state_restored = True
@@ -564,6 +663,10 @@ class PortfolioCoordinator:
 
         self._control_state_restored = False
         self._control_state_migration = "FRESH"
+        self._decision_state_migration = {
+            "meta_labeler": "FRESH",
+            "microstructure": "FRESH",
+        }
 
     def _apply_control_state(self, payload: dict[str, Any]) -> None:
         execution = payload["execution"]
@@ -591,6 +694,35 @@ class PortfolioCoordinator:
         self._last_prices = {
             str(symbol): float(price)
             for symbol, price in payload.get("last_prices", {}).items()
+        }
+        try:
+            self.meta_labeler.restore_persistent_state(
+                payload["meta_labeler_state"]
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_CORRUPT:META_LABELER_STATE"
+            ) from exc
+        try:
+            self.microstructure.restore_persistent_state(
+                payload["microstructure_state"]
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_CORRUPT:MICROSTRUCTURE_STATE"
+            ) from exc
+        decision_migration = payload.get("decision_state_migration")
+        if not isinstance(decision_migration, dict):
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_CORRUPT:DECISION_STATE_MIGRATION"
+            )
+        self._decision_state_migration = {
+            "meta_labeler": str(
+                decision_migration.get("meta_labeler") or "RESTORED"
+            ),
+            "microstructure": str(
+                decision_migration.get("microstructure") or "RESTORED"
+            ),
         }
         self._control_state_migration = str(payload.get("migration") or "RESTORED")
         self._control_order_count_semantics = str(
