@@ -155,6 +155,16 @@ Intermediate evidence:
 Fix: CI now checks the stronger effective-routing contract:
 `effective_testnet`, both futures URL keys, and per-URL `"testnet" in url.lower()`.
 
+## Mirror supply-chain hardening
+
+The GitHub→GitLab mirror workflow previously populated `known_hosts` with live
+`ssh-keyscan gitlab.com` output. That proves reachability but does not independently
+authenticate the host observed during the job.
+
+The cleanup pins GitLab.com's published ED25519, RSA and ECDSA host keys directly in
+the workflow. The exact key material was cross-checked against GitLab's current
+GitLab.com settings documentation before accepting the change.
+
 ## Repository hygiene changes
 
 - removed the UTF-8 BOM from `tests/test_portfolio_equity_reconcile_v2.py`;
@@ -168,6 +178,10 @@ Fix: CI now checks the stronger effective-routing contract:
 
 `requirements.lock` contains 60 fully pinned packages with hashes and declares its
 pip-compile provenance under Python 3.11.
+
+This pass verifies lock integrity and reproducible installation through Canonical CI. It does
+**not** claim a complete external CVE/advisory-database scan; no new third-party SCA tool is
+introduced by this cleanup.
 
 A Windows-only local install attempt failed on `uvloop`, which does not support
 Windows. This is not treated as a production defect because canonical CI/runtime use
