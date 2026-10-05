@@ -408,6 +408,117 @@ class MicrostructureIntelligence:
             ts=datetime.now(timezone.utc).isoformat(),
         )
 
+    # -------- durable decision state --------
+
+    def persistent_state(self) -> dict[str, Any]:
+        """Return only rolling state that can change RiskKernel decisions."""
+        return {
+            "vpin": {
+                "buckets": [dict(bucket) for bucket in self.vpin.buckets],
+                "current_bucket": dict(self.vpin._current_bucket),
+            },
+            "ofi": {
+                "tick_history": list(self.ofi.tick_history),
+                "last_bid_size": self.ofi._last_bid_size,
+                "last_ask_size": self.ofi._last_ask_size,
+                "cum_ofi": self.ofi._cum_ofi,
+            },
+            "liquidation_nodes": [
+                [price, volume]
+                for price, volume in self.liq._recent_high_volume_nodes
+            ],
+            "funding_bps": self._last_funding_bps,
+            "oi_change_24h_pct": self._last_oi_change_pct,
+        }
+
+    def restore_persistent_state(self, state: dict[str, Any]) -> None:
+        if not isinstance(state, dict):
+            raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+
+        def number(value: Any, *, nonnegative: bool = False) -> float:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+            result = float(value)
+            if not math.isfinite(result) or (nonnegative and result < 0):
+                raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+            return result
+
+        vpin_state = state.get("vpin")
+        ofi_state = state.get("ofi")
+        nodes = state.get("liquidation_nodes")
+        if (
+            not isinstance(vpin_state, dict)
+            or not isinstance(ofi_state, dict)
+            or not isinstance(nodes, list)
+        ):
+            raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+
+        buckets = vpin_state.get("buckets")
+        current_bucket = vpin_state.get("current_bucket")
+        if (
+            not isinstance(buckets, list)
+            or len(buckets) > self.vpin.cfg["vpin_window_buckets"]
+            or not isinstance(current_bucket, dict)
+        ):
+            raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+        restored_buckets: list[dict[str, float]] = []
+        for bucket in buckets:
+            if not isinstance(bucket, dict):
+                raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+            restored_buckets.append(
+                {
+                    "buy_vol": number(bucket.get("buy_vol"), nonnegative=True),
+                    "sell_vol": number(bucket.get("sell_vol"), nonnegative=True),
+                }
+            )
+        restored_current = {
+            "buy_vol": number(current_bucket.get("buy_vol"), nonnegative=True),
+            "sell_vol": number(current_bucket.get("sell_vol"), nonnegative=True),
+        }
+
+        ticks = ofi_state.get("tick_history")
+        if (
+            not isinstance(ticks, list)
+            or len(ticks) > self.ofi.cfg["ofi_window_ticks"]
+        ):
+            raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+        restored_ticks = [number(value) for value in ticks]
+        last_bid = number(ofi_state.get("last_bid_size"), nonnegative=True)
+        last_ask = number(ofi_state.get("last_ask_size"), nonnegative=True)
+        cum_ofi = number(ofi_state.get("cum_ofi"))
+
+        if len(nodes) > 20:
+            raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+        restored_nodes: list[tuple[float, float]] = []
+        for node in nodes:
+            if not isinstance(node, (list, tuple)) or len(node) != 2:
+                raise ValueError("MICROSTRUCTURE_STATE_CORRUPT")
+            restored_nodes.append(
+                (
+                    number(node[0]),
+                    number(node[1], nonnegative=True),
+                )
+            )
+
+        funding_bps = number(state.get("funding_bps"))
+        oi_change = number(state.get("oi_change_24h_pct"))
+
+        self.vpin.buckets = deque(
+            restored_buckets,
+            maxlen=self.vpin.cfg["vpin_window_buckets"],
+        )
+        self.vpin._current_bucket = restored_current
+        self.ofi.tick_history = deque(
+            restored_ticks,
+            maxlen=self.ofi.cfg["ofi_window_ticks"],
+        )
+        self.ofi._last_bid_size = last_bid
+        self.ofi._last_ask_size = last_ask
+        self.ofi._cum_ofi = cum_ofi
+        self.liq._recent_high_volume_nodes = restored_nodes
+        self._last_funding_bps = funding_bps
+        self._last_oi_change_pct = oi_change
+
     # -------- introspection --------
 
     def stats(self) -> dict[str, Any]:

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from senecio_polymarket.backend.portfolio.trade_journal import TradeJournal
 from senecio_polymarket.backend.portfolio.shadow_live import ShadowLive
+from senecio_polymarket.backend.portfolio.paper_control_state import PaperControlStateStore
 
 
 def test_results_dir_env_makes_default_journals_durable(tmp_path, monkeypatch):
@@ -11,6 +12,7 @@ def test_results_dir_env_makes_default_journals_durable(tmp_path, monkeypatch):
     assert journal.path == tmp_path / "trades.jsonl"
     assert shadow.path == tmp_path / "shadow_trades.jsonl"
     assert shadow.report_path == tmp_path / "shadow_report.json"
+    assert PaperControlStateStore().path == tmp_path / "paper_control_state.json"
 
 
 def test_explicit_paths_override_durable_default(tmp_path, monkeypatch):

@@ -811,15 +811,22 @@ def _route_to_binance_sim(prediction: dict[str, Any]) -> None:
 
 
 def _get_portfolio_coordinator():
-    """Lazily instantiate the PortfolioCoordinator (ACT-XXV)."""
+    """Lazily instantiate the PortfolioCoordinator (ACT-XXV).
+
+    Publish the singleton only after start() succeeds. A failed durable-state
+    restore must never leave a fresh/unrestored coordinator reachable by later
+    routing or observational views.
+    """
     global _portfolio_coordinator
     if _portfolio_coordinator is None:
         try:
             from .portfolio import PortfolioCoordinator
-            _portfolio_coordinator = PortfolioCoordinator()
-            _portfolio_coordinator.start()
+            candidate = PortfolioCoordinator()
+            candidate.start()
+            _portfolio_coordinator = candidate
             log.info("PortfolioCoordinator (ACT-XXV) initialized and started")
         except Exception as e:
+            _portfolio_coordinator = None
             log.exception("failed to init PortfolioCoordinator: %s", e)
             return None
     return _portfolio_coordinator
