@@ -179,6 +179,13 @@ def test_primary_eval_does_not_compute_bootstrap_below_frozen_gate(monkeypatch):
         (9999, 7),
         (10000, 8),
         (1, 1),
+        (10000.9, 7),
+        (10000, 7.9),
+        (10000.1, 7.1),
+        (True, 7),
+        (10000, False),
+        ("10000", 7),
+        (10000, "7"),
     ],
 )
 def test_frozen_eval_parameters_reject_noncanonical_values(bootstrap, seed):
