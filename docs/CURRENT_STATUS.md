@@ -6,7 +6,7 @@
 
 This file is a dated presentation snapshot. Fresh GitHub and H011 evidence supersedes it.
 
-> **POST-AUDIT / PHASE-SHIFT ADDENDUM — 2026-10-05:** Architecture is frozen for scientific work. ORDER100 remains `COLLECTING_PROSPECTIVE_DATA`; no interim prospective loss/edge metric is authorized before its >=300 fresh resolved-market gate. Historical ORDER099 calibration diagnostics are now reproducible from the exact frozen artifacts and confirm that absolute calibration is a larger issue than missing feature families; incremental SENEX edge remains unproven. PR #142 hardened future narrow-feature optimizer convergence without changing ORDER099 or ORDER100 frozen results.
+> **POST-AUDIT / PHASE-SHIFT ADDENDUM — 2026-10-05:** Architecture is frozen for scientific work. ORDER100 remains `COLLECTING_PROSPECTIVE_DATA`; no interim prospective loss/edge metric is authorized before its >=300 fresh resolved-market gate. Historical ORDER099 calibration diagnostics are now reproducible from the exact frozen artifacts and identify material absolute calibration error; they do not justify adding feature families, and incremental SENEX edge remains unproven. PR #142 hardened future narrow-feature optimizer convergence without changing ORDER099 or ORDER100 frozen results.
 >
 > **DATA AUTHORITY:** External Supabase is not a current SENEX operational authority. Current authority is Cloudflare D1 through the SENEX gateway/authority path plus H011 live readback. Legacy compatibility identifiers such as `supabase_client` and `SUPABASE_*` remain in code and deployment contracts and must not be mistaken for an active Supabase source.
 >
