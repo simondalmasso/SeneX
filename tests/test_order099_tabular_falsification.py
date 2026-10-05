@@ -346,20 +346,9 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
     predictions = tmp_path / "t0_predictions.jsonl"
     resolutions = tmp_path / "resolutions.jsonl"
     prediction_rows = [
-        {"id": 1, "source_audit_sha256": "a" * 64},
-        {"id": 2, "source_audit_sha256": "b" * 64},
+        _valid_t0_prediction_row(1, source_hash_char="a"),
     ]
-    resolution_rows = [
-        {
-            "slug": "btc-updown-5m-1791069600",
-            "condition_id": "0xabc",
-            "start_ts": 1791069600,
-            "end_ts": 1791069900,
-            "outcome": "UP",
-            "resolved_at": 1791069901,
-            "source": "POLYMARKET_GAMMA_RESOLVED_V1",
-        }
-    ]
+    resolution_rows = [_resolution_for_t0(prediction_rows[0])]
     predictions.write_text(
         "".join(_canonical(row) + "\n" for row in prediction_rows),
         encoding="utf-8",
@@ -377,10 +366,10 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
             "contract": "senex-order098-t0-audit-export-v1",
             "output_file_sha256": predictions_sha,
             "output_row_hashes_sha256": _sha256_text(
-                _canonical(["a" * 64, "b" * 64])
+                _canonical(["a" * 64])
             ),
-            "fetched_rows": 2,
-            "projected_rows": 2,
+            "fetched_rows": 1,
+            "projected_rows": 1,
             "skipped_rows": 0,
         }),
         encoding="utf-8",
@@ -410,6 +399,7 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
 
     assert result["predictions_sha256"] == predictions_sha
     assert result["resolutions_sha256"] == resolutions_sha
+    assert result["unique_t0_market_identities"] == 1
     assert result["requested_markets"] == 1
     assert result["accepted_markets"] == 1
     assert result["rejected_markets"] == 0
