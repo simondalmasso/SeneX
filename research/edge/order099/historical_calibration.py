@@ -1,5 +1,3 @@
-[Reading 405 lines from start (total: 405 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import argparse
@@ -405,5 +403,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
