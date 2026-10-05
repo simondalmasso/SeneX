@@ -39,7 +39,9 @@ which oracle_runner calls after persisting each prediction.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from .portfolio_engine import PortfolioEngine, PortfolioState
@@ -54,6 +56,13 @@ from .microstructure import MicrostructureIntelligence, MicrostructureReport
 from .meta_labeler import MetaLabeler, MetaLabel
 from .regime_hmm import HMMRegimeOverlay, RegimeBelief
 from .execution_fidelity import BookSnapshot, book_snapshot_from_dict
+from .paper_control_state import (
+    STATE_VERSION as PAPER_CONTROL_STATE_VERSION,
+    PaperControlStateStore,
+    bootstrap_from_closed_journal,
+    kernel_state_from_state,
+    position_from_state,
+)
 
 log = logging.getLogger("senecio.portfolio_coordinator")
 
@@ -94,6 +103,20 @@ class PortfolioCoordinator:
             path=self.cfg.get("journal_path"),
             supabase_mirror=self.cfg.get("supabase_mirror", False),
         )
+        control_state_path = self.cfg.get("paper_control_state_path")
+        if control_state_path is None and self.cfg.get("journal_path"):
+            control_state_path = str(
+                Path(str(self.cfg["journal_path"])).with_name("paper_control_state.json")
+            )
+        self._control_state_store = PaperControlStateStore(path=control_state_path)
+        raw_bootstrap = self.cfg.get("paper_control_allow_journal_bootstrap")
+        if raw_bootstrap is None:
+            raw_bootstrap = os.environ.get("SENEX_PAPER_CONTROL_ALLOW_JOURNAL_BOOTSTRAP")
+        self._allow_journal_bootstrap = str(raw_bootstrap or "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+        self._control_state_restored = False
+        self._control_state_migration = "NONE"
         self.portfolio_analytics = portfolio_analytics or PortfolioAnalytics(config=self.cfg)
         self.shadow_live = shadow_live or ShadowLive(config=self.cfg)
         self.live_gate = live_gate or LiveGate()
@@ -122,23 +145,28 @@ class PortfolioCoordinator:
     # -------- lifecycle --------
 
     def start(self) -> None:
-        """Wire audit listeners + initialize state."""
+        """Restore durable PAPER state, then wire listeners and start."""
         if self._started:
             return
-        # TradeJournal + ShadowLive both listen to ExecutionEngine's audit stream
+        self._restore_or_initialize_control_state()
+        # TradeJournal + ShadowLive both listen to ExecutionEngine's audit stream.
         self.execution_engine.set_audit_listener(self._on_audit_event)
         self._started = True
+        self._persist_control_state()
         log.info(
-            "PortfolioCoordinator started — equity=$%.2f trade_mode=%s live_locked=%s",
+            "PortfolioCoordinator started — equity=$%.2f trade_mode=%s live_locked=%s restored=%s migration=%s",
             self._portfolio_state.equity,
             self.cfg.get("trade_mode", "PAPER"),
             self.cfg.get("live_capital_locked", True),
+            self._control_state_restored,
+            self._control_state_migration,
         )
 
     async def stop(self) -> dict[str, Any]:
         """Generate final reports and stop shadow mode."""
         if not self._started:
             return {}
+        self._persist_control_state()
         report = self.shadow_live.stop()
         self._started = False
         log.info("PortfolioCoordinator stopped")
@@ -265,11 +293,13 @@ class PortfolioCoordinator:
             win_rate_by_direction=win_rate_by_direction,
         )
         if proposal is None:
+            self._persist_control_state()
             return {"skipped": "no_proposal", "prediction_id": prediction.get("id")}
 
         # 2) Risk-gate evaluation (RiskKernel consults MicrostructureIntelligence)
         decision = self.risk_kernel.evaluate(proposal)
         if not decision.approved:
+            self._persist_control_state()
             return {
                 "skipped": "risk_rejected",
                 "reason": decision.reason,
@@ -364,6 +394,7 @@ class PortfolioCoordinator:
                     self.meta_labeler.record_outcome(direction, result)
             except Exception as e:
                 log.debug("meta_labeler record_outcome failed: %s", e)
+        self._persist_control_state()
         return exits
 
     def evaluate_live_gate(
@@ -414,6 +445,13 @@ class PortfolioCoordinator:
                 self._last_regime_belief.to_dict()
                 if self._last_regime_belief else None
             ),
+            "paper_control_persistence": {
+                "version": PAPER_CONTROL_STATE_VERSION,
+                "state_path_name": self._control_state_store.path.name,
+                "state_exists": self._control_state_store.exists(),
+                "restored": self._control_state_restored,
+                "migration": self._control_state_migration,
+            },
         }
 
     def get_microstructure_report(self) -> dict[str, Any]:
@@ -449,10 +487,117 @@ class PortfolioCoordinator:
     def trip_kill_switch(self, reason: str) -> None:
         """Manually trip the kill switch — halts all new trades."""
         self.risk_kernel.trip_kill_switch(reason)
+        self._persist_control_state()
 
     def reset_kill_switch(self, reason: str = "manual reset") -> None:
         """Clear the kill switch (requires explicit human action)."""
         self.risk_kernel.reset_kill_switch(reason)
+        self._persist_control_state()
+
+    # -------- durable PAPER control state --------
+
+    def _control_state_payload(self) -> dict[str, Any]:
+        return {
+            "version": PAPER_CONTROL_STATE_VERSION,
+            "paper_only": True,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "migration": self._control_state_migration,
+            "execution": {
+                "cash": float(self.execution_engine.cash),
+                "starting_cash": float(self.execution_engine.starting_cash),
+                "total_orders": int(self.execution_engine.stats()["total_orders"]),
+                "open_positions": [
+                    pos.to_dict() for pos in self.execution_engine.positions.values()
+                    if pos.status == "OPEN"
+                ],
+                "closed_positions": [
+                    pos.to_dict() for pos in self.execution_engine.closed_positions
+                ],
+            },
+            "risk_state": self.risk_kernel.state.to_dict(),
+            "last_prices": {
+                str(symbol): float(price)
+                for symbol, price in self._last_prices.items()
+            },
+        }
+
+    def _persist_control_state(self) -> None:
+        if self.execution_engine.cfg.get("trade_mode", "PAPER") != "PAPER":
+            raise RuntimeError("PAPER_CONTROL_STATE_REFUSES_NON_PAPER_MODE")
+        if self.execution_engine.cfg.get("allow_live", False):
+            raise RuntimeError("PAPER_CONTROL_STATE_REFUSES_LIVE_CAPABILITY")
+        self._control_state_store.save(self._control_state_payload())
+
+    def _restore_or_initialize_control_state(self) -> None:
+        if self._control_state_store.exists():
+            payload = self._control_state_store.load()
+            self._apply_control_state(payload)
+            self._control_state_restored = True
+            if self._control_state_migration == "NONE":
+                self._control_state_migration = "RESTORED"
+            return
+
+        rows = self.trade_journal.fetch_all()
+        if rows:
+            if not self._allow_journal_bootstrap:
+                raise RuntimeError(
+                    "PAPER_CONTROL_STATE_MISSING_WITH_DURABLE_JOURNAL"
+                )
+            payload = bootstrap_from_closed_journal(
+                rows,
+                starting_cash=float(self.execution_engine.starting_cash),
+                consecutive_loss_threshold=int(
+                    self.risk_kernel.cfg["consecutive_loss_threshold"]
+                ),
+                cooldown_minutes=int(self.risk_kernel.cfg["cooldown_minutes"]),
+                max_daily_loss_pct=float(self.risk_kernel.cfg["max_daily_loss_pct"]),
+                max_drawdown_pct=float(self.risk_kernel.cfg["max_drawdown_pct"]),
+            )
+            self._control_state_store.save(payload)
+            self._apply_control_state(payload)
+            self._control_state_restored = True
+            self._control_state_migration = "JOURNAL_BOOTSTRAP_EXPLICIT"
+            return
+
+        self._control_state_restored = False
+        self._control_state_migration = "FRESH"
+
+    def _apply_control_state(self, payload: dict[str, Any]) -> None:
+        execution = payload["execution"]
+        self.execution_engine.cash = float(execution["cash"])
+        self.execution_engine.starting_cash = float(execution["starting_cash"])
+        self.execution_engine.orders.clear()
+        self.execution_engine._order_count_offset = int(
+            execution.get("total_orders", 0)
+        )
+
+        restored_open = {}
+        for item in execution.get("open_positions", []):
+            pos = position_from_state(item)
+            if pos.status != "OPEN":
+                raise RuntimeError("PAPER_CONTROL_STATE_CORRUPT:OPEN_POSITION_STATUS")
+            if pos.symbol in restored_open:
+                raise RuntimeError("PAPER_CONTROL_STATE_CORRUPT:DUPLICATE_OPEN_SYMBOL")
+            restored_open[pos.symbol] = pos
+        self.execution_engine.positions = restored_open
+        self.execution_engine.closed_positions = [
+            position_from_state(item)
+            for item in execution.get("closed_positions", [])
+        ]
+        self.risk_kernel.state = kernel_state_from_state(payload["risk_state"])
+        self._last_prices = {
+            str(symbol): float(price)
+            for symbol, price in payload.get("last_prices", {}).items()
+        }
+        self._control_state_migration = str(payload.get("migration") or "RESTORED")
+
+        # TradeJournal pending state is in-memory only. Re-seed it for any
+        # restored open position so the eventual exit remains a complete row.
+        for pos in restored_open.values():
+            self.trade_journal.on_audit_event(
+                {"event": "POSITION_OPEN", "position": pos.to_dict()}
+            )
+        self._refresh_portfolio_state()
 
     # -------- internal helpers --------
 
@@ -470,9 +615,13 @@ class PortfolioCoordinator:
         )
 
     def _on_audit_event(self, event: dict) -> None:
-        """Fan-out an ExecutionEngine audit event to journal + shadow."""
+        """Fan-out an ExecutionEngine audit event and checkpoint PAPER state."""
         self.trade_journal.on_audit_event(event)
         self.shadow_live.on_audit_event(event)
+        # POSITION_EXIT is emitted before ExecutionEngine moves the position
+        # from open -> closed. on_tick() checkpoints the completed transition.
+        if event.get("event") != "POSITION_EXIT":
+            self._persist_control_state()
 
     def _exec_self_test(self) -> dict[str, Any]:
         """Basic ExecutionEngine self-test for LIVE_GATE condition #6."""

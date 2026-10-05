@@ -202,6 +202,8 @@ class ExecutionEngine:
         self.cfg = {**DEFAULTS, **(config or {})}
         self._rng = random.Random(7)
         self.orders: dict[str, Order] = {}              # order_id → Order
+        self._order_count_offset: int = 0               # restored historical count
+        self._order_count_offset: int = 0               # restored historical count
         self.positions: dict[str, Position] = {}        # symbol → Position (one open per sym)
         self.closed_positions: list[Position] = []
         self.cash: float = self.cfg["starting_cash"]
@@ -832,7 +834,7 @@ class ExecutionEngine:
             "starting_cash": self.starting_cash,
             "open_positions": len(self.positions),
             "closed_positions": len(self.closed_positions),
-            "total_orders": len(self.orders),
+            "total_orders": self._order_count_offset + len(self.orders),
             "audit_log_size": len(self.audit_log),
             "fill_simulator": "on" if self.fill_simulator else "off",
         }
