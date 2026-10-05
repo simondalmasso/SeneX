@@ -1,3 +1,5 @@
+[Reading 897 lines from start (total: 897 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import importlib.util
@@ -848,3 +850,52 @@ def test_logistic_fitter_converges_on_narrow_probability_features():
     # Fixed-step GD previously stopped near 0.36 after 4,000 iterations.
     assert fitted.intercept == pytest.approx(0.11297054, abs=1e-5)
     assert fitted.coefficients[0] == pytest.approx(1.50688214, abs=1e-5)
+
+
+def test_logistic_refinement_is_scale_aware_when_l2_is_zero():
+    m = _load()
+
+    observations = []
+    features = []
+    prediction_id = 0
+    scaled = 1e-10
+
+    # Symmetric non-separable fixture with finite optimum:
+    # P(y=1 | +scaled) = 0.55 and P(y=1 | -scaled) = 0.45.
+    for feature, positives in ((scaled, 55), (-scaled, 45)):
+        for index in range(100):
+            pair = m.T0Pair(
+                prediction_id=prediction_id,
+                decision_ts=1000 + prediction_id,
+                market_slug=f"scaled-{prediction_id}",
+                condition_id=f"scaled-cond-{prediction_id}",
+                market_start_ts=900 + prediction_id,
+                market_end_ts=1200 + prediction_id,
+                market_horizon_seconds=300,
+                p_market=0.5,
+                senex_raw_up=0.5,
+            )
+            observations.append(
+                m.JoinedObservation(
+                    pair=pair,
+                    label_up=1 if index < positives else 0,
+                    resolved_at=1300 + prediction_id,
+                )
+            )
+            features.append((feature,))
+            prediction_id += 1
+
+    fitted = m._fit_logistic_features(
+        observations,
+        features,
+        l2=0.0,
+    )
+
+    positive = fitted.predict(scaled)
+    negative = fitted.predict(-scaled)
+
+    assert positive == pytest.approx(0.55, abs=1e-6)
+    assert negative == pytest.approx(0.45, abs=1e-6)
+
+
+[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
