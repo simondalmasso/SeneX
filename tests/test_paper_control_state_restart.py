@@ -226,3 +226,32 @@ def test_on_tick_checkpoints_completed_exit_for_restart(tmp_path: Path) -> None:
     assert restarted.execution_engine.stats()["closed_positions"] == 1
     assert restarted.execution_engine.cash == pytest.approx(expected_cash)
     assert restarted.risk_kernel.state.current_equity == pytest.approx(expected_cash)
+
+
+def test_failed_coordinator_start_never_publishes_partial_singleton(monkeypatch) -> None:
+    from senecio_polymarket.backend import oracle_runner, paper_view
+    from senecio_polymarket.backend import portfolio as portfolio_module
+
+    created = []
+
+    class FailingCoordinator:
+        def __init__(self):
+            created.append(self)
+
+        def start(self):
+            raise RuntimeError("restore failed")
+
+    monkeypatch.setattr(portfolio_module, "PortfolioCoordinator", FailingCoordinator)
+    monkeypatch.setattr(oracle_runner, "_portfolio_coordinator", None)
+    monkeypatch.setattr(paper_view, "_model_quality_view", lambda: {"status": "TEST"})
+    monkeypatch.setattr(paper_view, "_edge_view", lambda: {"status": "UNPROVEN"})
+
+    assert oracle_runner._get_portfolio_coordinator() is None
+    assert oracle_runner._portfolio_coordinator is None
+    assert oracle_runner._get_portfolio_coordinator() is None
+    assert oracle_runner._portfolio_coordinator is None
+    assert len(created) == 2
+
+    state = paper_view.paper_state(last_prices={})
+    assert state["status"] == "NO_PORTFOLIO_PIPELINE"
+    assert state["execution"]["status"] == "UNKNOWN"
