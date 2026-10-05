@@ -1,5 +1,3 @@
-[Reading 55 lines from start (total: 55 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import importlib.util
@@ -55,5 +53,3 @@ def test_historical_calibration_module_is_research_only():
     )
     for token in forbidden:
         assert token not in text
-
-[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
