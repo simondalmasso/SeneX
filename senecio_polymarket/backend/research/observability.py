@@ -208,6 +208,11 @@ DEFAULT_METRIC_SPECS: list[MetricSpec] = [
         "gauge",
     ),
     MetricSpec(
+        "senecio_monte_carlo_ruin_probability",
+        "Most recent Monte Carlo estimated ruin probability",
+        "gauge",
+    ),
+    MetricSpec(
         "senecio_rolling_sharpe",
         "Latest rolling Sharpe from research_metrics",
         "gauge",
