@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -141,12 +142,24 @@ def prospective_verdict(
 ) -> str:
     if prospective_sample_gate(n_markets) is not None:
         return "COLLECTING_PROSPECTIVE_DATA"
-    brier = bootstrap["brier"]
-    log_loss = bootstrap["log_loss"]
+    try:
+        brier = bootstrap["brier"]
+        log_loss = bootstrap["log_loss"]
+        brier_mean = float(brier["mean_delta"])
+        brier_high = float(brier["ci95_high"])
+        log_loss_high = float(log_loss["ci95_high"])
+    except (KeyError, TypeError, ValueError):
+        return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
+    if not all(math.isfinite(value) for value in (
+        brier_mean,
+        brier_high,
+        log_loss_high,
+    )):
+        return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
     if (
-        float(brier["mean_delta"]) <= -PRACTICAL_BRIER_GAIN
-        and float(brier["ci95_high"]) < 0.0
-        and float(log_loss["ci95_high"]) < 0.0
+        brier_mean <= -PRACTICAL_BRIER_GAIN
+        and brier_high < 0.0
+        and log_loss_high < 0.0
     ):
         return "PROSPECTIVE_EDGE_CONFIRMED"
     return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
