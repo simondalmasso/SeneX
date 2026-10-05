@@ -60,6 +60,40 @@ def _open_position(pid: str = "pos-open") -> Position:
     )
 
 
+def _journal_row(
+    trade_id: str,
+    *,
+    direction: str = "LONG",
+    entry_ts: str = "2026-10-04T01:00:00+00:00",
+    exit_ts: str = "2026-10-04T02:00:00+00:00",
+    entry_price: float = 100.0,
+    exit_price: float = 99.0,
+    qty: float = 1.0,
+    pnl: float = -1.0,
+    total_fees: float = 1.0,
+    risk_usd: float = 100.0,
+    prediction_id: int = 1,
+) -> dict:
+    return {
+        "journal_id": f"jr-{trade_id}",
+        "trade_id": trade_id,
+        "prediction_id": prediction_id,
+        "symbol": "BTCUSDT",
+        "direction": direction,
+        "entry_ts": entry_ts,
+        "exit_ts": exit_ts,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
+        "qty": qty,
+        "realized_pnl_usd": pnl,
+        "risk_usd": risk_usd,
+        "entry_fee_usd": total_fees / 2.0,
+        "exit_fee_usd": total_fees / 2.0,
+        "total_fees_usd": total_fees,
+        "exit_reason": "TIME_STOP",
+    }
+
+
 def test_restart_restores_execution_risk_and_last_prices(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
     first = PortfolioCoordinator(config=cfg)
@@ -68,12 +102,13 @@ def test_restart_restores_execution_risk_and_last_prices(tmp_path: Path) -> None
     first.execution_engine.closed_positions = [_closed_position()]
     Path(cfg["journal_path"]).write_text(
         json.dumps(
-            {
-                "trade_id": "pos-closed",
-                "symbol": "BTCUSDT",
-                "direction": "LONG",
-                "realized_pnl_usd": -1.25,
-            }
+            _journal_row(
+                "pos-closed",
+                pnl=-1.25,
+                total_fees=0.25,
+                risk_usd=10.0,
+                prediction_id=123,
+            )
         )
         + "\n",
         encoding="utf-8",
@@ -133,36 +168,22 @@ def test_existing_journal_without_state_fails_closed(tmp_path: Path) -> None:
 def test_explicit_journal_bootstrap_is_conservative_and_persists(tmp_path: Path) -> None:
     cfg = _config(tmp_path, allow_bootstrap=True)
     rows = [
-        {
-            "trade_id": "legacy-1",
-            "prediction_id": 1,
-            "symbol": "BTCUSDT",
-            "direction": "LONG",
-            "entry_ts": "2026-10-04T01:00:00+00:00",
-            "exit_ts": "2026-10-04T02:00:00+00:00",
-            "entry_price": 100.0,
-            "exit_price": 99.0,
-            "qty": 1.0,
-            "realized_pnl_usd": -10.0,
-            "total_fees_usd": 1.0,
-            "risk_usd": 100.0,
-            "exit_reason": "TIME_STOP",
-        },
-        {
-            "trade_id": "legacy-2",
-            "prediction_id": 2,
-            "symbol": "BTCUSDT",
-            "direction": "SHORT",
-            "entry_ts": "2026-10-04T03:00:00+00:00",
-            "exit_ts": "2026-10-04T04:00:00+00:00",
-            "entry_price": 100.0,
-            "exit_price": 99.0,
-            "qty": 1.0,
-            "realized_pnl_usd": 4.0,
-            "total_fees_usd": 1.0,
-            "risk_usd": 100.0,
-            "exit_reason": "TIME_STOP",
-        },
+        _journal_row(
+            "legacy-1",
+            direction="LONG",
+            entry_ts="2026-10-04T01:00:00+00:00",
+            exit_ts="2026-10-04T02:00:00+00:00",
+            pnl=-10.0,
+            prediction_id=1,
+        ),
+        _journal_row(
+            "legacy-2",
+            direction="SHORT",
+            entry_ts="2026-10-04T03:00:00+00:00",
+            exit_ts="2026-10-04T04:00:00+00:00",
+            pnl=4.0,
+            prediction_id=2,
+        ),
     ]
     Path(cfg["journal_path"]).write_text(
         "".join(json.dumps(row) + "\n" for row in rows),
@@ -174,9 +195,19 @@ def test_explicit_journal_bootstrap_is_conservative_and_persists(tmp_path: Path)
 
     assert coord.execution_engine.cash == pytest.approx(9994.0)
     assert coord.execution_engine.stats()["closed_positions"] == 2
+    assert coord.execution_engine.closed_positions == []
+    assert coord.execution_engine._closed_position_count_offset == 2
+    assert coord.execution_engine._historical_closed_trade_ids == [
+        "legacy-1",
+        "legacy-2",
+    ]
     assert coord.execution_engine.stats()["total_orders"] == 2
     assert coord._control_state_migration == "JOURNAL_BOOTSTRAP_EXPLICIT"
     assert coord._control_order_count_semantics == "MINIMUM_CLOSED_TRADES_AT_BOOTSTRAP"
+    assert coord._decision_state_migration == {
+        "meta_labeler": "RECONSTRUCTED_FROM_JOURNAL",
+        "microstructure": "RESET_AT_LEGACY_BOOTSTRAP",
+    }
     assert Path(cfg["paper_control_state_path"]).exists()
 
     # The bootstrap is one-time. A normal restart must restore the state file,
@@ -472,3 +503,100 @@ def test_microstructure_decision_state_survives_restart(tmp_path: Path) -> None:
     assert before_report.toxic_score == after_report.toxic_score
     assert before_report.action == after_report.action
     assert before_report.size_scale == after_report.size_scale
+
+
+def test_bootstrap_rejects_malformed_journal_line(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(_journal_row("ok")) + "\n" + "{truncated-json\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_CORRUPT"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_bootstrap_rejects_semantically_incomplete_journal_row(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps({"realized_pnl_usd": -5.0}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_CORRUPT"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def _valid_migration_row(trade_id: str = "strict-1", pnl: float = -5.0) -> dict:
+    return {
+        "trade_id": trade_id,
+        "prediction_id": 101,
+        "symbol": "BTCUSDT",
+        "direction": "LONG",
+        "entry_ts": "2026-10-04T01:00:00+00:00",
+        "exit_ts": "2026-10-04T02:00:00+00:00",
+        "entry_price": 100.0,
+        "exit_price": 99.0,
+        "qty": 1.0,
+        "realized_pnl_usd": pnl,
+        "total_fees_usd": 1.0,
+        "risk_usd": 100.0,
+        "exit_reason": "TIME_STOP",
+    }
+
+
+def test_journal_bootstrap_rejects_malformed_nonblank_line(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(_valid_migration_row()) + "\n" + "{malformed\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_CORRUPT"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_journal_bootstrap_rejects_semantically_incomplete_row(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(
+            {
+                "trade_id": "partial-1",
+                "symbol": "BTCUSDT",
+                "direction": "LONG",
+                "realized_pnl_usd": -5.0,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_SCHEMA"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_journal_bootstrap_rejects_exact_duplicate_trade_id(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    row = _valid_migration_row("dup-1")
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(row) + "\n" + json.dumps(row) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_DUPLICATE"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_journal_bootstrap_rejects_conflicting_duplicate_trade_id(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    first = _valid_migration_row("dup-conflict", pnl=-5.0)
+    second = _valid_migration_row("dup-conflict", pnl=3.0)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(first) + "\n" + json.dumps(second) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_DUPLICATE"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()

@@ -60,7 +60,9 @@ from .paper_control_state import (
     STATE_VERSION as PAPER_CONTROL_STATE_VERSION,
     PaperControlStateStore,
     bootstrap_from_closed_journal,
+    journal_has_nonblank_content,
     kernel_state_from_state,
+    load_strict_closed_journal,
     position_from_state,
 )
 
@@ -345,6 +347,10 @@ class PortfolioCoordinator:
                 target_price=proposal.target_price,
             )
 
+        # Even an approved proposal that ends with no durable position changes
+        # risk counters and rolling decision state. Checkpoint it explicitly.
+        self._persist_control_state()
+
         return {
             "proposal": proposal.to_dict(),
             "decision": decision.to_dict(),
@@ -514,6 +520,12 @@ class PortfolioCoordinator:
                 "starting_cash": float(self.execution_engine.starting_cash),
                 "total_orders": int(self.execution_engine.stats()["total_orders"]),
                 "order_count_semantics": self._control_order_count_semantics,
+                "closed_position_count_offset": int(
+                    self.execution_engine._closed_position_count_offset
+                ),
+                "historical_closed_trade_ids": list(
+                    self.execution_engine._historical_closed_trade_ids
+                ),
                 "open_positions": [
                     pos.to_dict() for pos in self.execution_engine.positions.values()
                     if pos.status == "OPEN"
@@ -550,7 +562,7 @@ class PortfolioCoordinator:
 
     def _assert_journal_state_consistency(self, payload: dict[str, Any]) -> None:
         """Fail closed if the state file and durable closed-trade journal disagree."""
-        rows = self.trade_journal.fetch_all()
+        rows = load_strict_closed_journal(self.trade_journal.path)
         journal_by_id: dict[str, dict[str, Any]] = {}
         for row in rows:
             trade_id = str(row.get("trade_id") or "")
@@ -581,11 +593,18 @@ class PortfolioCoordinator:
                 )
             closed_by_id[position_id] = row
 
+        historical_ids = execution.get("historical_closed_trade_ids") or []
+        historical_id_set = set(historical_ids)
+        if historical_id_set.intersection(closed_by_id):
+            raise RuntimeError(
+                "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:DUPLICATE_CLOSED_ID"
+            )
         if open_ids.intersection(journal_by_id):
             raise RuntimeError(
                 "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:OPEN_ALREADY_CLOSED"
             )
-        if set(closed_by_id) != set(journal_by_id):
+        represented_closed_ids = historical_id_set.union(closed_by_id)
+        if represented_closed_ids != set(journal_by_id):
             raise RuntimeError(
                 "PAPER_CONTROL_STATE_JOURNAL_MISMATCH:CLOSED_ID_SET"
             )
@@ -619,12 +638,12 @@ class PortfolioCoordinator:
                 self._control_state_migration = "RESTORED"
             return
 
-        rows = self.trade_journal.fetch_all()
-        if rows:
+        if journal_has_nonblank_content(self.trade_journal.path):
             if not self._allow_journal_bootstrap:
                 raise RuntimeError(
                     "PAPER_CONTROL_STATE_MISSING_WITH_DURABLE_JOURNAL"
                 )
+            rows = load_strict_closed_journal(self.trade_journal.path)
             payload = bootstrap_from_closed_journal(
                 rows,
                 starting_cash=float(self.execution_engine.starting_cash),
@@ -675,6 +694,12 @@ class PortfolioCoordinator:
         self.execution_engine.orders.clear()
         self.execution_engine._order_count_offset = int(
             execution.get("total_orders", 0)
+        )
+        self.execution_engine._closed_position_count_offset = int(
+            execution.get("closed_position_count_offset", 0)
+        )
+        self.execution_engine._historical_closed_trade_ids = list(
+            execution.get("historical_closed_trade_ids") or []
         )
 
         restored_open = {}

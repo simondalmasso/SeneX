@@ -176,6 +176,26 @@ class PaperControlStateStore:
             execution.get("total_orders", 0),
             "TOTAL_ORDERS",
         )
+        closed_offset = _require_exact_nonnegative_int(
+            execution.get("closed_position_count_offset", 0),
+            "CLOSED_POSITION_COUNT_OFFSET",
+        )
+        historical_ids = execution.get("historical_closed_trade_ids")
+        if not isinstance(historical_ids, list):
+            raise PaperControlStateError(
+                "PAPER_CONTROL_STATE_CORRUPT:HISTORICAL_CLOSED_TRADE_IDS"
+            )
+        if (
+            len(historical_ids) != closed_offset
+            or any(
+                not isinstance(value, str) or not value.strip()
+                for value in historical_ids
+            )
+            or len(set(historical_ids)) != len(historical_ids)
+        ):
+            raise PaperControlStateError(
+                "PAPER_CONTROL_STATE_CORRUPT:HISTORICAL_CLOSED_TRADE_IDS"
+            )
         for key in (
             "consecutive_losses",
             "proposals_evaluated",
@@ -247,6 +267,135 @@ def _parse_ts(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def journal_has_nonblank_content(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return any(line.strip() for line in handle)
+    except Exception as exc:
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{type(exc).__name__}"
+        ) from exc
+
+
+def _journal_number(
+    row: dict[str, Any],
+    key: str,
+    *,
+    nonnegative: bool = False,
+    positive: bool = False,
+) -> float:
+    value = row.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+        )
+    result = float(value)
+    if not math.isfinite(result):
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+        )
+    if nonnegative and result < 0:
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+        )
+    if positive and result <= 0:
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+        )
+    return result
+
+
+def validate_closed_journal_row(row: Any) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        raise PaperControlStateError("PAPER_CONTROL_JOURNAL_CORRUPT:ROW")
+    _validate_finite_tree(row, "JOURNAL_ROW")
+
+    for key in ("trade_id", "symbol", "direction", "entry_ts", "exit_ts", "exit_reason"):
+        value = row.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise PaperControlStateError(
+                f"PAPER_CONTROL_JOURNAL_CORRUPT:{key.upper()}"
+            )
+
+    direction = str(row["direction"]).upper()
+    if direction not in ("LONG", "SHORT"):
+        raise PaperControlStateError(
+            "PAPER_CONTROL_JOURNAL_CORRUPT:DIRECTION"
+        )
+    exit_reason = str(row["exit_reason"]).upper()
+    if exit_reason not in {
+        "STOP",
+        "TARGET",
+        "TIME_STOP",
+        "MANUAL",
+        "KILL_SWITCH",
+    }:
+        raise PaperControlStateError(
+            "PAPER_CONTROL_JOURNAL_CORRUPT:EXIT_REASON"
+        )
+
+    entry_dt = _parse_ts(row["entry_ts"])
+    exit_dt = _parse_ts(row["exit_ts"])
+    if entry_dt is None or exit_dt is None or exit_dt < entry_dt:
+        raise PaperControlStateError(
+            "PAPER_CONTROL_JOURNAL_CORRUPT:TIMESTAMPS"
+        )
+
+    _journal_number(row, "qty", positive=True)
+    _journal_number(row, "entry_price", positive=True)
+    _journal_number(row, "exit_price", positive=True)
+    _journal_number(row, "realized_pnl_usd")
+    _journal_number(row, "risk_usd", nonnegative=True)
+    entry_fee = _journal_number(row, "entry_fee_usd", nonnegative=True)
+    exit_fee = _journal_number(row, "exit_fee_usd", nonnegative=True)
+    total_fee = _journal_number(row, "total_fees_usd", nonnegative=True)
+    if abs((entry_fee + exit_fee) - total_fee) > 0.01:
+        raise PaperControlStateError(
+            "PAPER_CONTROL_JOURNAL_CORRUPT:FEE_RECONCILIATION"
+        )
+
+    return row
+
+
+def load_strict_closed_journal(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    row = json.loads(
+                        stripped,
+                        parse_constant=_reject_json_constant,
+                    )
+                except Exception as exc:
+                    raise PaperControlStateError(
+                        f"PAPER_CONTROL_JOURNAL_CORRUPT:JSON_LINE_{line_number}"
+                    ) from exc
+                validate_closed_journal_row(row)
+                trade_id = str(row["trade_id"])
+                if trade_id in seen_ids:
+                    raise PaperControlStateError(
+                        "PAPER_CONTROL_JOURNAL_CORRUPT:DUPLICATE_TRADE_ID"
+                    )
+                seen_ids.add(trade_id)
+                rows.append(row)
+    except PaperControlStateError:
+        raise
+    except Exception as exc:
+        raise PaperControlStateError(
+            f"PAPER_CONTROL_JOURNAL_CORRUPT:{type(exc).__name__}"
+        ) from exc
+    return rows
+
+
 def bootstrap_from_closed_journal(
     rows: Iterable[dict[str, Any]],
     *,
@@ -262,7 +411,10 @@ def bootstrap_from_closed_journal(
     The caller must separately establish that no open PAPER position needs to
     survive the migration. This function never guesses an open position.
     """
-    records = [dict(row) for row in rows]
+    records = [
+        validate_closed_journal_row(dict(row))
+        for row in rows
+    ]
     if not records:
         raise PaperControlStateError("PAPER_CONTROL_STATE_BOOTSTRAP_EMPTY_JOURNAL")
     now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -272,46 +424,26 @@ def bootstrap_from_closed_journal(
     daily_pnl = 0.0
     streak = 0
     last_loss_ts: str | None = None
-    closed_positions: list[dict[str, Any]] = []
+    historical_closed_trade_ids: list[str] = []
     last_prices: dict[str, float] = {}
 
     for row in records:
-        pnl = float(row.get("realized_pnl_usd") or 0.0)
+        pnl = float(row["realized_pnl_usd"])
         cash += pnl
         peak = max(peak, cash)
-        exit_dt = _parse_ts(row.get("exit_ts"))
+        exit_dt = _parse_ts(row["exit_ts"])
         if exit_dt is not None and exit_dt.strftime("%Y-%m-%d") == today:
             daily_pnl += pnl
         if pnl < 0:
             streak += 1
-            last_loss_ts = row.get("exit_ts")
+            last_loss_ts = str(row["exit_ts"])
         elif pnl > 0:
             streak = 0
             last_loss_ts = None
 
-        symbol = str(row.get("symbol") or "")
-        if symbol and row.get("exit_price") is not None:
-            last_prices[symbol] = float(row["exit_price"])
-        closed_positions.append(
-            Position(
-                position_id=str(row.get("trade_id") or f"legacy-{len(closed_positions)+1}"),
-                symbol=symbol,
-                direction=str(row.get("direction") or "LONG").upper(),
-                qty=float(row.get("qty") or 0.0),
-                avg_entry_price=float(row.get("entry_price") or 0.0),
-                entry_ts=str(row.get("entry_ts") or ""),
-                stop_price=0.0,
-                target_price=0.0,
-                status="CLOSED",
-                exit_price=float(row.get("exit_price") or 0.0),
-                exit_ts=str(row.get("exit_ts") or ""),
-                exit_reason=str(row.get("exit_reason") or ""),
-                realized_pnl=pnl,
-                fees_paid=float(row.get("total_fees_usd") or 0.0),
-                risk_usd=float(row.get("risk_usd") or 0.0),
-                proposal_id=row.get("prediction_id"),
-            ).to_dict()
-        )
+        symbol = str(row["symbol"])
+        last_prices[symbol] = float(row["exit_price"])
+        historical_closed_trade_ids.append(str(row["trade_id"]))
 
     drawdown_pct = ((peak - cash) / peak * 100.0) if peak > 0 else 0.0
     daily_pct = (daily_pnl / max(float(starting_cash), 1.0)) * 100.0
@@ -365,8 +497,10 @@ def bootstrap_from_closed_journal(
             "starting_cash": float(starting_cash),
             "total_orders": len(records),
             "order_count_semantics": "MINIMUM_CLOSED_TRADES_AT_BOOTSTRAP",
+            "closed_position_count_offset": len(records),
+            "historical_closed_trade_ids": historical_closed_trade_ids,
             "open_positions": [],
-            "closed_positions": closed_positions,
+            "closed_positions": [],
         },
         "risk_state": risk_state,
         "last_prices": last_prices,
