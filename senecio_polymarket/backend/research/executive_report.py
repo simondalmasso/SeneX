@@ -37,7 +37,6 @@ def _rank_root_causes(study: dict) -> list:
 
     # From counterfactual search: each candidate filter is a "potential cause"
     cf = study.get("tests", {}).get("counterfactual_search", {}) or {}
-    baseline_wr = cf.get("baseline_wr", 0.0)
     for r in cf.get("results", []):
         f = r.get("filter", {})
         delta_pp = r.get("wr_delta_pp", 0.0)
