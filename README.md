@@ -18,9 +18,11 @@ SENEX is not a live trading product. The current production runtime is intention
 | BINANCE_SIM | isolated PAPER wallet; start `18.63631644 USDT`; not a Binance balance; no live orders |
 | Predictive edge | UNPROVEN |
 | BTC independent 1h authority | 688 observations, 50.29% global win rate |
-| GPTrader treatment | PAPER/HYPOTHETICAL, 0 TAKE decisions, INSUFFICIENT_DATA |
+| GPTrader DIRECT PAPER | active via GitHub Issue #91 receipts; H011-local legacy store remains idle/observational; INSUFFICIENT_DATA |
 
 H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may contain later documentation/governance changes and dormant research-only code that is not deployed to H011 (for example ORDER126 offline provider preparation). Such repository drift does **not** imply a runtime change or authorize LIVE, real orders, capital, paid provider calls, or an automatic redeploy.
+
+GPTrader currently has two distinct surfaces: the **active treatment authority** is DIRECT PAPER in GitHub Issue #91, using exact-H011 T0 transport and append-only TAKE/ABSTAIN receipts; the older H011-local GPTrader store remains inert/observational and may still report 0 TAKE. Do not conflate the legacy local store with the active direct ledger. Both remain PAPER-only with no real orders or capital.
 
 See [Current Status](docs/CURRENT_STATUS.md) for the dated evidence snapshot.
 
@@ -62,6 +64,8 @@ flowchart LR
 
     X[Binance testnet adapter] -. explicit testnet-only path .-> T[Testnet execution experiments]
 ```
+
+The in-repo GPTrader nodes above describe the sealed/local components only. Current treatment decisions are authoritative through Issue #91 DIRECT PAPER; the legacy local scheduler is inert and is not a second treatment authority.
 
 The deployed public process is `backend.main_real:app`. Mutating admin/control routes are not mounted into that public application. The exchange connector contains an explicitly guarded Binance **testnet** order capability; mainnet order routing is not part of the H011 public runtime.
 
