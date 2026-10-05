@@ -187,3 +187,16 @@ def test_frozen_eval_parameters_reject_noncanonical_values(bootstrap, seed):
         m._require_frozen_eval_parameters(bootstrap, seed)
 
     m._require_frozen_eval_parameters(m.DEFAULT_BOOTSTRAP, m.DEFAULT_SEED)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_prospective_verdict_rejects_nonfinite_metrics(bad):
+    _, m = _modules()
+    bootstrap = {
+        "brier": {"mean_delta": bad, "ci95_high": bad},
+        "log_loss": {"mean_delta": bad, "ci95_high": bad},
+    }
+    assert (
+        m.prospective_verdict(bootstrap, n_markets=300)
+        == "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
+    )
