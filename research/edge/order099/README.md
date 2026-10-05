@@ -213,3 +213,27 @@ Verdict                                 = INCREMENTAL_EDGE_NOT_DEMONSTRATED
 
 Corrected subgroup findings are exploratory and do not override the primary
 nested holdout + bootstrap verdict. EDGE remains UNPROVEN.
+
+## Historical calibration diagnostic — 2026-10-05
+
+A reproducible, offline-only diagnostic now lives in:
+
+`research/edge/order099/historical_calibration.py`
+
+It requires the exact ORDER098 prediction/resolution artifacts plus the
+canonical ORDER099 `RUN_MANIFEST.json`. It fails closed unless the four
+published primary HOLDOUT scores are reproduced before calibration or
+challenger diagnostics are emitted.
+
+The opened historical HOLDOUT is descriptive only. The diagnostic reports
+calibration intercept/slope, reliability bins, ECE/MCE, a two-parameter
+development-only recalibration challenger, and a one-parameter
+market/SENEX shrinkage challenger.
+
+Result note:
+
+`research/edge/order099/results/2026-10-05/CALIBRATION_DIAGNOSTIC.md`
+
+This analysis does not modify ORDER100, does not consume prospective
+ORDER100 labels, and cannot promote EDGE. A future challenger requires a
+separately frozen fresh cohort.
