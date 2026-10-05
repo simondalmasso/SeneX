@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -27,6 +28,49 @@ PRIMARY_KEYS = (
     "market_only_log_loss",
     "market_plus_senex_log_loss",
 )
+
+FROZEN_ARTIFACT_SHA256 = {
+    "t0_predictions": "2cee4c452916e4e0a5a2bc6b23d72159a140af0de0a4d06af9cf1d35c0324329",
+    "t0_export_manifest": "a6767fb71b0e734a31d8b00144d426203d1644e5e9869194b917edc3e217cf1e",
+    "resolutions": "8673f0c2c3e93a5df30130fd20d3c6fac3f35b35b31744fe0631ed173ea9293d",
+    "resolution_manifest": "6f11efd8208868a87a11533ae190f12d07fe334a27b815b2146f5bdda193e181",
+}
+
+FROZEN_PRIMARY = {
+    "market_only_brier": 0.1498169988344378,
+    "market_plus_senex_brier": 0.14940014582664737,
+    "market_only_log_loss": 0.4666161216746469,
+    "market_plus_senex_log_loss": 0.46575113131231505,
+}
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def assert_frozen_artifact_hashes(
+    paths: dict[str, Path],
+    manifest: dict[str, Any],
+) -> None:
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("FROZEN_ARTIFACT_MANIFEST_MISSING")
+    for key, expected in FROZEN_ARTIFACT_SHA256.items():
+        path = paths.get(key)
+        entry = artifacts.get(key)
+        if path is None or not isinstance(entry, dict):
+            raise ValueError(f"FROZEN_ARTIFACT_KEY_MISSING:{key}")
+        manifest_hash = str(entry.get("sha256", "")).lower()
+        actual_hash = _sha256(path).lower()
+        if manifest_hash != expected or actual_hash != expected:
+            raise ValueError(
+                f"FROZEN_ARTIFACT_HASH_MISMATCH:{key}:"
+                f"actual={actual_hash}:manifest={manifest_hash}:expected={expected}"
+            )
 
 
 def _sigmoid(values: np.ndarray) -> np.ndarray:
@@ -67,7 +111,15 @@ def assert_primary_reproduction(
         if key not in actual or key not in primary:
             raise ValueError(f"PRIMARY_REPRO_KEY_MISSING:{key}")
         expected = float(primary[key])
+        frozen_expected = float(FROZEN_PRIMARY[key])
         observed = float(actual[key])
+        if not math.isfinite(expected):
+            raise ValueError(f"PRIMARY_REPRO_EXPECTED_NONFINITE:{key}")
+        if abs(expected - frozen_expected) > tolerance:
+            raise ValueError(
+                f"PRIMARY_REPRO_MANIFEST_DRIFT:{key}:"
+                f"manifest={expected}:frozen={frozen_expected}"
+            )
         if not math.isfinite(observed) or abs(observed - expected) > tolerance:
             raise ValueError(
                 f"PRIMARY_REPRO_MISMATCH:{key}:observed={observed}:expected={expected}"
@@ -201,6 +253,8 @@ def _paired_delta(
     replicates: int,
     seed: int,
 ) -> dict[str, Any]:
+    if replicates <= 0:
+        return {}
     rng = np.random.default_rng(seed)
     values = []
     for _ in range(replicates):
@@ -234,6 +288,21 @@ def build_report(
     bootstrap: int = 1000,
     seed: int = 7,
 ) -> dict[str, Any]:
+    if bootstrap < 0:
+        raise ValueError("bootstrap must be non-negative")
+    run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    if run_manifest.get("contract") != "senex-order099-evaluated-result-v1":
+        raise ValueError("ORDER099_RUN_MANIFEST_CONTRACT_MISMATCH")
+    assert_frozen_artifact_hashes(
+        {
+            "t0_predictions": predictions_path,
+            "t0_export_manifest": predictions_manifest_path,
+            "resolutions": resolutions_path,
+            "resolution_manifest": resolutions_manifest_path,
+        },
+        run_manifest,
+    )
+
     provenance = order099.verify_order098_artifacts(
         predictions_path,
         predictions_manifest_path,
@@ -267,7 +336,6 @@ def build_report(
         "market_only_log_loss": market_metrics["log_loss"],
         "market_plus_senex_log_loss": augmented_metrics["log_loss"],
     }
-    run_manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
     assert_primary_reproduction(primary, run_manifest)
 
     calibration = {
@@ -314,7 +382,7 @@ def build_report(
     best_dev_brier, best_lambda = min(scored)
     hold_blend = (1.0 - best_lambda) * hold_market + best_lambda * hold_augmented
 
-    challenger_bootstrap = max(1, bootstrap)
+    challenger_bootstrap = bootstrap
     challengers = {
         "status": "EXPLORATORY_HISTORICAL_ONLY",
         "inner_fit_markets": len(inner_fit),
