@@ -934,7 +934,7 @@ async def research_montecarlo(request: Request):
             labels={"module": "monte_carlo"},
         )
         _metrics_registry.set_gauge(
-            "senecio_last_ic",  # we abuse this slot — TODO add a dedicated gauge
+            "senecio_monte_carlo_ruin_probability",
             float(rep.ruin_probability),
         )
     return rep.to_dict()
