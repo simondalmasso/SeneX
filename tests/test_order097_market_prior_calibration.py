@@ -848,3 +848,43 @@ def test_logistic_fitter_converges_on_narrow_probability_features():
     # Fixed-step GD previously stopped near 0.36 after 4,000 iterations.
     assert fitted.intercept == pytest.approx(0.11297054, abs=1e-5)
     assert fitted.coefficients[0] == pytest.approx(1.50688214, abs=1e-5)
+
+def test_logistic_refinement_is_scale_aware_when_l2_is_zero():
+    m = _load()
+    import random
+
+    rng = random.Random(7)
+    observations = []
+    features = []
+    n = 500
+    for i in range(n):
+        p = 0.45 + 0.10 * (i / (n - 1))
+        base_logit = math.log(p / (1.0 - p))
+        scaled_feature = base_logit * 1e-9
+        target_p = 1.0 / (1.0 + math.exp(-2.0 * base_logit))
+        label = 1 if rng.random() < target_p else 0
+        pair = m.T0Pair(
+            prediction_id=i,
+            decision_ts=1000 + i,
+            market_slug=f"scaled-{i}",
+            condition_id=f"scaled-cond-{i}",
+            market_start_ts=900 + i,
+            market_end_ts=1200 + i,
+            market_horizon_seconds=300,
+            p_market=0.5,
+            senex_raw_up=0.5,
+        )
+        observations.append(
+            m.JoinedObservation(
+                pair=pair,
+                label_up=label,
+                resolved_at=1300 + i,
+            )
+        )
+        features.append((scaled_feature,))
+
+    fitted = m._fit_logistic_features(observations, features, l2=0.0)
+
+    low = fitted.predict(features[0][0])
+    high = fitted.predict(features[-1][0])
+    assert high - low > 0.10

@@ -427,14 +427,16 @@ def _newton_refine_logistic(
         return objective, gradient, hessian
 
     objective, gradient, hessian = state(beta)
-    if float(np.max(np.abs(gradient))) <= tolerance:
-        return [float(value) for value in beta]
 
     for _ in range(max_iter):
         try:
             step = np.linalg.solve(hessian, gradient)
         except np.linalg.LinAlgError:
             step = np.linalg.lstsq(hessian, gradient, rcond=None)[0]
+
+        newton_decrement = float(np.dot(gradient, step))
+        if newton_decrement >= 0.0 and 0.5 * newton_decrement <= tolerance:
+            return [float(value) for value in beta]
 
         alpha = 1.0
         accepted = False
@@ -454,8 +456,6 @@ def _newton_refine_logistic(
 
         if not accepted:
             raise RuntimeError("logistic optimizer refinement failed line search")
-        if float(np.max(np.abs(gradient))) <= tolerance:
-            return [float(value) for value in beta]
 
     raise RuntimeError("logistic optimizer failed to converge")
 
