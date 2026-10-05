@@ -254,10 +254,19 @@ def write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None:
     Path(path).write_text("".join(chunks), encoding="utf-8")
 
 
+def _env_value(primary: str, *legacy: str) -> str:
+    """Resolve a neutral SENEX data variable before legacy compatibility names."""
+    for name in (primary, *legacy):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _public_origin(value: str) -> str:
     parsed = urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ExportContractError("SUPABASE_URL must be an absolute HTTP(S) origin")
+        raise ExportContractError("SENEX_DATA_URL must be an absolute HTTP(S) origin")
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
@@ -306,9 +315,7 @@ def build_manifest(
 
 def _headers(api_key: str) -> dict[str, str]:
     if not api_key:
-        raise ExportContractError(
-            "SUPABASE_READ_KEY or SUPABASE_KEY is required"
-        )
+        raise ExportContractError("read-only SENEX data credential is required")
     headers = {"apikey": api_key}
     if api_key.startswith("eyJ") and api_key.count(".") == 2:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -325,20 +332,31 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--symbol", default=DEFAULT_SYMBOL)
-    parser.add_argument("--table", default=os.environ.get("SUPABASE_TABLE", DEFAULT_TABLE))
+    parser.add_argument(
+        "--table",
+        default=_env_value("SENEX_DATA_TABLE", "SUPABASE_TABLE") or DEFAULT_TABLE,
+    )
     parser.add_argument("--page-size", type=int, default=500)
     parser.add_argument("--timeout", type=float, default=20.0)
     args = parser.parse_args()
 
-    source_url = os.environ.get("SUPABASE_URL", "").strip()
+    source_url = _env_value("SENEX_DATA_URL", "SUPABASE_URL")
     if not source_url:
-        parser.error("SUPABASE_URL is required")
-    api_key = (
-        os.environ.get("SUPABASE_READ_KEY", "").strip()
-        or os.environ.get("SUPABASE_KEY", "").strip()
+        parser.error(
+            "SENEX_DATA_URL is required "
+            "(legacy SUPABASE_URL is accepted for compatibility)"
+        )
+    api_key = _env_value(
+        "SENEX_DATA_READ_KEY",
+        "SENEX_DATA_KEY",
+        "SUPABASE_READ_KEY",
+        "SUPABASE_KEY",
     )
     if not api_key:
-        parser.error("SUPABASE_READ_KEY or SUPABASE_KEY is required")
+        parser.error(
+            "SENEX_DATA_READ_KEY is required "
+            "(legacy SUPABASE_READ_KEY/SUPABASE_KEY are accepted for compatibility)"
+        )
 
     base_url = source_url.rstrip("/") + "/rest/v1"
     with httpx.Client(
