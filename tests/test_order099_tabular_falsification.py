@@ -288,6 +288,59 @@ def _canonical(value) -> str:
     )
 
 
+
+
+def _valid_t0_prediction_row(market_i: int, *, source_hash_char: str) -> dict:
+    start = 1791069600 + market_i * 300
+    end = start + 300
+    decision = datetime.fromtimestamp(start + 30, timezone.utc).isoformat().replace(
+        "+00:00", "Z"
+    )
+    return {
+        "id": market_i,
+        "ts": decision,
+        "symbol": "BTCUSDT",
+        "audit": {
+            "pipeline": {
+                "step2_features": {
+                    "up_prob": 0.61,
+                    "polymarket_context_v1": {
+                        "directional_use": False,
+                        "experiment_enabled": False,
+                        "effective_weight": 0.0,
+                    },
+                }
+            },
+            "external_markets_v1": {
+                "polymarket": {
+                    "source": "POLYMARKET_PUBLIC",
+                    "version": "polymarket-btc-5m-v1",
+                    "eligible_for_prediction": True,
+                    "slug": f"btc-updown-5m-{start}",
+                    "condition_id": f"cond-{market_i}",
+                    "start_ts": start,
+                    "end_ts": end,
+                    "up_probability": 0.57,
+                }
+            },
+        },
+        "source_audit_sha256": source_hash_char * 64,
+    }
+
+
+def _resolution_for_t0(row: dict, *, outcome: str = "UP") -> dict:
+    poly = row["audit"]["external_markets_v1"]["polymarket"]
+    return {
+        "slug": poly["slug"],
+        "condition_id": poly["condition_id"],
+        "start_ts": poly["start_ts"],
+        "end_ts": poly["end_ts"],
+        "outcome": outcome,
+        "resolved_at": poly["end_ts"] + 1,
+        "source": "POLYMARKET_GAMMA_RESOLVED_V1",
+    }
+
+
 def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
     _, m = _modules()
     predictions = tmp_path / "t0_predictions.jsonl"
@@ -360,6 +413,74 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
     assert result["requested_markets"] == 1
     assert result["accepted_markets"] == 1
     assert result["rejected_markets"] == 0
+
+
+
+
+def test_order098_artifact_verification_rejects_selective_resolution_identity_coverage(
+    tmp_path,
+):
+    _, m = _modules()
+    predictions = tmp_path / "t0_predictions.jsonl"
+    resolutions = tmp_path / "resolutions.jsonl"
+
+    prediction_rows = [
+        _valid_t0_prediction_row(1, source_hash_char="a"),
+        _valid_t0_prediction_row(2, source_hash_char="b"),
+    ]
+    resolution_rows = [_resolution_for_t0(prediction_rows[0])]
+
+    predictions.write_text(
+        "".join(_canonical(row) + "\n" for row in prediction_rows),
+        encoding="utf-8",
+    )
+    resolutions.write_text(
+        "".join(_canonical(row) + "\n" for row in resolution_rows),
+        encoding="utf-8",
+    )
+    predictions_sha = _sha256_file(predictions)
+    resolutions_sha = _sha256_file(resolutions)
+
+    p_manifest = tmp_path / "t0_manifest.json"
+    p_manifest.write_text(
+        json.dumps({
+            "contract": "senex-order098-t0-audit-export-v1",
+            "output_file_sha256": predictions_sha,
+            "output_row_hashes_sha256": _sha256_text(
+                _canonical(["a" * 64, "b" * 64])
+            ),
+            "fetched_rows": 2,
+            "projected_rows": 2,
+            "skipped_rows": 0,
+        }),
+        encoding="utf-8",
+    )
+    r_manifest = tmp_path / "resolution_manifest.json"
+    r_manifest.write_text(
+        json.dumps({
+            "contract": "senex-order098-polymarket-5m-resolution-corpus-v1",
+            "predictions_file_sha256": predictions_sha,
+            "output_file_sha256": resolutions_sha,
+            "resolution_records_sha256": _sha256_text(
+                _canonical(resolution_rows)
+            ),
+            "requested_markets": 1,
+            "accepted_markets": 1,
+            "rejected_markets": 0,
+        }),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        m.ArtifactContractError,
+        match="resolution market identity coverage mismatch",
+    ):
+        m.verify_order098_artifacts(
+            predictions,
+            p_manifest,
+            resolutions,
+            r_manifest,
+        )
 
 
 def test_order098_artifact_verification_fails_closed_on_hash_or_partial_corpus(tmp_path):
