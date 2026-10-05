@@ -1,14 +1,19 @@
 """
 LIVE_BRIDGE_LAYER_v1: exchange_connector.py — Dual-Exchange Public Data Connector
 
-Purpose: Connect to Binance + Bybit via ccxt REST API for public market data only.
-This is a SHADOW OBSERVATION LAYER — it reads market reality. It does not act on it.
+Purpose: Connect to public exchange market-data APIs. The default connector is a
+SHADOW OBSERVATION LAYER. A separately guarded Binance testnet experiment path
+can place testnet-only orders; it is not part of the H011 public runtime.
 
 CRITICAL CONSTRAINTS:
-    - NO_REAL_ORDERS:  This module MUST NEVER place an order. It only reads data.
-    - NO_API_KEYS:     Only public endpoints (orderbook, ticker, trades, funding).
-    - PAPER_ONLY:      Even "execution" is simulated. Records what WOULD have happened.
-    - OBSERVATION_STREAM_ONLY: Output is a data stream, not trading commands.
+    - NO_MAINNET_ORDERS: Mainnet order routing is forbidden.
+    - PUBLIC_DATA_DEFAULT: Normal exchange instances use public market-data endpoints.
+    - TESTNET_KEYS_ONLY: Authentication is accepted only for the explicit
+      binance_testnet instance.
+    - VERIFIED_TESTNET_ROUTING: Any testnet order call revalidates effective
+      futures URLs before reaching the exchange order method.
+    - OBSERVATION_STREAM_DEFAULT: Market-data output is observational, not a
+      trading command.
 
 Architecture:
     - Two ccxt exchange instances (binance, bybit)
@@ -282,10 +287,12 @@ class NormalizedOrderbook:
 class ExchangeConnector:
     """Dual-exchange public data connector.
 
-    Connects to Binance + Bybit via ccxt REST API.
-    Public endpoints only — NO authentication, NO orders.
+    Connects to supported exchanges via ccxt REST API.
 
-    This is a SENSOR. It reads market reality. It does not act on it.
+    Normal exchange instances are public-data sensors. The explicit
+    binance_testnet instance is the only authenticated/order-capable path,
+    and place_market_order revalidates testnet routing before any order call.
+    Mainnet order routing is forbidden.
 
     Architecture:
         - Two ccxt exchange instances (binance, bybit)
