@@ -1,5 +1,8 @@
 # SENEX_DEEPSEEK_RUNBOOK
 
+> Naming note: `SUPABASE_*` below are legacy runtime compatibility variable names. The current persisted authority backend is the Cloudflare D1/PostgREST-compatible gateway. Do not infer an active Supabase service from these variable names.
+
+
 > **HISTORICAL / NOT CURRENT AUTHORITY** — This document preserves earlier SENEX operating context. It does not describe the current repository/runtime state. Start with [README.md](README.md) and [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); fresh GitHub/H011 evidence supersedes this file.
 
 
@@ -72,7 +75,7 @@ SENEX_RUNTIME_ROOT="$PWD" PYTHONPATH="$PWD" \
 ```
 
 The container entrypoint (`start_single_authority.sh`) additionally runs the
-settlement reconciler guard and requires a real Supabase; it is the PROVIDER
+settlement reconciler guard and requires the authorized D1-backed data gateway; the
 path, not the sandbox path.
 
 ## Health probe
@@ -86,7 +89,7 @@ curl -s http://127.0.0.1:8080/healthz | python3 -m json.tool
 
 ```bash
 curl -s -w '\nHTTP %{http_code}\n' http://127.0.0.1:8080/readyz
-# without Supabase authority: 503 {"status":"not_ready","reason":"NO_VALID_AUTHORITY_GENERATION",...}
+# without persisted D1-backed authority: 503 {"status":"not_ready","reason":"NO_VALID_AUTHORITY_GENERATION",...}
 # (fail-closed is CORRECT; do not "fix" it)
 ```
 
@@ -121,7 +124,7 @@ print(git_tree_sha(Path('.')))"
 ```bash
 docker build --build-arg NF_GIT_SHA=<actual-final-gitlab-commit> -t senex-b81:<tag> .
 docker run --rm -p 8080:8080 \
-  -e SUPABASE_URL=<real> -e SUPABASE_KEY=<real> senex-b81:<tag>
+  -e SUPABASE_URL=<authorized-d1-gateway> -e SUPABASE_KEY=<authorized-read-key> senex-b81:<tag>
 ```
 
 ---
