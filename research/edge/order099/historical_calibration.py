@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from research.edge.order097 import market_prior_calibration as order097
 from research.edge.order099 import tabular_falsification as order099
