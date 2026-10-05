@@ -546,7 +546,6 @@ def _persist_reliability(
     try:
         out_dir = Path(reliability_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         path = out_dir / f"reliability_{day}.jsonl"
         with open(path, "a", encoding="utf-8") as f:
