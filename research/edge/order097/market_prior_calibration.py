@@ -930,5 +930,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
