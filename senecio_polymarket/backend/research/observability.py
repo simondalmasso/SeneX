@@ -361,16 +361,15 @@ class MetricsRegistry:
             elapsed = time.perf_counter() - start
             if _HAS_PROM:
                 m = self._metrics.get(metric_name)
-                if m is None:
-                    return
-                try:
-                    if isinstance(m, (Histogram, Summary)):
-                        if labels:
-                            m.labels(**labels).observe(elapsed)
-                        else:
-                            m.observe(elapsed)
-                except Exception as e:
-                    log.debug("time_call observe failed (%s): %s", metric_name, e)
+                if m is not None:
+                    try:
+                        if isinstance(m, (Histogram, Summary)):
+                            if labels:
+                                m.labels(**labels).observe(elapsed)
+                            else:
+                                m.observe(elapsed)
+                    except Exception as e:
+                        log.debug("time_call observe failed (%s): %s", metric_name, e)
             else:
                 self._histograms_samples.setdefault(metric_name, []).append(elapsed)
 
