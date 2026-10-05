@@ -2,7 +2,6 @@
 
 > Naming note: `SUPABASE_*` below are legacy runtime compatibility variable names. The current persisted authority backend is the Cloudflare D1/PostgREST-compatible gateway. Do not infer an active Supabase service from these variable names.
 
-
 > **HISTORICAL / NOT CURRENT AUTHORITY** — This document preserves earlier SENEX operating context. It does not describe the current repository/runtime state. Start with [README.md](README.md) and [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); fresh GitHub/H011 evidence supersedes this file.
 
 
@@ -75,8 +74,9 @@ SENEX_RUNTIME_ROOT="$PWD" PYTHONPATH="$PWD" \
 ```
 
 The container entrypoint (`start_single_authority.sh`) additionally runs the
-settlement reconciler guard and requires the authorized D1-backed data gateway; the
-path, not the sandbox path.
+settlement reconciler guard and requires the authorized D1-backed data gateway
+configuration from the provider environment, not the intentionally unreachable
+sandbox values above.
 
 ## Health probe
 
