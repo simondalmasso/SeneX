@@ -153,7 +153,6 @@ def test_gateway_count_is_explicit_only_and_normal_get_is_count_free():
 
 def test_gateway_has_no_offset_history_scan_in_steady_state_contract():
     path = Path("cloudflare/senex-order072-d1-gateway/src/gateway_order074.js")
-    source = path.read_text(encoding="utf-8")
     # OFFSET remains a compatibility input, but steady-state callers do not emit it.
     steady_sources = (
         Path("senecio_polymarket/backend/supabase_client.py").read_text(encoding="utf-8")
