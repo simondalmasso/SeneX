@@ -188,3 +188,35 @@ def test_manifest_contains_hashes_and_no_credentials(tmp_path):
     assert "secret" not in encoded.lower()
     assert "apikey" not in encoded.lower()
     assert "authorization" not in encoded.lower()
+
+
+def test_neutral_data_env_precedes_legacy(monkeypatch):
+    m = _load()
+    monkeypatch.setenv("SENEX_DATA_URL", "https://d1.example")
+    monkeypatch.setenv("SUPABASE_URL", "https://legacy.example")
+    monkeypatch.setenv("SENEX_DATA_READ_KEY", "neutral-key")
+    monkeypatch.setenv("SUPABASE_READ_KEY", "legacy-key")
+
+    assert m._env_value("SENEX_DATA_URL", "SUPABASE_URL") == "https://d1.example"
+    assert (
+        m._env_value(
+            "SENEX_DATA_READ_KEY",
+            "SUPABASE_READ_KEY",
+            "SUPABASE_KEY",
+        )
+        == "neutral-key"
+    )
+
+
+def test_legacy_data_env_remains_compatibility_fallback(monkeypatch):
+    m = _load()
+    monkeypatch.delenv("SENEX_DATA_URL", raising=False)
+    monkeypatch.delenv("SENEX_DATA_READ_KEY", raising=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://legacy.example")
+    monkeypatch.setenv("SUPABASE_READ_KEY", "legacy-key")
+
+    assert m._env_value("SENEX_DATA_URL", "SUPABASE_URL") == "https://legacy.example"
+    assert (
+        m._env_value("SENEX_DATA_READ_KEY", "SUPABASE_READ_KEY", "SUPABASE_KEY")
+        == "legacy-key"
+    )
