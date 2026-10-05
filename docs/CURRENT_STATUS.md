@@ -165,7 +165,7 @@ No current evidence authorizes:
 - capital;
 - deployment solely to reconcile SHAs;
 - treating raw `up_prob` as a calibrated probability;
-- claiming incremental Polymarket edge before the ORDER098 artifacts are exported/verified and ORDER097/099 produce an evaluated causal holdout verdict;
+- claiming prospective incremental Polymarket edge before ORDER100 reaches its frozen >=300 resolved primary-band gate and produces the preregistered prospective verdict;
 - using HMM/regime complexity to rescue a failed or data-blocked tabular result.
 
 ## Merged scientific stack
