@@ -188,12 +188,49 @@ def verify_order098_artifacts(
             "resolution manifest accepted_markets does not match JSONL"
         )
 
+    prediction_market_keys = {
+        (pair.market_slug, pair.condition_id)
+        for pair in order097.extract_t0_pairs(prediction_rows)
+    }
+    resolution_market_keys: set[tuple[str, str]] = set()
+    for row in resolution_rows:
+        try:
+            key, _ = order097._resolution_record(row)
+        except order097.ResolutionContractError as exc:
+            raise ArtifactContractError(
+                "resolution JSONL contains an invalid market identity"
+            ) from exc
+        if key in resolution_market_keys:
+            raise ArtifactContractError(
+                "resolution JSONL contains a duplicate market identity"
+            )
+        resolution_market_keys.add(key)
+
+    if requested != len(prediction_market_keys):
+        raise ArtifactContractError(
+            "resolution manifest requested_markets does not match "
+            "unique admissible T0 market identities"
+        )
+    if accepted != len(resolution_market_keys):
+        raise ArtifactContractError(
+            "resolution manifest accepted_markets does not match "
+            "unique resolution market identities"
+        )
+    if resolution_market_keys != prediction_market_keys:
+        missing = prediction_market_keys - resolution_market_keys
+        extra = resolution_market_keys - prediction_market_keys
+        raise ArtifactContractError(
+            "resolution market identity coverage mismatch: "
+            f"missing={len(missing)} extra={len(extra)}"
+        )
+
     return {
         "predictions_sha256": predictions_sha,
         "resolutions_sha256": resolutions_sha,
         "prediction_contract": p_manifest["contract"],
         "resolution_contract": r_manifest["contract"],
         "prediction_rows": len(prediction_rows),
+        "unique_t0_market_identities": len(prediction_market_keys),
         "requested_markets": requested,
         "accepted_markets": accepted,
         "rejected_markets": rejected,
