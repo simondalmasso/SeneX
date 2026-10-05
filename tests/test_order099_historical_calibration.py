@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -53,3 +55,14 @@ def test_historical_calibration_module_is_research_only():
     )
     for token in forbidden:
         assert token not in text
+
+def test_historical_calibration_direct_cli_help():
+    completed = subprocess.run(
+        [sys.executable, str(MODULE_PATH), "--help"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0
+    assert "--run-manifest" in completed.stdout
