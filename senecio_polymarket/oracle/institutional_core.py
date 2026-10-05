@@ -1146,7 +1146,7 @@ class SingleDecisionCore:
     # LEARNING LOOP (outcome feedback)
     # ===================================================================
 
-    def record_outcome(self, pnl_pct: float, decision: dict):
+    def record_trade_outcome(self, pnl_pct: float, decision: dict):
         """Record a trade outcome and mutate probability field weights.
 
         This is the HARD LEARNING LOOP:
