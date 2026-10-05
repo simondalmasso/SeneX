@@ -77,8 +77,11 @@ The public H011 `/api/oracle/predictions/db` endpoint is intentionally bounded
 and strips the full decision-time audit. It is **not** an admissible source for
 ORDER097.
 
-Export the persisted full audit through the read-only database REST surface
-before moving data into Intern Discovery.
+Export the persisted full audit through the authenticated REST surface using
+the GET-only exporter before moving data into Intern Discovery. The exporter
+performs no mutations. Do not infer that the gateway credential itself is
+read-only: the gateway implementation also contains POST/PATCH methods whose
+production write fence and credential scope are a separate operational control.
 
 The exporter performs GET only, paginates by the integer prediction id, and
 writes a minimal causal projection containing only:
@@ -94,7 +97,7 @@ The persisted settlement reconciler preserves existing audit keys and only
 adds/repairs settlement evidence, so the exported decision-time subtrees are
 not reconstructed from post-close state.
 
-Prefer a read-only key if one exists:
+Use the least-privilege credential available; the exporter itself is GET-only:
 
 ```bash
 export SENEX_DATA_URL='https://<authorized-d1-gateway-origin>'
