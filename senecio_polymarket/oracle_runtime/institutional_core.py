@@ -51,6 +51,8 @@ for _name in dir(_original):
     globals()[_name] = getattr(_original, _name)
 
 OriginalSingleDecisionCore = _original.SingleDecisionCore
+_clamp = _original._clamp
+_sigmoid = _original._sigmoid
 
 LEARNING_VERSION = "proof-qualified-replay-v4-aud061-r1"
 MIN_LEARNING_EXAMPLES = 10
