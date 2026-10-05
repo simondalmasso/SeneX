@@ -530,7 +530,6 @@ def _persist_calibrator(
     try:
         out_dir = Path(calibrators_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         fname = f"calibrator_{method}_{ts}_n{n}.json"
         path = out_dir / fname
         with open(path, "w", encoding="utf-8") as f:
