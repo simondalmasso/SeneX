@@ -579,7 +579,6 @@ class SingleDecisionCore:
         drawdown = abs(risk_state.get("drawdown", 0.0))
         var = abs(risk_state.get("var", 0.0))
         loss_streak = risk_state.get("loss_streak", 0)
-        capital = risk_state.get("capital", self._capital)
 
         # ── Hard stop: max drawdown ──
         if self.hard_stop and drawdown >= self.max_drawdown:
@@ -852,7 +851,6 @@ class SingleDecisionCore:
         # OLD: slippage > 50% of edge → killed signals with small but positive EV.
         # NEW: absolute slippage limit (5 bps for limit orders, 10 bps for market).
         # Small edge + small slippage = still profitable; only block toxic slippage.
-        ev_edge = abs(ev_result["adjusted_ev"])
         slippage_pct = slippage_bps / 10000.0
         max_acceptable_slippage = 0.0005  # 5 bps absolute limit
         if slippage_pct > max_acceptable_slippage:
