@@ -848,4 +848,3 @@ def test_logistic_fitter_converges_on_narrow_probability_features():
     # Fixed-step GD previously stopped near 0.36 after 4,000 iterations.
     assert fitted.intercept == pytest.approx(0.11297054, abs=1e-5)
     assert fitted.coefficients[0] == pytest.approx(1.50688214, abs=1e-5)
-
