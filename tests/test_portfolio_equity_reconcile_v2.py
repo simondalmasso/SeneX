@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from senecio_polymarket.backend.portfolio.execution_engine import ExecutionEngine, Position
 from senecio_polymarket.backend.portfolio.portfolio_engine import PortfolioEngine
 
