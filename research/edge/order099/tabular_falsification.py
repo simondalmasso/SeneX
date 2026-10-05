@@ -188,6 +188,40 @@ def verify_order098_artifacts(
             "resolution manifest accepted_markets does not match JSONL"
         )
 
+    # Bind label coverage to the exact admissible T0 market identities in the
+    # prediction artifact. Hash/counter consistency alone is insufficient:
+    # otherwise a self-consistent resolution manifest could selectively omit
+    # valid markets and silently shrink the scientific cohort.
+    t0_pairs = order097.extract_t0_pairs(prediction_rows)
+    t0_market_keys = {
+        (pair.market_slug, pair.condition_id)
+        for pair in t0_pairs
+    }
+    if not t0_market_keys:
+        raise ArtifactContractError(
+            "prediction artifact contains no admissible T0 market identities"
+        )
+    try:
+        joined = order097.join_resolutions(t0_pairs, resolution_rows)
+    except order097.ResolutionContractError as exc:
+        raise ArtifactContractError(
+            "resolution rows violate the ORDER098 market contract"
+        ) from exc
+    joined_market_keys = {
+        (item.pair.market_slug, item.pair.condition_id)
+        for item in joined
+    }
+    if (
+        accepted != len(t0_market_keys)
+        or joined_market_keys != t0_market_keys
+    ):
+        missing = t0_market_keys - joined_market_keys
+        raise ArtifactContractError(
+            "ORDER098 market identity coverage mismatch: "
+            f"t0={len(t0_market_keys)} resolved={accepted} "
+            f"missing={len(missing)}"
+        )
+
     return {
         "predictions_sha256": predictions_sha,
         "resolutions_sha256": resolutions_sha,
