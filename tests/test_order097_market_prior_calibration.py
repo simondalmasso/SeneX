@@ -808,3 +808,81 @@ def test_off_boundary_or_fractional_resolution_grid_is_rejected():
                 )
             ],
         )
+
+def test_logistic_fitter_converges_on_compressed_probability_features():
+    m = _load()
+    observations = []
+    feature_rows = []
+    prediction_id = 0
+
+    for step in range(11):
+        p_market = 0.45 + step * 0.01
+        market_logit = math.log(p_market / (1.0 - p_market))
+        target_probability = 1.0 / (1.0 + math.exp(-2.0 * market_logit))
+        samples = 40
+        positives = round(target_probability * samples)
+
+        for sample in range(samples):
+            pair = m.T0Pair(
+                prediction_id=prediction_id,
+                decision_ts=1000 + prediction_id,
+                market_slug=f"compressed-{prediction_id}",
+                condition_id=f"compressed-cond-{prediction_id}",
+                market_start_ts=900 + prediction_id,
+                market_end_ts=1200 + prediction_id,
+                market_horizon_seconds=300,
+                p_market=p_market,
+                senex_raw_up=0.5,
+            )
+            observations.append(
+                m.JoinedObservation(
+                    pair=pair,
+                    label_up=1 if sample < positives else 0,
+                    resolved_at=1300 + prediction_id,
+                )
+            )
+            feature_rows.append((market_logit,))
+            prediction_id += 1
+
+    model = m._fit_logistic_features(observations, feature_rows)
+
+    assert model.coefficients[0] > 1.5
+
+
+def test_platt_fitter_converges_on_compressed_raw_scores():
+    m = _load()
+    observations = []
+    prediction_id = 0
+
+    for step in range(11):
+        raw_score = 0.45 + step * 0.01
+        raw_logit = math.log(raw_score / (1.0 - raw_score))
+        target_probability = 1.0 / (1.0 + math.exp(-2.0 * raw_logit))
+        samples = 40
+        positives = round(target_probability * samples)
+
+        for sample in range(samples):
+            pair = m.T0Pair(
+                prediction_id=prediction_id,
+                decision_ts=1000 + prediction_id,
+                market_slug=f"platt-compressed-{prediction_id}",
+                condition_id=f"platt-compressed-cond-{prediction_id}",
+                market_start_ts=900 + prediction_id,
+                market_end_ts=1200 + prediction_id,
+                market_horizon_seconds=300,
+                p_market=0.5,
+                senex_raw_up=raw_score,
+            )
+            observations.append(
+                m.JoinedObservation(
+                    pair=pair,
+                    label_up=1 if sample < positives else 0,
+                    resolved_at=1300 + prediction_id,
+                )
+            )
+            prediction_id += 1
+
+    calibrator = m.fit_platt(observations)
+
+    assert calibrator.slope > 1.5
+
