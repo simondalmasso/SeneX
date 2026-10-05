@@ -128,7 +128,12 @@ def prospective_sample_gate(n_markets: int) -> str | None:
 
 
 def _require_frozen_eval_parameters(n_bootstrap: int, seed: int) -> None:
-    if int(n_bootstrap) != DEFAULT_BOOTSTRAP or int(seed) != DEFAULT_SEED:
+    if (
+        type(n_bootstrap) is not int
+        or type(seed) is not int
+        or n_bootstrap != DEFAULT_BOOTSTRAP
+        or seed != DEFAULT_SEED
+    ):
         raise ValueError(
             "ORDER100 frozen evaluator requires "
             f"bootstrap={DEFAULT_BOOTSTRAP} and seed={DEFAULT_SEED}"
