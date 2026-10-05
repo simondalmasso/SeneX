@@ -117,6 +117,7 @@ class PortfolioCoordinator:
         }
         self._control_state_restored = False
         self._control_state_migration = "NONE"
+        self._control_order_count_semantics = "EXACT"
         self.portfolio_analytics = portfolio_analytics or PortfolioAnalytics(config=self.cfg)
         self.shadow_live = shadow_live or ShadowLive(config=self.cfg)
         self.live_gate = live_gate or LiveGate()
@@ -451,6 +452,7 @@ class PortfolioCoordinator:
                 "state_exists": self._control_state_store.exists(),
                 "restored": self._control_state_restored,
                 "migration": self._control_state_migration,
+                "order_count_semantics": self._control_order_count_semantics,
             },
         }
 
@@ -506,6 +508,7 @@ class PortfolioCoordinator:
                 "cash": float(self.execution_engine.cash),
                 "starting_cash": float(self.execution_engine.starting_cash),
                 "total_orders": int(self.execution_engine.stats()["total_orders"]),
+                "order_count_semantics": self._control_order_count_semantics,
                 "open_positions": [
                     pos.to_dict() for pos in self.execution_engine.positions.values()
                     if pos.status == "OPEN"
@@ -590,6 +593,9 @@ class PortfolioCoordinator:
             for symbol, price in payload.get("last_prices", {}).items()
         }
         self._control_state_migration = str(payload.get("migration") or "RESTORED")
+        self._control_order_count_semantics = str(
+            execution.get("order_count_semantics") or "EXACT"
+        )
 
         # TradeJournal pending state is in-memory only. Re-seed it for any
         # restored open position so the eventual exit remains a complete row.
@@ -618,9 +624,15 @@ class PortfolioCoordinator:
         """Fan-out an ExecutionEngine audit event and checkpoint PAPER state."""
         self.trade_journal.on_audit_event(event)
         self.shadow_live.on_audit_event(event)
-        # POSITION_EXIT is emitted before ExecutionEngine moves the position
-        # from open -> closed. on_tick() checkpoints the completed transition.
-        if event.get("event") != "POSITION_EXIT":
+        # Persist only stable execution transitions. FILL / ORDER_FILLED /
+        # PARTIAL_FILL are intermediate states; POSITION_EXIT is emitted before
+        # ExecutionEngine moves the position from open -> closed, so on_tick()
+        # checkpoints that completed transition instead.
+        if event.get("event") in {
+            "POSITION_OPEN",
+            "POSITION_STOP_TARGET_SET",
+            "ORDER_REJECTED",
+        }:
             self._persist_control_state()
 
     def _exec_self_test(self) -> dict[str, Any]:

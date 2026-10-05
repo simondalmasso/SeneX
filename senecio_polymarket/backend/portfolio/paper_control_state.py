@@ -263,6 +263,7 @@ def bootstrap_from_closed_journal(
             "cash": cash,
             "starting_cash": float(starting_cash),
             "total_orders": len(records),
+            "order_count_semantics": "MINIMUM_CLOSED_TRADES_AT_BOOTSTRAP",
             "open_positions": [],
             "closed_positions": closed_positions,
         },

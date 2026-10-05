@@ -164,6 +164,7 @@ def test_explicit_journal_bootstrap_is_conservative_and_persists(tmp_path: Path)
     assert coord.execution_engine.stats()["closed_positions"] == 2
     assert coord.execution_engine.stats()["total_orders"] == 2
     assert coord._control_state_migration == "JOURNAL_BOOTSTRAP_EXPLICIT"
+    assert coord._control_order_count_semantics == "MINIMUM_CLOSED_TRADES_AT_BOOTSTRAP"
     assert Path(cfg["paper_control_state_path"]).exists()
 
     # The bootstrap is one-time. A normal restart must restore the state file,
@@ -174,6 +175,7 @@ def test_explicit_journal_bootstrap_is_conservative_and_persists(tmp_path: Path)
     restarted.start()
     assert restarted.execution_engine.cash == pytest.approx(9994.0)
     assert restarted.execution_engine.stats()["closed_positions"] == 2
+    assert restarted._control_order_count_semantics == "MINIMUM_CLOSED_TRADES_AT_BOOTSTRAP"
 
 
 def test_corrupt_state_never_silently_resets(tmp_path: Path) -> None:
