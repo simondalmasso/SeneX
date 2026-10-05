@@ -159,7 +159,7 @@ class PortfolioAnalytics:
             "n_trades": n,
             "sufficient_data": sufficient,
             "starting_equity_usd": self.cfg["starting_equity_usd"],
-            "ending_equity_usd": round(eity := equity_curve[-1], 2),
+            "ending_equity_usd": round(equity_curve[-1], 2),
             "total_pnl_usd": round(total_pnl, 2),
             "total_fees_usd": round(total_fees, 2),
             # TradeJournal.realized_pnl_usd is already net of entry+exit fees
