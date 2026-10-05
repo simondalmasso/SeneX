@@ -60,11 +60,12 @@ Its public `/health` reports `storage=d1` / `adapter=order074-postgrest`.
 Full-audit reads are authenticated: an unauthenticated
 `/rest/v1/oracle_predictions?...select=...,audit` request returns HTTP 401.
 
-The gateway implementation rehydrates `audit` from the COLD
+The gateway implementation rehydrates `audit` from the D1 COLD
 `oracle_prediction_audit_cold` table whenever the query requests the full
-audit. Therefore **Supabase does not need to be restored merely for ORDER098**
-if the export is executed in an already-authorized SENEX environment whose
-`SUPABASE_URL` / `SUPABASE_KEY` point to this gateway.
+audit. ORDER098 therefore reads the current **Cloudflare D1 gateway**, not a
+Supabase service. New research tooling should use neutral `SENEX_DATA_*`
+configuration names. Historical `SUPABASE_*` names remain accepted only as a
+temporary compatibility fallback for already-authorized environments.
 
 Do not copy or expose the gateway credential. Run the GET-only exporter inside
 the already-authorized environment, then move only the secret-free JSONL and
@@ -96,10 +97,11 @@ not reconstructed from post-close state.
 Prefer a read-only key if one exists:
 
 ```bash
-export SUPABASE_URL='https://<authorized-origin>'
-export SUPABASE_READ_KEY='<read-only-key>'
-# SUPABASE_KEY is accepted only as a fallback when that is the existing
-# authorized credential. Never print or persist the credential.
+export SENEX_DATA_URL='https://<authorized-d1-gateway-origin>'
+export SENEX_DATA_READ_KEY='<read-only-key>'
+# Legacy SUPABASE_URL / SUPABASE_READ_KEY / SUPABASE_KEY remain accepted only
+# for compatibility with existing SENEX runtime environments. Do not introduce
+# those legacy names into new research automation. Never print or persist keys.
 
 export OUT=/tmp/order098-export-$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$OUT"
