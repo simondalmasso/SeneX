@@ -192,7 +192,7 @@ class CircuitBreaker:
                 f"circuit '{self.name}' is OPEN (rejected)")
         try:
             result = fn(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             self.record_failure()
             raise
         else:
