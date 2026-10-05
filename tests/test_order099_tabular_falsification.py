@@ -440,3 +440,94 @@ def test_direct_cli_help_runs_from_repo_root():
     )
     assert result.returncode == 0
     assert "ORDER099 preregistered tabular falsification" in result.stdout
+
+
+def test_order098_artifact_verification_rejects_selective_resolution_coverage(tmp_path):
+    _, m = _modules()
+    predictions = tmp_path / "t0_predictions.jsonl"
+    resolutions = tmp_path / "resolutions.jsonl"
+    p_manifest = tmp_path / "t0_manifest.json"
+    r_manifest = tmp_path / "resolution_manifest.json"
+
+    starts = [1791090000, 1791090300]
+    prediction_rows = []
+    for i, start in enumerate(starts, start=1):
+        prediction_rows.append({
+            "id": i,
+            "ts": start + 30,
+            "symbol": "BTCUSDT",
+            "audit": {
+                "pipeline": {
+                    "step2_features": {
+                        "up_prob": 0.55,
+                        "polymarket_context_v1": {
+                            "directional_use": False,
+                            "experiment_enabled": False,
+                            "effective_weight": 0.0,
+                        },
+                    }
+                },
+                "external_markets_v1": {
+                    "polymarket": {
+                        "source": "POLYMARKET_PUBLIC",
+                        "version": "polymarket-btc-5m-v1",
+                        "eligible_for_prediction": True,
+                        "slug": f"btc-updown-5m-{start}",
+                        "condition_id": f"cond-{i}",
+                        "start_ts": start,
+                        "end_ts": start + 300,
+                        "up_probability": 0.50,
+                    }
+                },
+            },
+            "source_audit_sha256": f"{i:064x}",
+        })
+
+    resolution_rows = [{
+        "slug": f"btc-updown-5m-{starts[0]}",
+        "condition_id": "cond-1",
+        "start_ts": starts[0],
+        "end_ts": starts[0] + 300,
+        "outcome": "UP",
+        "resolved_at": starts[0] + 301,
+        "source": "POLYMARKET_GAMMA_RESOLVED_V1",
+    }]
+
+    predictions.write_text(
+        "".join(_canonical(row) + "\n" for row in prediction_rows),
+        encoding="utf-8",
+    )
+    resolutions.write_text(
+        "".join(_canonical(row) + "\n" for row in resolution_rows),
+        encoding="utf-8",
+    )
+    predictions_sha = _sha256_file(predictions)
+    resolutions_sha = _sha256_file(resolutions)
+
+    p_manifest.write_text(json.dumps({
+        "contract": "senex-order098-t0-audit-export-v1",
+        "output_file_sha256": predictions_sha,
+        "output_row_hashes_sha256": _sha256_text(
+            _canonical([row["source_audit_sha256"] for row in prediction_rows])
+        ),
+        "fetched_rows": 2,
+        "projected_rows": 2,
+        "skipped_rows": 0,
+    }), encoding="utf-8")
+    r_manifest.write_text(json.dumps({
+        "contract": "senex-order098-polymarket-5m-resolution-corpus-v1",
+        "predictions_file_sha256": predictions_sha,
+        "output_file_sha256": resolutions_sha,
+        "resolution_records_sha256": _sha256_text(_canonical(resolution_rows)),
+        "requested_markets": 1,
+        "accepted_markets": 1,
+        "rejected_markets": 0,
+    }), encoding="utf-8")
+
+    with pytest.raises(m.ArtifactContractError, match="market identity coverage"):
+        m.verify_order098_artifacts(
+            predictions,
+            p_manifest,
+            resolutions,
+            r_manifest,
+        )
