@@ -315,7 +315,7 @@ def build_manifest(
 
 def _headers(api_key: str) -> dict[str, str]:
     if not api_key:
-        raise ExportContractError("read-only SENEX data credential is required")
+        raise ExportContractError("SENEX data credential is required for the GET-only exporter")
     headers = {"apikey": api_key}
     if api_key.startswith("eyJ") and api_key.count(".") == 2:
         headers["Authorization"] = f"Bearer {api_key}"
