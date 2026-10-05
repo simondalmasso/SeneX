@@ -206,6 +206,13 @@ def verify_order098_artifacts(
             )
         resolution_market_keys.add(key)
 
+    if resolution_market_keys != prediction_market_keys:
+        missing = prediction_market_keys - resolution_market_keys
+        extra = resolution_market_keys - prediction_market_keys
+        raise ArtifactContractError(
+            "resolution market identity coverage mismatch: "
+            f"missing={len(missing)} extra={len(extra)}"
+        )
     if requested != len(prediction_market_keys):
         raise ArtifactContractError(
             "resolution manifest requested_markets does not match "
@@ -215,13 +222,6 @@ def verify_order098_artifacts(
         raise ArtifactContractError(
             "resolution manifest accepted_markets does not match "
             "unique resolution market identities"
-        )
-    if resolution_market_keys != prediction_market_keys:
-        missing = prediction_market_keys - resolution_market_keys
-        extra = resolution_market_keys - prediction_market_keys
-        raise ArtifactContractError(
-            "resolution market identity coverage mismatch: "
-            f"missing={len(missing)} extra={len(extra)}"
         )
 
     return {
