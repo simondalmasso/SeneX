@@ -2035,7 +2035,6 @@ def _run_mock_tests():
     print("\n[Test 23] Depth metrics precision (known orderbook)...")
     try:
         # Create a known orderbook where we can verify the math
-        mid = 10000.0
         known_ob = {
             "bids": [
                 [9999.5, 1.0],   # within 0.5% of mid -> depth = 9999.5
@@ -2061,9 +2060,7 @@ def _run_mock_tests():
         # Spread = 10000.5 - 9999.5 = 1.0 -> 1.0/10000 * 10000 = 1.0 bps
         assert metrics["spread_bps"] == 1.0, f"Expected spread=1.0 bps, got {metrics['spread_bps']}"
 
-        # Threshold: 0.5% from mid
-        bid_threshold = 10000.0 * (1 - 0.005)  # = 9950.0
-        ask_threshold = 10000.0 * (1 + 0.005)  # = 10050.0
+        # Threshold: 0.5% from mid gives 9950.0 / 10050.0.
 
         # Bid depth: levels with price >= 9950.0
         # 9999.5 * 1.0 = 9999.5
