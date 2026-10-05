@@ -172,14 +172,20 @@ jobs:
           patterns = {
               "private-key-header": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
               "gitlab-pat": re.compile(r"glpat-[A-Za-z0-9_-]{20,}"),
-              "github-pat": re.compile(r"ghp_[A-Za-z0-9]{20,}"),
+              "github-prefixed-token": re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}"),
+              "github-fine-grained-pat": re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
               "openai-project-key": re.compile(r"sk-proj-[A-Za-z0-9_-]{20,}"),
+              "nvidia-api-key": re.compile(r"nvapi-[A-Za-z0-9_-]{20,}"),
+              "aws-access-key": re.compile(r"AKIA[0-9A-Z]{16}"),
           }
           detector_probes = {
               "private-key-header": "-----BEGIN " + "PRIVATE KEY-----",
               "gitlab-pat": "glpat-" + "ABCDEFGHIJKLMNOPQRST",
-              "github-pat": "ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+              "github-prefixed-token": "ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+              "github-fine-grained-pat": "github_" + "pat_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
               "openai-project-key": "sk-" + "proj-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+              "nvidia-api-key": "nvapi-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+              "aws-access-key": "AKIA" + "ABCDEFGHIJKLMNOP",
           }
           for name, pattern in patterns.items():
               assert pattern.search(detector_probes[name]), f"secret detector self-test failed: {name}"
