@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
+import numpy as np
+
 
 POLYMARKET_VERSION = "polymarket-btc-5m-v1"
 POLYMARKET_SOURCE = "POLYMARKET_PUBLIC"
@@ -371,6 +373,93 @@ def chronological_market_split(
     return train, test
 
 
+def _newton_refine_logistic(
+    feature_rows: list[tuple[float, ...]],
+    labels: list[int],
+    params: list[float],
+    *,
+    l2: float,
+    penalize_intercept: bool,
+    tolerance: float = 1e-8,
+    max_iter: int = 50,
+) -> list[float]:
+    """Refine a fixed-step GD solution only when it has not converged.
+
+    ORDER097 historically used bounded fixed-step gradient descent. Keep that
+    path as the primary optimizer so already-converged historical fits remain
+    unchanged, then use penalized Newton/IRLS only when the final gradient is
+    materially non-zero (for example, narrow low-variance feature ranges).
+    """
+    if not feature_rows:
+        raise ValueError("feature rows are required")
+
+    x = np.asarray(feature_rows, dtype=float)
+    y = np.asarray(labels, dtype=float)
+    design = np.column_stack([np.ones(len(x), dtype=float), x])
+    beta = np.asarray(params, dtype=float)
+
+    penalty = np.full(beta.shape, float(l2), dtype=float)
+    if not penalize_intercept:
+        penalty[0] = 0.0
+
+    def state(current: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
+        logits = design @ current
+        probabilities = np.empty_like(logits, dtype=float)
+        positive = logits >= 0.0
+        probabilities[positive] = 1.0 / (1.0 + np.exp(-logits[positive]))
+        exp_logits = np.exp(logits[~positive])
+        probabilities[~positive] = exp_logits / (1.0 + exp_logits)
+
+        losses = np.logaddexp(0.0, logits) - y * logits
+        objective = float(np.mean(losses))
+        objective += 0.5 * float(np.sum(penalty * current * current))
+
+        gradient = (design.T @ (probabilities - y)) / len(y)
+        gradient = gradient + penalty * current
+
+        weights = np.clip(
+            probabilities * (1.0 - probabilities),
+            1e-12,
+            None,
+        )
+        hessian = (design.T @ (weights[:, None] * design)) / len(y)
+        hessian = hessian + np.diag(penalty)
+        return objective, gradient, hessian
+
+    objective, gradient, hessian = state(beta)
+    if float(np.max(np.abs(gradient))) <= tolerance:
+        return [float(value) for value in beta]
+
+    for _ in range(max_iter):
+        try:
+            step = np.linalg.solve(hessian, gradient)
+        except np.linalg.LinAlgError:
+            step = np.linalg.lstsq(hessian, gradient, rcond=None)[0]
+
+        alpha = 1.0
+        accepted = False
+        while alpha >= 1e-8:
+            candidate = beta - alpha * step
+            candidate_objective, candidate_gradient, candidate_hessian = state(
+                candidate
+            )
+            if candidate_objective <= objective:
+                beta = candidate
+                objective = candidate_objective
+                gradient = candidate_gradient
+                hessian = candidate_hessian
+                accepted = True
+                break
+            alpha *= 0.5
+
+        if not accepted:
+            raise RuntimeError("logistic optimizer refinement failed line search")
+        if float(np.max(np.abs(gradient))) <= tolerance:
+            return [float(value) for value in beta]
+
+    raise RuntimeError("logistic optimizer failed to converge")
+
+
 def fit_platt(
     observations: Iterable[JoinedObservation],
     *,
@@ -390,12 +479,17 @@ def fit_platt(
 
     intercept = 0.0
     slope = 1.0
+    feature_rows = [
+        (_logit(_probability(item.pair.senex_raw_up, "senex_raw_up")),)
+        for item in rows
+    ]
+    label_rows = [int(item.label_up) for item in rows]
     n = float(len(rows))
     for _ in range(max_iter):
         grad_intercept = 0.0
         grad_slope = 0.0
-        for item in rows:
-            x = _logit(_probability(item.pair.senex_raw_up, "senex_raw_up"))
+        for item, feature_row in zip(rows, feature_rows):
+            x = feature_row[0]
             pred = _sigmoid(intercept + slope * x)
             error = pred - int(item.label_up)
             grad_intercept += error
@@ -405,6 +499,13 @@ def fit_platt(
         intercept -= learning_rate * grad_intercept
         slope -= learning_rate * grad_slope
 
+    intercept, slope = _newton_refine_logistic(
+        feature_rows,
+        label_rows,
+        [intercept, slope],
+        l2=l2,
+        penalize_intercept=True,
+    )
     return PlattCalibrator(intercept=intercept, slope=slope)
 
 
@@ -433,6 +534,7 @@ def _fit_logistic_features(
 
     intercept = 0.0
     coefficients = [0.0] * width
+    label_rows = [int(item.label_up) for item in rows]
     n = float(len(rows))
     for _ in range(max_iter):
         grad_intercept = 0.0
@@ -452,9 +554,16 @@ def _fit_logistic_features(
             gradient = grad_coefficients[index] / n + l2 * coefficients[index]
             coefficients[index] -= learning_rate * gradient
 
+    refined = _newton_refine_logistic(
+        features,
+        label_rows,
+        [intercept, *coefficients],
+        l2=l2,
+        penalize_intercept=False,
+    )
     return LogisticModel(
-        intercept=intercept,
-        coefficients=tuple(coefficients),
+        intercept=refined[0],
+        coefficients=tuple(refined[1:]),
     )
 
 
