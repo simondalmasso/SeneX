@@ -6,6 +6,13 @@
 
 This file is a dated presentation snapshot. Fresh GitHub and H011 evidence supersedes it.
 
+> **POST-AUDIT / PHASE-SHIFT ADDENDUM — 2026-10-05:** Architecture is frozen for scientific work. ORDER100 remains `COLLECTING_PROSPECTIVE_DATA`; no interim prospective loss/edge metric is authorized before its >=300 fresh resolved-market gate. Historical ORDER099 calibration diagnostics are now reproducible from the exact frozen artifacts and confirm that absolute calibration is a larger issue than missing feature families; incremental SENEX edge remains unproven. PR #142 hardened future narrow-feature optimizer convergence without changing ORDER099 or ORDER100 frozen results.
+>
+> **DATA AUTHORITY:** External Supabase is not a current SENEX operational authority. Current authority is Cloudflare D1 through the SENEX gateway/authority path plus H011 live readback. Legacy compatibility identifiers such as `supabase_client` and `SUPABASE_*` remain in code and deployment contracts and must not be mistaken for an active Supabase source.
+>
+> **GPTRADER CLARIFICATION:** The H011-local GPTrader treatment ledger still shows the old 2026-09-28 canary and is locally idle. The active DIRECT PAPER path is GitHub issue #91 using exact-URL H011 transport, T0 allowlisting, no search/enrichment, TAKE/ABSTAIN receipts, PAPER-only/no-capital. There is no separate active GPTrader scheduler process to repair.
+
+
 > **POST-DEPLOY ADDENDUM — 2026-10-04 ~22:45 UTC:** H011 was deliberately deployed to canonical `main` at `96c41f123175f597788911ab7f52a18ed77c7cdb`. Fresh readback reports exact provenance, READY, PAPER, orders disabled, live capital locked, hard PAPER lock engaged, 17 GET-only public operations, and the isolated BINANCE_SIM lane initialized at `18.63631644 USDT`. No real Binance balance or live-order capability is present.
 
 ## Authority
@@ -138,7 +145,7 @@ verdict=INSUFFICIENT_DATA
 edge=UNPROVEN
 ```
 
-`last_run_id` remains the 2026-09-28 canary. Packets have continued to accumulate while treatment decisions have not, so the treatment experiment is operationally idle.
+`last_run_id` remains the 2026-09-28 canary in the **H011-local GPTrader store**. That local treatment ledger is idle, but it is no longer the only operational decision path: GitHub issue #91 records the active DIRECT PAPER exact-URL TAKE/ABSTAIN receipts outside the H011-local store. Do not interpret the stale local `last_run_id` as evidence of a running or broken GPTrader scheduler.
 
 ## Known presentation/governance debt
 
