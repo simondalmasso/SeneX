@@ -292,21 +292,50 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
     _, m = _modules()
     predictions = tmp_path / "t0_predictions.jsonl"
     resolutions = tmp_path / "resolutions.jsonl"
-    prediction_rows = [
-        {"id": 1, "source_audit_sha256": "a" * 64},
-        {"id": 2, "source_audit_sha256": "b" * 64},
-    ]
-    resolution_rows = [
-        {
-            "slug": "btc-updown-5m-1791069600",
-            "condition_id": "0xabc",
-            "start_ts": 1791069600,
-            "end_ts": 1791069900,
-            "outcome": "UP",
-            "resolved_at": 1791069901,
+    starts = [1791069600, 1791069900]
+    prediction_rows = []
+    resolution_rows = []
+    for i, start_ts in enumerate(starts, start=1):
+        prediction_rows.append({
+            "id": i,
+            "ts": start_ts + 30,
+            "symbol": "BTCUSDT",
+            "audit": {
+                "pipeline": {
+                    "step2_features": {
+                        "up_prob": 0.55,
+                        "polymarket_context_v1": {
+                            "directional_use": False,
+                            "experiment_enabled": False,
+                            "effective_weight": 0.0,
+                        },
+                    }
+                },
+                "external_markets_v1": {
+                    "polymarket": {
+                        "source": "POLYMARKET_PUBLIC",
+                        "version": "polymarket-btc-5m-v1",
+                        "eligible_for_prediction": True,
+                        "slug": f"btc-updown-5m-{start_ts}",
+                        "condition_id": f"cond-{i}",
+                        "start_ts": start_ts,
+                        "end_ts": start_ts + 300,
+                        "up_probability": 0.50,
+                    }
+                },
+            },
+            "source_audit_sha256": f"{i:064x}",
+        })
+        resolution_rows.append({
+            "slug": f"btc-updown-5m-{start_ts}",
+            "condition_id": f"cond-{i}",
+            "start_ts": start_ts,
+            "end_ts": start_ts + 300,
+            "outcome": "UP" if i == 1 else "DOWN",
+            "resolved_at": start_ts + 301,
             "source": "POLYMARKET_GAMMA_RESOLVED_V1",
-        }
-    ]
+        })
+
     predictions.write_text(
         "".join(_canonical(row) + "\n" for row in prediction_rows),
         encoding="utf-8",
@@ -324,7 +353,9 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
             "contract": "senex-order098-t0-audit-export-v1",
             "output_file_sha256": predictions_sha,
             "output_row_hashes_sha256": _sha256_text(
-                _canonical(["a" * 64, "b" * 64])
+                _canonical(
+                    [row["source_audit_sha256"] for row in prediction_rows]
+                )
             ),
             "fetched_rows": 2,
             "projected_rows": 2,
@@ -341,8 +372,8 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
             "resolution_records_sha256": _sha256_text(
                 _canonical(resolution_rows)
             ),
-            "requested_markets": 1,
-            "accepted_markets": 1,
+            "requested_markets": 2,
+            "accepted_markets": 2,
             "rejected_markets": 0,
         }),
         encoding="utf-8",
@@ -357,8 +388,8 @@ def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
 
     assert result["predictions_sha256"] == predictions_sha
     assert result["resolutions_sha256"] == resolutions_sha
-    assert result["requested_markets"] == 1
-    assert result["accepted_markets"] == 1
+    assert result["requested_markets"] == 2
+    assert result["accepted_markets"] == 2
     assert result["rejected_markets"] == 0
 
 
