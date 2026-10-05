@@ -1051,19 +1051,27 @@ class ExchangeConnector:
 
         ex = self.exchanges[exchange_name]
 
-        # SAFETY: Verify we are NOT on mainnet (multi-layer defense)
-        is_testnet = (
-            exchange_name == "binance_testnet"
-            or getattr(ex, 'isSandboxModeEnabled', False)
-            or getattr(ex, 'sandbox', False)
+        # SAFETY: order execution requires both the explicit testnet alias and
+        # effective ccxt futures URLs that still point to testnet at call time.
+        # The alias alone is not sufficient: the exchange object may have been
+        # replaced or mutated after initialization.
+        api_urls = ex.urls.get("api", {})
+        fapi_urls = (
+            api_urls.get("fapiPublic", ""),
+            api_urls.get("fapiPrivate", ""),
         )
-        # Defense-in-depth: also verify the actual fapi URLs point to testnet
-        fapi_private = ex.urls.get("api", {}).get("fapiPrivate", "")
-        if not is_testnet and "testnet" not in fapi_private:
+        effective_testnet = (
+            exchange_name == "binance_testnet"
+            and all(
+                isinstance(url, str) and "testnet" in url.lower()
+                for url in fapi_urls
+            )
+        )
+        if not effective_testnet:
             raise RuntimeError(
-                f"SAFETY ABORT: place_market_order called on NON-TESTNET exchange "
-                f"'{exchange_name}'. This would place REAL orders with REAL money. "
-                f"Use --mode testnet with --exchange binance_testnet only."
+                f"SAFETY ABORT: place_market_order called without verified "
+                f"Binance testnet routing for '{exchange_name}'. "
+                f"Refusing any market-order path."
             )
 
         # Get expected price from ticker before order
