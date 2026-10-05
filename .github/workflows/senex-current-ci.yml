@@ -150,7 +150,10 @@ jobs:
                   "BINANCE_TESTNET_KEY",
                   "BINANCE_TESTNET_SECRET",
                   "set_sandbox_mode(True)",
-                  '"testnet" not in fapi_private',
+                  "effective_testnet",
+                  'api_urls.get("fapiPublic", "")',
+                  'api_urls.get("fapiPrivate", "")',
+                  '"testnet" in url.lower()',
               ):
                   assert guard in connector, f"testnet order guard missing: {guard}"
               assert "BINANCE_KEY" not in connector
