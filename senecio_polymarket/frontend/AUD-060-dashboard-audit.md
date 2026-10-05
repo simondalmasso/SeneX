@@ -38,7 +38,7 @@ This inventory covers the complete dashboard. Runtime truth remains read-only; n
 | Dashboard surface | Primary class | Truth source / boundary |
 |---|---|---|
 | BTC authoritative score | API_DERIVED | `/api/oracle-score?symbol=BTCUSDT`; raw diagnostic separated from 1h authority |
-| Supabase prediction window | API_DERIVED | Read-only `/api/oracle-predictions`; total explicitly cross-symbol |
+| D1-backed prediction window | API_DERIVED | Read-only `/api/oracle-predictions`; total explicitly cross-symbol |
 | Polymarket market | RUNTIME_OBSERVED | Read-only market-context snapshot; missing evidence becomes UNKNOWN |
 | Polymarket orderbook | RUNTIME_OBSERVED | Public CLOB snapshot/transport fields; missing depth is not synthesized |
 | CLOB event feed | RUNTIME_OBSERVED | Public recent-event payload |
