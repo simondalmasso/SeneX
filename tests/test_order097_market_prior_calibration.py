@@ -888,4 +888,3 @@ def test_logistic_refinement_is_scale_aware_when_l2_is_zero():
     low = fitted.predict(features[0][0])
     high = fitted.predict(features[-1][0])
     assert high - low > 0.10
-
