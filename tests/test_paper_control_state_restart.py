@@ -527,3 +527,30 @@ def test_bootstrap_rejects_semantically_incomplete_journal_row(tmp_path: Path) -
     with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_SCHEMA"):
         PortfolioCoordinator(config=cfg).start()
     assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_bootstrap_rejects_exact_duplicate_trade_id(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    row = _journal_row("dup-exact", pnl=-2.0)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(row) + "\n" + json.dumps(row) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_DUPLICATE"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_bootstrap_rejects_conflicting_duplicate_trade_id(tmp_path: Path) -> None:
+    cfg = _config(tmp_path, allow_bootstrap=True)
+    first = _journal_row("dup-conflict", pnl=-2.0)
+    second = _journal_row("dup-conflict", pnl=3.0)
+    Path(cfg["journal_path"]).write_text(
+        json.dumps(first) + "\n" + json.dumps(second) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_DUPLICATE"):
+        PortfolioCoordinator(config=cfg).start()
+    assert not Path(cfg["paper_control_state_path"]).exists()
