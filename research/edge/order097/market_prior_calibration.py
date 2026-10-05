@@ -388,24 +388,62 @@ def fit_platt(
     if max_iter <= 0 or learning_rate <= 0:
         raise ValueError("optimizer parameters must be positive")
 
-    intercept = 0.0
-    slope = 1.0
-    n = float(len(rows))
-    for _ in range(max_iter):
-        grad_intercept = 0.0
-        grad_slope = 0.0
-        for item in rows:
-            x = _logit(_probability(item.pair.senex_raw_up, "senex_raw_up"))
-            pred = _sigmoid(intercept + slope * x)
-            error = pred - int(item.label_up)
-            grad_intercept += error
-            grad_slope += error * x
-        grad_intercept = grad_intercept / n + l2 * intercept
-        grad_slope = grad_slope / n + l2 * slope
-        intercept -= learning_rate * grad_intercept
-        slope -= learning_rate * grad_slope
+    try:
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError("numpy is required for Platt fitting") from exc
 
-    return PlattCalibrator(intercept=intercept, slope=slope)
+    raw_logits = np.asarray(
+        [
+            _logit(_probability(item.pair.senex_raw_up, "senex_raw_up"))
+            for item in rows
+        ],
+        dtype=float,
+    )
+    design = np.column_stack(
+        [np.ones(len(rows), dtype=float), raw_logits]
+    )
+    labels_array = np.asarray(
+        [int(item.label_up) for item in rows],
+        dtype=float,
+    )
+    beta = np.asarray([0.0, 1.0], dtype=float)
+    tolerance = 1e-10
+
+    for _ in range(max_iter):
+        logits = design @ beta
+        probabilities = np.empty_like(logits)
+        positive = logits >= 0.0
+        probabilities[positive] = 1.0 / (1.0 + np.exp(-logits[positive]))
+        exp_logits = np.exp(logits[~positive])
+        probabilities[~positive] = exp_logits / (1.0 + exp_logits)
+
+        gradient = design.T @ (probabilities - labels_array) / len(rows)
+        gradient += l2 * beta
+
+        weights = np.clip(
+            probabilities * (1.0 - probabilities),
+            1e-12,
+            None,
+        )
+        hessian = design.T @ (weights[:, None] * design) / len(rows)
+        hessian += l2 * np.eye(2)
+
+        try:
+            step = np.linalg.solve(hessian, gradient)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError("Platt optimizer hessian is singular") from exc
+
+        beta -= step
+        if float(np.max(np.abs(step))) < tolerance:
+            break
+    else:
+        raise ValueError("Platt optimizer did not converge")
+
+    return PlattCalibrator(
+        intercept=float(beta[0]),
+        slope=float(beta[1]),
+    )
 
 
 def _fit_logistic_features(
@@ -431,30 +469,55 @@ def _fit_logistic_features(
     if width <= 0 or any(len(row) != width for row in features):
         raise ValueError("feature matrix is invalid")
 
-    intercept = 0.0
-    coefficients = [0.0] * width
-    n = float(len(rows))
-    for _ in range(max_iter):
-        grad_intercept = 0.0
-        grad_coefficients = [0.0] * width
-        for item, feature_row in zip(rows, features):
-            z = intercept
-            for coefficient, feature in zip(coefficients, feature_row):
-                z += coefficient * feature
-            pred = _sigmoid(z)
-            error = pred - int(item.label_up)
-            grad_intercept += error
-            for index, feature in enumerate(feature_row):
-                grad_coefficients[index] += error * feature
+    try:
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError("numpy is required for logistic fitting") from exc
 
-        intercept -= learning_rate * (grad_intercept / n)
-        for index in range(width):
-            gradient = grad_coefficients[index] / n + l2 * coefficients[index]
-            coefficients[index] -= learning_rate * gradient
+    design = np.asarray(
+        [[1.0, *feature_row] for feature_row in features],
+        dtype=float,
+    )
+    labels_array = np.asarray(
+        [int(item.label_up) for item in rows],
+        dtype=float,
+    )
+    beta = np.zeros(width + 1, dtype=float)
+    tolerance = 1e-10
+
+    for _ in range(max_iter):
+        logits = design @ beta
+        probabilities = np.empty_like(logits)
+        positive = logits >= 0.0
+        probabilities[positive] = 1.0 / (1.0 + np.exp(-logits[positive]))
+        exp_logits = np.exp(logits[~positive])
+        probabilities[~positive] = exp_logits / (1.0 + exp_logits)
+
+        gradient = design.T @ (probabilities - labels_array) / len(rows)
+        gradient[1:] += l2 * beta[1:]
+
+        weights = np.clip(
+            probabilities * (1.0 - probabilities),
+            1e-12,
+            None,
+        )
+        hessian = design.T @ (weights[:, None] * design) / len(rows)
+        hessian[1:, 1:] += l2 * np.eye(width)
+
+        try:
+            step = np.linalg.solve(hessian, gradient)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError("logistic optimizer hessian is singular") from exc
+
+        beta -= step
+        if float(np.max(np.abs(step))) < tolerance:
+            break
+    else:
+        raise ValueError("logistic optimizer did not converge")
 
     return LogisticModel(
-        intercept=intercept,
-        coefficients=tuple(coefficients),
+        intercept=float(beta[0]),
+        coefficients=tuple(float(value) for value in beta[1:]),
     )
 
 
