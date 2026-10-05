@@ -1,5 +1,3 @@
-[Reading 930 lines from start (total: 930 lines, 0 remaining)]
-
 """ORDER097 target-aligned SENEX-vs-Polymarket incremental EDGE research.
 
 Pure offline functions only. This module deliberately refuses to use the
