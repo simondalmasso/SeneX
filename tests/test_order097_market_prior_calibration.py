@@ -897,5 +897,3 @@ def test_logistic_refinement_is_scale_aware_when_l2_is_zero():
     assert positive == pytest.approx(0.55, abs=1e-6)
     assert negative == pytest.approx(0.45, abs=1e-6)
 
-
-[executed on device: DESKTOP-DPH3941 (5c55697f-26f8-47b7-95af-9cfe1f0017db)]
