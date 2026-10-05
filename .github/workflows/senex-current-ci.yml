@@ -206,6 +206,20 @@ jobs:
         run: |
           set -euo pipefail
           python -m compileall -q senecio_polymarket tests
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          tracked = subprocess.run(
+              ["git", "ls-files", "*.py"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.splitlines()
+          bom = [name for name in tracked if Path(name).read_bytes().startswith(b"\xef\xbb\xbf")]
+          assert not bom, "UTF-8 BOM in Python source: " + ", ".join(bom)
+          print("PYTHON_BOM_SCAN=CLEAN")
+          PY
           git diff --check "$CONVERGENCE_BASE_SHA" "$EXPECTED_SHA"
           echo "COMPILEALL=PASS"
           echo "NEW_DELTA_DIFF_CHECK=PASS"
