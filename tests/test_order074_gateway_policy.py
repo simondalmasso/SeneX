@@ -222,3 +222,117 @@ console.log(JSON.stringify({status: res.status, body: await res.json()}));
     assert case["status"] == 201
     assert len(case["body"]) == 1
     assert case["body"][0]["symbol"] == "BTCUSDT"
+
+
+def test_legacy_generic_gateway_token_is_not_an_active_read_scope(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        """
+const bomb = {prepare() { throw new Error("DB_TOUCHED"); }};
+const env = {HOT: bomb, COLD: bomb, GATEWAY_TOKEN: "legacy"};
+const res = await worker.fetch(
+  new Request("https://unit/rest/v1/oracle_predictions?select=id&limit=1", {
+    headers: {"apikey": "legacy"},
+  }),
+  env,
+);
+console.log(JSON.stringify({status: res.status, body: await res.json()}));
+""",
+    )
+    assert case == {"status": 401, "body": {"error": "unauthorized"}}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://unit/rest/v1/oracle_predictions",
+        "https://unit/rest/v1/oracle_predictions?outcome=is.null&audit->outcomes_dual=is.null",
+        "https://unit/rest/v1/oracle_predictions?id=gt.7&outcome=is.null&audit->outcomes_dual=is.null",
+        "https://unit/rest/v1/oracle_predictions?id=eq.7",
+        "https://unit/rest/v1/oracle_predictions?id=eq.7&outcome=is.null",
+    ],
+)
+def test_patch_requires_exact_single_id_and_cas_before_db(tmp_path: Path, url: str) -> None:
+    case = _node_case(
+        tmp_path,
+        f"""
+const bomb = {{prepare() {{ throw new Error("DB_TOUCHED"); }}}};
+const env = {{HOT: bomb, COLD: bomb, GATEWAY_WRITE_TOKEN: "write", D1_WRITES_ENABLED: "1"}};
+const req = new Request({json.dumps(url)}, {{
+  method: "PATCH",
+  headers: {{"apikey": "write", "content-type": "application/json"}},
+  body: JSON.stringify({{outcome: "WIN", audit: {{outcomes_dual: {{v: 1}}}}}}),
+}});
+const res = await worker.fetch(req, env);
+const body = await res.json();
+console.log(JSON.stringify({{status: res.status, body}}));
+""",
+    )
+    assert case["status"] == 500
+    assert "DB_TOUCHED" not in case["body"]["message"]
+    assert "patch target" in case["body"]["message"].lower()
+
+
+def test_valid_primary_settlement_cas_reaches_db(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        """
+const bomb = {prepare() { throw new Error("DB_TOUCHED"); }};
+const env = {HOT: bomb, COLD: bomb, GATEWAY_WRITE_TOKEN: "write", D1_WRITES_ENABLED: "1"};
+const req = new Request(
+  "https://unit/rest/v1/oracle_predictions?id=eq.7&outcome=is.null&audit->outcomes_dual=is.null",
+  {
+    method: "PATCH",
+    headers: {"apikey": "write", "content-type": "application/json"},
+    body: JSON.stringify({outcome: "WIN", audit: {outcomes_dual: {v: 1}}}),
+  },
+);
+const res = await worker.fetch(req, env);
+const body = await res.json();
+console.log(JSON.stringify({status: res.status, body}));
+""",
+    )
+    assert case["status"] == 500
+    assert case["body"]["message"] == "DB_TOUCHED"
+
+
+def test_order098_full_audit_query_shape_at_bounded_limit_100(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        _env_js()
+        + """
+const env = {HOT: db, COLD: db, GATEWAY_READ_TOKEN: "read"};
+const res = await worker.fetch(
+  new Request(
+    "https://unit/rest/v1/oracle_predictions?select=id,ts,symbol,audit&symbol=eq.BTCUSDT&order=id.asc&limit=100",
+    {headers: {"apikey": "read"}},
+  ),
+  env,
+);
+console.log(JSON.stringify({status: res.status, body: await res.json()}));
+""",
+    )
+    assert case == {"status": 200, "body": []}
+
+
+def test_valid_repair_cas_reaches_db(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        """
+const bomb = {prepare() { throw new Error("DB_TOUCHED"); }};
+const env = {HOT: bomb, COLD: bomb, GATEWAY_WRITE_TOKEN: "write", D1_WRITES_ENABLED: "1"};
+const req = new Request(
+  "https://unit/rest/v1/oracle_predictions?id=eq.7&outcome=eq.WIN&audit->outcomes_dual=is.null",
+  {
+    method: "PATCH",
+    headers: {"apikey": "write", "content-type": "application/json"},
+    body: JSON.stringify({price_15m_later: 101, audit: {outcomes_dual: {v: 1}}}),
+  },
+);
+const res = await worker.fetch(req, env);
+const body = await res.json();
+console.log(JSON.stringify({status: res.status, body}));
+""",
+    )
+    assert case["status"] == 500
+    assert case["body"]["message"] == "DB_TOUCHED"

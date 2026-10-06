@@ -16,7 +16,7 @@ __name(suppliedToken, "suppliedToken");
 async function readAuthorized(req, env) {
   const supplied = suppliedToken(req);
   if (!supplied) return false;
-  return [env.GATEWAY_READ_TOKEN, env.GATEWAY_WRITE_TOKEN, env.GATEWAY_TOKEN]
+  return [env.GATEWAY_READ_TOKEN, env.GATEWAY_WRITE_TOKEN]
     .filter((value) => typeof value === "string" && value.length > 0)
     .some((value) => supplied === value);
 }
@@ -243,6 +243,46 @@ function validateAuditPatch(oldAudit, newAudit) {
   if (oldValue.outcomes_dual != null && canonical(nextValue.outcomes_dual) !== canonical(oldValue.outcomes_dual)) throw new Error("outcomes_dual rewrite forbidden");
 }
 __name(validateAuditPatch, "validateAuditPatch");
+function validatePatchTarget(url, patchValue) {
+  const allowedKeys = new Set(["id", "outcome", "audit->outcomes_dual"]);
+  for (const [key] of url.searchParams) {
+    if (!allowedKeys.has(key)) throw new Error(`patch target unsupported filter: ${key}`);
+  }
+
+  const idFilters = url.searchParams.getAll("id");
+  const outcomeFilters = url.searchParams.getAll("outcome");
+  const auditFilters = url.searchParams.getAll("audit->outcomes_dual");
+  if (idFilters.length !== 1 || outcomeFilters.length !== 1 || auditFilters.length !== 1) {
+    throw new Error("patch target requires exact id + outcome CAS + outcomes_dual CAS");
+  }
+
+  const [idOp, idRaw] = decodeFilter(idFilters[0]);
+  const id = Number(idRaw);
+  if (idOp !== "eq" || !Number.isSafeInteger(id) || id < 0) {
+    throw new Error("patch target requires id=eq.<integer>");
+  }
+
+  const [auditOp, auditRaw] = decodeFilter(auditFilters[0]);
+  if (auditOp !== "is" || auditRaw !== "null") {
+    throw new Error("patch target requires audit->outcomes_dual=is.null");
+  }
+
+  const [outcomeOp, outcomeRaw] = decodeFilter(outcomeFilters[0]);
+  if (outcomeOp === "is" && outcomeRaw === "null") {
+    if (!("outcome" in patchValue) || !["WIN", "LOSS"].includes(patchValue.outcome)) {
+      throw new Error("patch target primary settlement requires outcome transition");
+    }
+    return;
+  }
+  if (outcomeOp === "eq" && ["WIN", "LOSS"].includes(String(outcomeRaw).toUpperCase())) {
+    if ("outcome" in patchValue) {
+      throw new Error("patch target repair cannot rewrite settled outcome");
+    }
+    return;
+  }
+  throw new Error("patch target requires approved outcome compare-and-set");
+}
+__name(validatePatchTarget, "validatePatchTarget");
 var QUERY_LIMIT_MAX = 500;
 var FULL_AUDIT_LIMIT_MAX = 100;
 var OFFSET_MAX = 1000;
@@ -419,7 +459,9 @@ async function rawPatch(req, env, url) {
   if (env.WRITE_FENCE === "1") return jresp({ error: "writer_fenced" }, 503);
   const text = await req.text(), parsed = parseJsonWithNumbers(text);
   validatePatchShape(parsed.value);
+  validatePatchTarget(url, parsed.value);
   const { out: matches } = await querySourceRows(env, url, { forceAudit: true, projectResult: false });
+  if (matches.length > 1) throw new Error("patch target matched multiple rows");
   const result = [];
   for (const old of matches) {
     if ("audit" in parsed.value) validateAuditPatch(old.audit, parsed.value.audit);
