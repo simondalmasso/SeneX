@@ -87,6 +87,7 @@ async def real_lifespan(public_app: FastAPI):
     quarantine_legacy_outcome_backfill()
     authority_store.clear()
     oracle_runner.start()
+    oracle_runner.initialize_portfolio_control()
 
     # R4: establish and continuously revalidate authority during controlled
     # runtime lifecycle. Public readiness remains observational and never
