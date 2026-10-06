@@ -222,4 +222,3 @@ console.log(JSON.stringify({status: res.status, body: await res.json()}));
     assert case["status"] == 201
     assert len(case["body"]) == 1
     assert case["body"][0]["symbol"] == "BTCUSDT"
-
