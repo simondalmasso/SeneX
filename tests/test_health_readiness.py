@@ -149,6 +149,42 @@ class HealthReadinessTests(unittest.TestCase):
         self.assertIsNone(payload["reason"])
         self.assertEqual(payload["safety"], safety_projection())
 
+    def test_readiness_contract_requires_paper_control_restore(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {
+                "trade_mode": "PAPER",
+                "live_capital_locked": True,
+                "orders_enabled": False,
+            },
+            "snapshot_id": "s",
+            "generation": 8,
+            "canonical_sha256": "sha256:" + "3" * 64,
+        }
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=False,
+            paper_control_status={
+                "attempted": True,
+                "ready": False,
+                "reason": "PAPER_CONTROL_RESTORE_FAILED",
+                "error_class": "RuntimeError",
+            },
+        )
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertEqual(payload["reason"], "PAPER_CONTROL_NOT_READY")
+        self.assertFalse(payload["checks"]["paper_control_ready"])
+        self.assertFalse(payload["components"]["paper_control"]["ready"])
+        self.assertEqual(
+            payload["components"]["paper_control"]["error_class"],
+            "RuntimeError",
+        )
+
     def test_runtime_provenance_endpoint_fail_closed_without_identity(self) -> None:
         response = _get("/api/runtime/provenance")
         self.assertEqual(response.status_code, 200)
