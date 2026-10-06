@@ -403,10 +403,12 @@ __name(rawPost, "rawPost");
 async function rawPatch(req, env, url) {
   if (env.WRITE_FENCE === "1") return jresp({ error: "writer_fenced" }, 503);
   const text = await req.text(), parsed = parseJsonWithNumbers(text);
-  if (!parsed.value || Array.isArray(parsed.value) || typeof parsed.value !== "object") throw new Error("patch body");
+  validatePatchShape(parsed.value);
   const { out: matches } = await querySourceRows(env, url, { forceAudit: true, projectResult: false });
   const result = [];
   for (const old of matches) {
+    if ("audit" in parsed.value) validateAuditPatch(old.audit, parsed.value.audit);
+    if ("outcome" in parsed.value && old.outcome != null) throw new Error("outcome rewrite forbidden");
     const src = { ...old, ...parsed.value, id: old.id, ts: old.ts, created_at: old.created_at };
     src.confidence = Number(src.confidence);
     src.ev = Number(src.ev);
