@@ -400,7 +400,16 @@ __name(rawPatch, "rawPatch");
 var gateway_order074_default = { async fetch(req, env) {
   const url = new URL(req.url);
   if (url.pathname === "/health") return jresp({ ok: true, storage: "d1", adapter: "order074-postgrest" });
-  if (!await authorized(req, env)) return jresp({ error: "unauthorized" }, 401);
+  const isWrite = req.method === "POST" || req.method === "PATCH";
+  if (isWrite) {
+    if (!await writeAuthorized(req, env)) return jresp({ error: "write_unauthorized" }, 403);
+    if (!writesEnabled(env)) return jresp({ error: "writer_disabled" }, 503);
+  } else if (!await readAuthorized(req, env)) {
+    return jresp({ error: "unauthorized" }, 401);
+  }
+  if ((url.pathname === "/admin/digests" || url.pathname === "/admin/integrity") && req.method === "GET" && !await writeAuthorized(req, env)) {
+    return jresp({ error: "admin_unauthorized" }, 403);
+  }
   if (url.pathname === "/admin/digests" && req.method === "GET") {
     const rows = await env.HOT.prepare("SELECT id,source_row_digest,audit_digest,cold_key,cold_payload_sha256 FROM oracle_predictions_hot ORDER BY id").all();
     return jresp(rows.results);
