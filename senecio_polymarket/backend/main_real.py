@@ -353,11 +353,14 @@ def _readiness_payload(snap, refresh: dict[str, Any]) -> dict[str, Any]:
         "kalshi": _kalshi.snapshot(),
         "boros": _boros.snapshot(),
     }
+    paper_control = oracle_runner.get_portfolio_control_status()
     return build_readiness_contract(
         snap,
         refresh,
         oracle_started=bool(runner.get("started_at")),
         adapters=adapters,
+        paper_control_ready=bool(paper_control.get("ready")),
+        paper_control_status=paper_control,
     )
 
 
