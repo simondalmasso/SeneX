@@ -243,6 +243,17 @@ function validateAuditPatch(oldAudit, newAudit) {
   if (oldValue.outcomes_dual != null && canonical(nextValue.outcomes_dual) !== canonical(oldValue.outcomes_dual)) throw new Error("outcomes_dual rewrite forbidden");
 }
 __name(validateAuditPatch, "validateAuditPatch");
+var QUERY_LIMIT_MAX = 500;
+var FULL_AUDIT_LIMIT_MAX = 100;
+var OFFSET_MAX = 1000;
+function parseBoundedInteger(raw, fallback, min, max, label) {
+  if (raw == null || raw === "") return fallback;
+  if (!/^\d+$/.test(String(raw))) throw new Error(`${label} must be an integer`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error(`${label} out of bounds`);
+  return value;
+}
+__name(parseBoundedInteger, "parseBoundedInteger");
 function buildWhere(url) {
   const clauses = [], binds = [];
   for (const [k, raw] of url.searchParams) {
