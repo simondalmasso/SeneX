@@ -262,19 +262,24 @@ def normalize_gamma_event(
     metadata = event.get("eventMetadata")
     final_price = None
     price_to_beat = None
-    if isinstance(metadata, dict):
+    if metadata is not None:
+        if not isinstance(metadata, dict):
+            raise ResolutionEvidenceError("event metadata is invalid")
+        if "finalPrice" not in metadata or "priceToBeat" not in metadata:
+            raise ResolutionEvidenceError(
+                "event metadata finalPrice/priceToBeat is incomplete"
+            )
         try:
-            final_price = float(metadata.get("finalPrice"))
-            price_to_beat = float(metadata.get("priceToBeat"))
-        except (TypeError, ValueError):
-            final_price = None
-            price_to_beat = None
-    if (
-        final_price is not None
-        and price_to_beat is not None
-        and math.isfinite(final_price)
-        and math.isfinite(price_to_beat)
-    ):
+            final_price = float(metadata["finalPrice"])
+            price_to_beat = float(metadata["priceToBeat"])
+        except (TypeError, ValueError) as exc:
+            raise ResolutionEvidenceError(
+                "event metadata finalPrice/priceToBeat is invalid"
+            ) from exc
+        if not math.isfinite(final_price) or not math.isfinite(price_to_beat):
+            raise ResolutionEvidenceError(
+                "event metadata finalPrice/priceToBeat is non-finite"
+            )
         metadata_winner = "UP" if final_price >= price_to_beat else "DOWN"
         if metadata_winner != winner:
             raise ResolutionEvidenceError(
