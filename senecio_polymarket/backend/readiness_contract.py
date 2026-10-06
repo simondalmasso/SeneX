@@ -147,6 +147,11 @@ def build_readiness_contract(
             },
             "market_data_freshness": market,
             "d1_quota_state": d1,
+            "paper_control": {
+                "status": "READY" if paper_control_ready else "DEGRADED",
+                "ready": bool(paper_control_ready),
+                **dict(paper_control_status or {}),
+            },
             "collector_liveness": {
                 "status": "EXTERNAL_NOT_PROBED_BY_H011",
                 "ready": None,
