@@ -291,6 +291,12 @@ def test_failed_coordinator_start_never_publishes_partial_singleton(monkeypatch)
 
     assert oracle_runner._get_portfolio_coordinator() is None
     assert oracle_runner._portfolio_coordinator is None
+    status = oracle_runner.get_portfolio_control_status()
+    assert status["attempted"] is True
+    assert status["ready"] is False
+    assert status["reason"] == "PAPER_CONTROL_RESTORE_FAILED"
+    assert status["error_class"] == "RuntimeError"
+
     assert oracle_runner._get_portfolio_coordinator() is None
     assert oracle_runner._portfolio_coordinator is None
     assert len(created) == 2
