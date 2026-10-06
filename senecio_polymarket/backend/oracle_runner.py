@@ -734,6 +734,23 @@ _tasks: list[asyncio.Task] = []
 # ACT-XXV: Portfolio coordinator singleton
 # Lazily initialized on first use to avoid import-time side effects.
 _portfolio_coordinator = None
+_portfolio_control_status: dict[str, Any] = {
+    "attempted": False,
+    "ready": False,
+    "reason": "NOT_INITIALIZED",
+    "error_class": None,
+}
+
+
+def get_portfolio_control_status() -> dict[str, Any]:
+    """Observational startup/restore status; performs no initialization."""
+    return dict(_portfolio_control_status)
+
+
+def initialize_portfolio_control() -> bool:
+    """Eagerly initialize/restore native PAPER control for readiness."""
+    return _get_portfolio_coordinator() is not None
+
 
 # Isolated owner-requested PAPER wallet. It has its own local ledger and never
 # shares ACT-XXV positions/cash/journal state.
@@ -817,16 +834,38 @@ def _get_portfolio_coordinator():
     restore must never leave a fresh/unrestored coordinator reachable by later
     routing or observational views.
     """
-    global _portfolio_coordinator
+    global _portfolio_coordinator, _portfolio_control_status
     if _portfolio_coordinator is None:
+        _portfolio_control_status = {
+            "attempted": True,
+            "ready": False,
+            "reason": "INITIALIZING",
+            "error_class": None,
+        }
         try:
             from .portfolio import PortfolioCoordinator
             candidate = PortfolioCoordinator()
             candidate.start()
             _portfolio_coordinator = candidate
+            persistence = candidate.get_full_state().get("paper_control_persistence") or {}
+            _portfolio_control_status = {
+                "attempted": True,
+                "ready": True,
+                "reason": None,
+                "error_class": None,
+                "restored": bool(persistence.get("restored")),
+                "migration": persistence.get("migration"),
+                "decision_state_migration": persistence.get("decision_state_migration"),
+            }
             log.info("PortfolioCoordinator (ACT-XXV) initialized and started")
         except Exception as e:
             _portfolio_coordinator = None
+            _portfolio_control_status = {
+                "attempted": True,
+                "ready": False,
+                "reason": "PAPER_CONTROL_RESTORE_FAILED",
+                "error_class": type(e).__name__,
+            }
             log.exception("failed to init PortfolioCoordinator: %s", e)
             return None
     return _portfolio_coordinator
