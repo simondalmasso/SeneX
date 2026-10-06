@@ -122,3 +122,88 @@ def test_prospective_status_blocks_until_300_unique_markets():
 def test_prospective_verdict_is_frozen_and_fail_closed(bootstrap, n_markets, expected):
     _, m = _modules()
     assert m.prospective_verdict(bootstrap, n_markets=n_markets) == expected
+
+
+def test_band_classification_uses_earliest_market_row_before_filtering():
+    o97, m = _modules()
+    cutoff = m.PROSPECTIVE_START_TS
+    earliest = _obs(
+        o97,
+        20,
+        start_ts=cutoff,
+        p_market=0.50,
+        senex=0.90,
+        label=1,
+    )
+    later = earliest._replace(
+        pair=earliest.pair._replace(
+            prediction_id=21,
+            decision_ts=cutoff + 60,
+            senex_raw_up=0.55,
+        )
+    )
+
+    subset = m.prospective_primary_subset([earliest, later])
+
+    assert subset == []
+
+
+def test_primary_eval_does_not_compute_bootstrap_below_frozen_gate(monkeypatch):
+    o97, m = _modules()
+    cutoff = m.PROSPECTIVE_START_TS
+    rows = [
+        _obs(o97, 30, start_ts=cutoff, p_market=0.50, senex=0.55, label=1),
+        _obs(o97, 31, start_ts=cutoff + 300, p_market=0.50, senex=0.55, label=0),
+    ]
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("bootstrap must not run below ORDER100 N>=300 gate")
+
+    monkeypatch.setattr(m.order099, "cluster_bootstrap", forbidden)
+    result = m._evaluate_subset(
+        rows,
+        n_bootstrap=m.DEFAULT_BOOTSTRAP,
+        seed=m.DEFAULT_SEED,
+        minimum_markets=m.MIN_PROSPECTIVE_MARKETS,
+    )
+
+    assert result == {
+        "n_markets": 2,
+        "status": "GATE_CLOSED_NO_INTERIM_METRICS",
+    }
+
+
+@pytest.mark.parametrize(
+    "bootstrap,seed",
+    [
+        (9999, 7),
+        (10000, 8),
+        (1, 1),
+        (10000.9, 7),
+        (10000, 7.9),
+        (10000.1, 7.1),
+        (True, 7),
+        (10000, False),
+        ("10000", 7),
+        (10000, "7"),
+    ],
+)
+def test_frozen_eval_parameters_reject_noncanonical_values(bootstrap, seed):
+    _, m = _modules()
+    with pytest.raises(ValueError, match="frozen evaluator requires"):
+        m._require_frozen_eval_parameters(bootstrap, seed)
+
+    m._require_frozen_eval_parameters(m.DEFAULT_BOOTSTRAP, m.DEFAULT_SEED)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_prospective_verdict_rejects_nonfinite_metrics(bad):
+    _, m = _modules()
+    bootstrap = {
+        "brier": {"mean_delta": bad, "ci95_high": bad},
+        "log_loss": {"mean_delta": bad, "ci95_high": bad},
+    }
+    assert (
+        m.prospective_verdict(bootstrap, n_markets=300)
+        == "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
+    )
