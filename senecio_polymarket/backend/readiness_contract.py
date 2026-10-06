@@ -112,13 +112,22 @@ def build_readiness_contract(
         "snapshot_fresh": snapshot_fresh,
         "last_refresh_ok": last_refresh_ok,
     }
-    ready = authority_ready and bool(oracle_started) and paper_lock and orders_disabled
+    checks["paper_control_ready"] = bool(paper_control_ready)
+    ready = (
+        authority_ready
+        and bool(oracle_started)
+        and paper_lock
+        and orders_disabled
+        and bool(paper_control_ready)
+    )
     if d1["status"] == "EXHAUSTED":
         reason = "D1_QUOTA_EXCEEDED"
     elif not authority_ready:
         reason = refresh.get("last_refresh_error") or "AUTHORITY_NOT_READY"
     elif not oracle_started:
         reason = "ORACLE_NOT_STARTED"
+    elif not paper_control_ready:
+        reason = "PAPER_CONTROL_NOT_READY"
     elif not paper_lock or not orders_disabled:
         reason = "SAFETY_CONTRACT_VIOLATION"
     else:
