@@ -293,3 +293,42 @@ def test_manifest_binds_exact_output_file_sha256(tmp_path):
 
     assert len(manifest["output_file_sha256"]) == 64
     assert manifest["output_file_sha256"] == m._file_sha256(output)
+
+
+@pytest.mark.parametrize(
+    "final_price,price_to_beat",
+    [
+        ("MALFORMED", 84746.0),
+        (84789.0, "MALFORMED"),
+        (float("nan"), 84746.0),
+        (84789.0, float("inf")),
+        (float("-inf"), 84746.0),
+        (84789.0, None),
+        (None, 84746.0),
+    ],
+)
+def test_present_gamma_metadata_must_be_complete_finite_and_parseable(
+    final_price, price_to_beat
+):
+    m = _load()
+    event = _event(final_price=final_price, price_to_beat=price_to_beat)
+    with pytest.raises(m.ResolutionEvidenceError, match="metadata"):
+        m.normalize_gamma_event(
+            event,
+            expected_slug="btc-updown-5m-1791069600",
+            expected_condition_id="0xabc",
+        )
+
+
+def test_absent_gamma_metadata_is_explicitly_optional():
+    m = _load()
+    event = _event()
+    event.pop("eventMetadata")
+    result = m.normalize_gamma_event(
+        event,
+        expected_slug="btc-updown-5m-1791069600",
+        expected_condition_id="0xabc",
+    )
+    assert result["outcome"] == "UP"
+    assert result["final_price"] is None
+    assert result["price_to_beat"] is None

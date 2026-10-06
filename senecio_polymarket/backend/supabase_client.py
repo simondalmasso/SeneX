@@ -1326,6 +1326,7 @@ async def update_outcome_dual(
         from .settlement_contract import (
             WINDOW_15M_S,
             WINDOW_1H_S,
+            directional_outcome,
             normalize_exchange,
             normalize_symbol,
             parse_utc,
@@ -1398,14 +1399,31 @@ async def update_outcome_dual(
                 return False
         except (TypeError, ValueError, KeyError):
             return False
+        expected_15m = directional_outcome(
+            direction,
+            origin.get("price"),
+            price_evidence_15m["price"],
+        )
+        expected_1h = directional_outcome(
+            direction,
+            origin.get("price"),
+            price_evidence_1h["price"],
+        )
+        if expected_15m not in {"WIN", "LOSS"} or expected_1h not in {"WIN", "LOSS"}:
+            return False
+        supplied_15m = str(outcome_15m or "").upper()
+        supplied_1h = str(outcome_1h or "").upper()
+        if supplied_15m != expected_15m or supplied_1h != expected_1h:
+            return False
+
         observed_at = datetime.now(timezone.utc)
         if observed_at < row_dt + timedelta(seconds=WINDOW_1H_S):
             return False
 
         observed_iso = observed_at.isoformat()
         outcomes_dual = {
-            "outcome_15m": outcome_15m,
-            "outcome_1h": outcome_1h,
+            "outcome_15m": expected_15m,
+            "outcome_1h": expected_1h,
             "price_15m_later": float(price_15m_later),
             "price_1h_later": float(price_1h_later),
             "primary_window": primary_window,
@@ -1425,7 +1443,7 @@ async def update_outcome_dual(
         merged_audit = dict(existing_audit)
         merged_audit["outcomes_dual"] = outcomes_dual
         patch_body = {
-            "outcome": outcome_1h,
+            "outcome": expected_1h,
             "price_15m_later": float(price_15m_later),
             "audit": merged_audit,
         }
@@ -1447,7 +1465,7 @@ async def update_outcome_dual(
         success = isinstance(body, list) and len(body) > 0
         if success:
             updated = dict(existing)
-            updated["outcome"] = outcome_1h
+            updated["outcome"] = expected_1h
             updated["price_15m_later"] = float(price_15m_later)
             updated["audit"] = merged_audit
             persist_authority_row_local(updated)
