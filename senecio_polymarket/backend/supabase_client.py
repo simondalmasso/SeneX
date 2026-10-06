@@ -1336,6 +1336,9 @@ async def update_outcome_dual(
         if primary_window != "1h":
             return False
 
+        if primary_window != "1h":
+            return False
+
         c = _get_client()
         r_get = await _d1_get(c, 
             f"/{SUPABASE_TABLE}",
