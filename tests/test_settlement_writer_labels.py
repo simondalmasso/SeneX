@@ -181,3 +181,29 @@ async def test_dual_writer_rejects_invalid_outcome_tokens(
 
     assert ok is False
     client.patch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("primary_window", ["bogus", "15m", "", "1H"])
+async def test_dual_writer_rejects_unsupported_primary_window_before_network(
+    monkeypatch, primary_window
+):
+    client = _Client()
+    d1_get = mock.AsyncMock()
+    monkeypatch.setattr(sc, "_get_client", lambda: client)
+    monkeypatch.setattr(sc, "_d1_get", d1_get)
+
+    ok = await sc.update_outcome_dual(
+        7,
+        "WIN",
+        "WIN",
+        110.0,
+        120.0,
+        primary_window=primary_window,
+        price_evidence_15m={},
+        price_evidence_1h={},
+    )
+
+    assert ok is False
+    d1_get.assert_not_awaited()
+    client.patch.assert_not_awaited()
