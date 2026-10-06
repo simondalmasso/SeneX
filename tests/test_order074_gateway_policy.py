@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import shutil
@@ -202,7 +202,14 @@ const payload = {
   price_15m_later: null,
   outcome: null,
   exchange_used: "okx",
-  audit: {},
+  audit: {
+    origin_price_v1: {
+      version: "origin-price-v1",
+      price: 100,
+      timestamp: "2026-10-05T00:00:00Z",
+      source: "okx",
+    },
+  },
 };
 const res = await worker.fetch(new Request("https://unit/rest/v1/oracle_predictions", {
   method: "POST",
@@ -215,3 +222,4 @@ console.log(JSON.stringify({status: res.status, body: await res.json()}));
     assert case["status"] == 201
     assert len(case["body"]) == 1
     assert case["body"][0]["symbol"] == "BTCUSDT"
+
