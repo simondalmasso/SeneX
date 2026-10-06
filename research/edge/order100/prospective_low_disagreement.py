@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -86,28 +87,35 @@ def _earliest_unique_market_rows(
 def prospective_primary_subset(
     observations: Iterable[order097.JoinedObservation],
 ) -> list[order097.JoinedObservation]:
-    """Fresh, low-disagreement, one-market-one-row prospective sample."""
-    eligible: list[order097.JoinedObservation] = []
-    for item in observations:
-        if item.pair.market_start_ts < PROSPECTIVE_START_TS:
-            continue
-        if abs(item.pair.senex_raw_up - item.pair.p_market) > LOW_DISAGREEMENT_MAX:
-            continue
-        eligible.append(item)
-    return _earliest_unique_market_rows(eligible)
+    """Fresh, low-disagreement sample using each market's earliest causal T0 row."""
+    earliest = _earliest_unique_market_rows(
+        item
+        for item in observations
+        if item.pair.market_start_ts >= PROSPECTIVE_START_TS
+    )
+    return [
+        item
+        for item in earliest
+        if abs(item.pair.senex_raw_up - item.pair.p_market)
+        <= LOW_DISAGREEMENT_MAX
+    ]
 
 
 def prospective_high_disagreement_subset(
     observations: Iterable[order097.JoinedObservation],
 ) -> list[order097.JoinedObservation]:
-    """Descriptive-only frozen high-disagreement safety band."""
-    eligible = [
+    """Descriptive-only band using each market's earliest causal T0 row."""
+    earliest = _earliest_unique_market_rows(
         item
         for item in observations
         if item.pair.market_start_ts >= PROSPECTIVE_START_TS
-        and abs(item.pair.senex_raw_up - item.pair.p_market) > HIGH_DISAGREEMENT_MIN
+    )
+    return [
+        item
+        for item in earliest
+        if abs(item.pair.senex_raw_up - item.pair.p_market)
+        > HIGH_DISAGREEMENT_MIN
     ]
-    return _earliest_unique_market_rows(eligible)
 
 
 def prospective_sample_gate(n_markets: int) -> str | None:
@@ -119,6 +127,19 @@ def prospective_sample_gate(n_markets: int) -> str | None:
     return None
 
 
+def _require_frozen_eval_parameters(n_bootstrap: int, seed: int) -> None:
+    if (
+        type(n_bootstrap) is not int
+        or type(seed) is not int
+        or n_bootstrap != DEFAULT_BOOTSTRAP
+        or seed != DEFAULT_SEED
+    ):
+        raise ValueError(
+            "ORDER100 frozen evaluator requires "
+            f"bootstrap={DEFAULT_BOOTSTRAP} and seed={DEFAULT_SEED}"
+        )
+
+
 def prospective_verdict(
     bootstrap: dict[str, object],
     *,
@@ -126,12 +147,24 @@ def prospective_verdict(
 ) -> str:
     if prospective_sample_gate(n_markets) is not None:
         return "COLLECTING_PROSPECTIVE_DATA"
-    brier = bootstrap["brier"]
-    log_loss = bootstrap["log_loss"]
+    try:
+        brier = bootstrap["brier"]
+        log_loss = bootstrap["log_loss"]
+        brier_mean = float(brier["mean_delta"])
+        brier_high = float(brier["ci95_high"])
+        log_loss_high = float(log_loss["ci95_high"])
+    except (KeyError, TypeError, ValueError):
+        return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
+    if not all(math.isfinite(value) for value in (
+        brier_mean,
+        brier_high,
+        log_loss_high,
+    )):
+        return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
     if (
-        float(brier["mean_delta"]) <= -PRACTICAL_BRIER_GAIN
-        and float(brier["ci95_high"]) < 0.0
-        and float(log_loss["ci95_high"]) < 0.0
+        brier_mean <= -PRACTICAL_BRIER_GAIN
+        and brier_high < 0.0
+        and log_loss_high < 0.0
     ):
         return "PROSPECTIVE_EDGE_CONFIRMED"
     return "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
@@ -142,25 +175,31 @@ def _evaluate_subset(
     *,
     n_bootstrap: int,
     seed: int,
+    minimum_markets: int = 2,
 ) -> dict[str, object]:
+    n_markets = len({_market_key(item) for item in observations})
+    if n_markets < int(minimum_markets):
+        return {
+            "n_markets": n_markets,
+            "status": (
+                "GATE_CLOSED_NO_INTERIM_METRICS"
+                if int(minimum_markets) >= MIN_PROSPECTIVE_MARKETS
+                else "INSUFFICIENT_FOR_BOOTSTRAP"
+            ),
+        }
     market_only, augmented = frozen_models()
     loss_rows = order099.nested_loss_rows(
         observations,
         market_only,
         augmented,
     )
-    if len({_market_key(item) for item in observations}) < 2:
-        return {
-            "n_markets": len(observations),
-            "status": "INSUFFICIENT_FOR_BOOTSTRAP",
-        }
     bootstrap = order099.cluster_bootstrap(
         loss_rows,
         n_bootstrap=n_bootstrap,
         random_seed=seed,
     )
     return {
-        "n_markets": len(observations),
+        "n_markets": n_markets,
         "bootstrap": bootstrap,
     }
 
@@ -174,6 +213,7 @@ def run_offline(
     n_bootstrap: int = DEFAULT_BOOTSTRAP,
     seed: int = DEFAULT_SEED,
 ) -> dict[str, object]:
+    _require_frozen_eval_parameters(n_bootstrap, seed)
     provenance = order099.verify_order098_artifacts(
         predictions_path,
         predictions_manifest_path,
@@ -191,21 +231,26 @@ def run_offline(
         primary,
         n_bootstrap=n_bootstrap,
         seed=seed,
-    )
-    high_eval = _evaluate_subset(
-        high,
-        n_bootstrap=n_bootstrap,
-        seed=seed + 101,
+        minimum_markets=MIN_PROSPECTIVE_MARKETS,
     )
 
     n_primary = int(primary_eval["n_markets"])
-    if "bootstrap" in primary_eval:
+    if prospective_sample_gate(n_primary) is not None:
+        high_eval = {
+            "n_markets": len(high),
+            "status": "GATE_CLOSED_NO_INTERIM_METRICS",
+        }
+        verdict = "COLLECTING_PROSPECTIVE_DATA"
+    else:
+        high_eval = _evaluate_subset(
+            high,
+            n_bootstrap=n_bootstrap,
+            seed=seed + 101,
+        )
         verdict = prospective_verdict(
             primary_eval["bootstrap"],
             n_markets=n_primary,
         )
-    else:
-        verdict = "COLLECTING_PROSPECTIVE_DATA"
 
     return {
         "order": "ORDER100",
