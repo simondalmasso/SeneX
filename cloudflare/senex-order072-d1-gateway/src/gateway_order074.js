@@ -7,15 +7,34 @@ function jresp(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
 }
 __name(jresp, "jresp");
-async function authorized(req, env) {
+function suppliedToken(req) {
   const bearer = req.headers.get("authorization") || "";
   const apiKey = req.headers.get("apikey") || "";
-  const supplied = apiKey || (bearer.startsWith("Bearer ") ? bearer.slice(7) : "");
-  if (!supplied) return false;
-  if (env.GATEWAY_TOKEN && supplied === env.GATEWAY_TOKEN) return true;
-  return await sha256hex(supplied) === "643935c88358867802d8d8f5e1599cdda76ec62bc36d352e067806342fe88d07";
+  return apiKey || (bearer.startsWith("Bearer ") ? bearer.slice(7) : "");
 }
-__name(authorized, "authorized");
+__name(suppliedToken, "suppliedToken");
+async function readAuthorized(req, env) {
+  const supplied = suppliedToken(req);
+  if (!supplied) return false;
+  return [env.GATEWAY_READ_TOKEN, env.GATEWAY_WRITE_TOKEN, env.GATEWAY_TOKEN]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .some((value) => supplied === value);
+}
+__name(readAuthorized, "readAuthorized");
+async function writeAuthorized(req, env) {
+  const supplied = suppliedToken(req);
+  return Boolean(
+    supplied &&
+    typeof env.GATEWAY_WRITE_TOKEN === "string" &&
+    env.GATEWAY_WRITE_TOKEN.length > 0 &&
+    supplied === env.GATEWAY_WRITE_TOKEN
+  );
+}
+__name(writeAuthorized, "writeAuthorized");
+function writesEnabled(env) {
+  return env.D1_WRITES_ENABLED === "1";
+}
+__name(writesEnabled, "writesEnabled");
 function pathKey(path) {
   return JSON.stringify(path);
 }
