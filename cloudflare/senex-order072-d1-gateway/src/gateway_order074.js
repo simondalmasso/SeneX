@@ -218,6 +218,18 @@ function project(row, select) {
 }
 __name(project, "project");
 var HOT_FIELDS = /* @__PURE__ */ new Set(["id", "ts", "symbol", "prediction", "confidence", "ev", "price_now", "price_15m_later", "outcome", "exchange_used", "created_at"]);
+var PATCH_ALLOWED_TOP_LEVEL = /* @__PURE__ */ new Set(["outcome", "price_15m_later", "audit"]);
+function validatePatchShape(value) {
+  if (!value || Array.isArray(value) || typeof value !== "object") throw new Error("patch body");
+  for (const key of Object.keys(value)) if (!PATCH_ALLOWED_TOP_LEVEL.has(key)) throw new Error(`immutable T0 field: ${key}`);
+  if ("outcome" in value && !["WIN", "LOSS"].includes(value.outcome)) throw new Error("invalid outcome patch");
+  if ("price_15m_later" in value) {
+    const price = Number(value.price_15m_later);
+    if (!Number.isFinite(price) || price <= 0) throw new Error("invalid price_15m_later patch");
+  }
+  if ("audit" in value && (!value.audit || Array.isArray(value.audit) || typeof value.audit !== "object")) throw new Error("audit patch must be an object");
+}
+__name(validatePatchShape, "validatePatchShape");
 function buildWhere(url) {
   const clauses = [], binds = [];
   for (const [k, raw] of url.searchParams) {
