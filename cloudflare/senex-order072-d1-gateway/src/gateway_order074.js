@@ -334,10 +334,14 @@ function apiRow(r) {
 __name(apiRow, "apiRow");
 async function querySourceRows(env, url, { forceAudit = false, projectResult = true, includeTotal = false } = {}) {
   const { sql: where, binds } = buildWhere(url), order = buildOrder(url);
-  const offset = Math.max(0, Number(url.searchParams.get("offset") || 0)), limit = Math.max(1, Number(url.searchParams.get("limit") || 1e5));
-  const count = includeTotal ? await env.HOT.prepare(`SELECT COUNT(*) AS n FROM oracle_predictions_hot${where}`).bind(...binds).first() : null;
+  if (includeTotal) throw new Error("exact count disabled on compatibility route");
+  const offset = parseBoundedInteger(url.searchParams.get("offset"), 0, 0, OFFSET_MAX, "offset");
+  const limit = parseBoundedInteger(url.searchParams.get("limit"), 100, 1, QUERY_LIMIT_MAX, "limit");
+  const count = null;
+  const sel = url.searchParams.get("select"), full = needsFullAudit(sel, forceAudit);
+  if (full && limit > FULL_AUDIT_LIMIT_MAX) throw new Error("full audit limit out of bounds");
   const got = await env.HOT.prepare(`SELECT * FROM oracle_predictions_hot${where}${order} LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
-  const sel = url.searchParams.get("select"), full = needsFullAudit(sel, forceAudit), audits = full ? await fetchAudits(env, got.results.map((r) => r.id)) : /* @__PURE__ */ new Map();
+  const audits = full ? await fetchAudits(env, got.results.map((r) => r.id)) : /* @__PURE__ */ new Map();
   const rows = got.results.map((h) => {
     let audit;
     if (full) audit = audits.get(h.id) ?? null;
