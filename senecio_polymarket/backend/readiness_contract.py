@@ -64,6 +64,8 @@ def build_readiness_contract(
     *,
     oracle_started: bool,
     adapters: dict[str, Any] | None = None,
+    paper_control_ready: bool = True,
+    paper_control_status: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     refresh = dict(refresh or {})
     d1 = classify_d1_quota_state(refresh)
