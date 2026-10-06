@@ -230,6 +230,19 @@ function validatePatchShape(value) {
   if ("audit" in value && (!value.audit || Array.isArray(value.audit) || typeof value.audit !== "object")) throw new Error("audit patch must be an object");
 }
 __name(validatePatchShape, "validatePatchShape");
+function validateAuditPatch(oldAudit, newAudit) {
+  const oldValue = oldAudit && typeof oldAudit === "object" && !Array.isArray(oldAudit) ? oldAudit : {};
+  const nextValue = newAudit && typeof newAudit === "object" && !Array.isArray(newAudit) ? newAudit : {};
+  for (const key of Object.keys(oldValue)) {
+    if (key === "outcomes_dual") continue;
+    if (!(key in nextValue) || canonical(nextValue[key]) !== canonical(oldValue[key])) throw new Error(`immutable audit field: ${key}`);
+  }
+  for (const key of Object.keys(nextValue)) {
+    if (!(key in oldValue) && key !== "outcomes_dual") throw new Error(`new audit field not allowed: ${key}`);
+  }
+  if (oldValue.outcomes_dual != null && canonical(nextValue.outcomes_dual) !== canonical(oldValue.outcomes_dual)) throw new Error("outcomes_dual rewrite forbidden");
+}
+__name(validateAuditPatch, "validateAuditPatch");
 function buildWhere(url) {
   const clauses = [], binds = [];
   for (const [k, raw] of url.searchParams) {
