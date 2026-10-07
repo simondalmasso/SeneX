@@ -166,11 +166,29 @@ def purged_walk_forward_splits(
         range(len(rows)),
         key=lambda idx: (_utc(rows[idx].decision_ts), rows[idx].market_id, idx),
     )
-    remaining = len(ordered) - min_train_size
+    first_test_position: int | None = None
+    for position in range(min_train_size, len(ordered)):
+        test_start = _utc(rows[ordered[position]].decision_ts)
+        purge_before = test_start.timestamp() - embargo_seconds
+        eligible_train = [
+            idx
+            for idx in ordered[:position]
+            if _utc(rows[idx].label_end_ts).timestamp() < purge_before
+        ]
+        if len(eligible_train) >= min_train_size:
+            first_test_position = position
+            break
+
+    if first_test_position is None:
+        raise ChallengerContractError(
+            "not enough post-purge training rows for requested min_train_size"
+        )
+
+    remaining = len(ordered) - first_test_position
     actual_splits = min(n_splits, remaining)
     base = remaining // actual_splits
     extra = remaining % actual_splits
-    cursor = min_train_size
+    cursor = first_test_position
     splits: list[PurgedSplit] = []
 
     for fold in range(actual_splits):
@@ -186,9 +204,9 @@ def purged_walk_forward_splits(
             for idx in ordered[:cursor]
             if _utc(rows[idx].label_end_ts).timestamp() < purge_before
         )
-        if not train_indices:
+        if len(train_indices) < min_train_size:
             raise ChallengerContractError(
-                "purge/embargo removed the entire training set"
+                "purge/embargo violated post-purge min_train_size"
             )
         splits.append(
             PurgedSplit(
