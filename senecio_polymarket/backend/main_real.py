@@ -87,6 +87,7 @@ async def real_lifespan(public_app: FastAPI):
     quarantine_legacy_outcome_backfill()
     authority_store.clear()
     oracle_runner.start()
+    oracle_runner.initialize_portfolio_control()
 
     # R4: establish and continuously revalidate authority during controlled
     # runtime lifecycle. Public readiness remains observational and never
@@ -352,11 +353,14 @@ def _readiness_payload(snap, refresh: dict[str, Any]) -> dict[str, Any]:
         "kalshi": _kalshi.snapshot(),
         "boros": _boros.snapshot(),
     }
+    paper_control = oracle_runner.get_portfolio_control_status()
     return build_readiness_contract(
         snap,
         refresh,
         oracle_started=bool(runner.get("started_at")),
         adapters=adapters,
+        paper_control_ready=bool(paper_control.get("ready")),
+        paper_control_status=paper_control,
     )
 
 
