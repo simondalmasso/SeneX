@@ -13,10 +13,17 @@ import hashlib
 import json
 import math
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit
+
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[3]
+    repo_root_text = str(repo_root)
+    if repo_root_text not in sys.path:
+        sys.path.insert(0, repo_root_text)
 
 import httpx
 
