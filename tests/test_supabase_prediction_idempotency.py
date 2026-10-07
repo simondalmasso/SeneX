@@ -159,5 +159,3 @@ def test_conflicting_same_timestamp_symbol_fails_closed(monkeypatch):
 
     with pytest.raises(supabase_client.PredictionPersistenceConflictError):
         asyncio.run(supabase_client.ensure_prediction_persisted(prediction))
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
