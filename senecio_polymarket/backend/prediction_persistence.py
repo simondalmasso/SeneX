@@ -1,3 +1,5 @@
+[Reading 310 lines from start (total: 310 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import copy
@@ -129,6 +131,11 @@ class PredictionPersistenceStore:
                 raise PredictionPersistenceError(
                     f"invalid persistence receipt contract at line {line_no}"
                 )
+            if idx == len(lines) - 1 and not terminated:
+                with open(self.path, "ab") as handle:
+                    handle.write(b"\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
             rows.append(row)
             idx += 1
 
@@ -303,3 +310,5 @@ class PredictionPersistenceStore:
             )
         )
         return pending[:limit]
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
