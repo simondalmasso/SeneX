@@ -1,5 +1,3 @@
-[Reading 470 lines from start (total: 470 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import hashlib
@@ -470,5 +468,3 @@ def test_prospective_receipt_ledger_is_append_only_and_idempotent(tmp_path):
     other = seal_prospective_receipt(**conflicting)
     with pytest.raises(ChallengerContractError, match="identity conflict"):
         append_prospective_receipt(ledger, other)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
