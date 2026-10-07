@@ -219,5 +219,3 @@ def test_prospective_verdict_rejects_nonfinite_metrics(bad):
         m.prospective_verdict(bootstrap, n_markets=300)
         == "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
     )
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
