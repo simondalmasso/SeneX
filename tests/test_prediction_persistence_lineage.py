@@ -1,3 +1,5 @@
+[Reading 280 lines from start (total: 280 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import asyncio
@@ -203,6 +205,31 @@ def test_receipt_store_recovers_torn_final_tail_append_only(tmp_path, monkeypatc
     assert "_prediction_persistence_recovery_v1" in raw
 
 
+def test_receipt_store_repairs_valid_unterminated_final_record(tmp_path, monkeypatch):
+    monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
+    store = PredictionPersistenceStore()
+    store.enqueue(_packet(), _prediction())
+    path = tmp_path / "prediction_persistence_receipts.jsonl"
+    path.write_bytes(path.read_bytes().rstrip(b"\r\n"))
+
+    packet2 = {
+        "packet_id": "gptrader-t0-" + "e" * 24,
+        "packet_hash": "f" * 64,
+        "packet_seq": 2,
+    }
+    prediction2 = _prediction()
+    prediction2["timestamp"] = "2026-10-06T18:15:00Z"
+
+    restarted = PredictionPersistenceStore()
+    restarted.enqueue(packet2, prediction2)
+
+    states = restarted.states()
+    assert len(states) == 2
+    raw = path.read_bytes()
+    assert b"}\n{" in raw
+    assert not raw.endswith(b"}{")
+
+
 def test_pending_retry_rotation_does_not_starve_newer_receipts(tmp_path, monkeypatch):
     monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
     store = PredictionPersistenceStore()
@@ -253,3 +280,5 @@ def test_restart_retry_keeps_unresolved_receipt_explicit(tmp_path, monkeypatch):
     pending = PredictionPersistenceStore().pending(limit=10)
     assert len(pending) == 1
     assert pending[0]["status"] == "FAILED"
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
