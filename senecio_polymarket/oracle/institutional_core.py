@@ -61,11 +61,10 @@ log = logging.getLogger("senecio.institutional_core")
 
 try:
     from survivability import SurvivabilityFunction
-    from market_ev import MarketEV, compute_market_ev
+    from market_ev import MarketEV
 except ImportError:
     SurvivabilityFunction = None
     MarketEV = None
-    compute_market_ev = None
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -824,19 +823,19 @@ class SingleDecisionCore:
         survival_discount = 1.0 - risk_score * 0.8  # risk=0→discount=1.0, risk=1→discount=0.2
         adjusted_ev = base_ev * survival_discount
 
-        # ── Market EV anchoring (if available) ──
-        if self.market_ev is not None and compute_market_ev is not None:
+        # ── Market-friction anchoring (if available) ──
+        # P(win) has already been established by the validated calibration
+        # artifact above. MarketEV may only reduce that EV using execution
+        # frictions/latency; it must not derive another probability.
+        if self.market_ev is not None:
             position_usdt = self._capital * conviction * size_mult
-            market_ev_result = compute_market_ev(
+            market_ev_result = self.market_ev.compute_market_ev(
+                model_ev=adjusted_ev,
                 edge=conviction,
-                entropy=noise,
                 atr_pct=volatility,
-                market_ev_instance=self.market_ev,
                 position_usdt=position_usdt,
             )
-            if isinstance(market_ev_result, (int, float)):
-                adjusted_ev = min(adjusted_ev, market_ev_result)
-            elif isinstance(market_ev_result, dict):
+            if isinstance(market_ev_result, dict):
                 mkt_ev = market_ev_result.get("market_ev", adjusted_ev)
                 adjusted_ev = min(adjusted_ev, mkt_ev)
 
@@ -1041,6 +1040,8 @@ class SingleDecisionCore:
 
         # ── 5. EV not tradeable → HOLD ──
         if not ev_result["tradeable"]:
+            if ev_result.get("reason") == "UNVALIDATED_WIN_PROBABILITY":
+                return self._action_hold("UNVALIDATED_WIN_PROBABILITY")
             return self._action_hold(
                 f"negative_ev: {ev_result['adjusted_ev']:.8f}"
             )
