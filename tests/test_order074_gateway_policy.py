@@ -424,5 +424,3 @@ console.log(JSON.stringify({status: res.status, body: await res.json()}));
     assert case["status"] == 500
     assert case["body"]["error"] == "request_failed"
     assert "reference mismatch" in case["body"]["message"].lower()
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
