@@ -55,3 +55,44 @@ def test_portfolio_analytics_does_not_double_subtract_fees_from_realized_pnl():
     assert report["ending_equity_usd"] == 1002.0
     assert report["net_pnl_usd"] == report["ending_equity_usd"] - report["starting_equity_usd"]
     assert report["total_return_pct"] == 0.2
+
+
+def test_expectancy_equals_mean_realized_pnl_for_net_trade_ledger():
+    analytics = PortfolioAnalytics(
+        config={
+            "starting_equity_usd": 1000.0,
+            "min_trades_for_metrics": 1,
+            "trades_per_year": 365.0,
+        }
+    )
+    trades = [
+        _trade(
+            "t1",
+            10.0,
+            0.0,
+            direction="LONG",
+            exit_ts="2026-10-01T01:00:00Z",
+        ),
+        _trade(
+            "t2",
+            -4.0,
+            0.0,
+            direction="LONG",
+            exit_ts="2026-10-01T02:00:00Z",
+        ),
+        _trade(
+            "t3",
+            -5.0,
+            0.0,
+            direction="SHORT",
+            exit_ts="2026-10-01T03:00:00Z",
+        ),
+    ]
+
+    report = analytics.compute(trades)
+    expected_mean = sum(t["realized_pnl_usd"] for t in trades) / len(trades)
+
+    assert expected_mean == 1.0 / 3.0
+    assert report["expectancy_usd"] == round(expected_mean, 2)
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
