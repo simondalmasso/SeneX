@@ -12,6 +12,7 @@ from typing import Any, Iterable, Sequence
 
 RECEIPT_CONTRACT = "senex-challenger-prospective-receipt-v1"
 EPS = 1e-12
+POSIX_DIR_FSYNC = os.name == "posix"
 
 
 class ChallengerContractError(RuntimeError):
@@ -50,6 +51,21 @@ def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def canonical_numeric(value: Any, *, digits: int = 12) -> Any:
+    """Round finite floats before hashing cross-runtime model artifacts."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ChallengerContractError("non-finite numeric artifact")
+        return round(value, digits)
+    if isinstance(value, dict):
+        return {key: canonical_numeric(item, digits=digits) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return tuple(canonical_numeric(item, digits=digits) for item in value)
+    if isinstance(value, list):
+        return [canonical_numeric(item, digits=digits) for item in value]
+    return value
+
+
 def _utc(value: str) -> datetime:
     raw = str(value or "").strip()
     if not raw:
@@ -77,6 +93,11 @@ def _prob(value: float, *, name: str) -> float:
     return p
 
 
+def bounded_probability(value: float, *, name: str = "probability") -> float:
+    """Probability in the closed interval [0,1] for paths that clip before logit."""
+    return _prob(value, name=name)
+
+
 def parse_utc_timestamp(value: str) -> datetime:
     """Public UTC parser used by challenger modules."""
     return _utc(value)
@@ -98,10 +119,11 @@ def binary_label(value: int) -> int:
     if isinstance(value, bool):
         return int(value)
     try:
+        numeric = float(value)
         result = int(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ChallengerContractError("label must be 0 or 1") from exc
-    if result not in {0, 1}:
+    if not math.isfinite(numeric) or numeric != result or result not in {0, 1}:
         raise ChallengerContractError("label must be 0 or 1")
     return result
 
@@ -219,6 +241,56 @@ def purged_walk_forward_splits(
         cursor = end
 
     return splits
+
+
+def validate_purged_splits(
+    rows: Sequence[Observation],
+    splits: Sequence[PurgedSplit],
+) -> None:
+    """Fail closed unless supplied folds satisfy the frozen temporal contract."""
+    if not splits:
+        raise ChallengerContractError("at least one purged split is required")
+
+    for row in rows:
+        validate_observation(row)
+
+    seen_test_indices: set[int] = set()
+    n_rows = len(rows)
+    for split in splits:
+        if (
+            isinstance(split.embargo_seconds, bool)
+            or not isinstance(split.embargo_seconds, int)
+            or split.embargo_seconds < 0
+        ):
+            raise ChallengerContractError("purged split embargo must be non-negative")
+        if not split.train_indices or not split.test_indices:
+            raise ChallengerContractError("purged split train/test indices are required")
+        if len(set(split.train_indices)) != len(split.train_indices):
+            raise ChallengerContractError("purged split train indices must be unique")
+        if len(set(split.test_indices)) != len(split.test_indices):
+            raise ChallengerContractError("purged split test indices must be unique")
+        if set(split.train_indices) & set(split.test_indices):
+            raise ChallengerContractError("purged split train/test overlap")
+        if any(index < 0 or index >= n_rows for index in [*split.train_indices, *split.test_indices]):
+            raise ChallengerContractError("purged split index out of range")
+        if seen_test_indices.intersection(split.test_indices):
+            raise ChallengerContractError("purged split test rows cannot repeat across folds")
+        seen_test_indices.update(split.test_indices)
+
+        declared_start = _utc(split.test_start_ts)
+        observed_start = min(_utc(rows[index].decision_ts) for index in split.test_indices)
+        if declared_start != observed_start:
+            raise ChallengerContractError("purged split test_start_ts mismatch")
+        purge_before = declared_start.timestamp() - split.embargo_seconds
+        for index in split.train_indices:
+            decision = _utc(rows[index].decision_ts)
+            label_end = _utc(rows[index].label_end_ts)
+            if decision >= declared_start:
+                raise ChallengerContractError("purged split training row is not strictly historical")
+            if label_end.timestamp() >= purge_before:
+                raise ChallengerContractError("purged split violates label purge/embargo")
+        if any(_utc(rows[index].decision_ts) < declared_start for index in split.test_indices):
+            raise ChallengerContractError("purged split test row precedes declared start")
 
 
 def brier_score(labels: Sequence[int], probabilities: Sequence[float]) -> float:
@@ -479,13 +551,65 @@ def seal_prospective_receipt(
 def verify_prospective_receipt(receipt: dict[str, Any]) -> bool:
     if not isinstance(receipt, dict) or receipt.get("contract") != RECEIPT_CONTRACT:
         return False
-    observed = str(receipt.get("receipt_sha256") or "")
-    if len(observed) != 64:
+
+    required_text = (
+        "challenger_id",
+        "challenger_version",
+        "source_commit",
+        "manifest_sha256",
+        "market_id",
+        "cutoff_ts",
+        "outcome_not_before_ts",
+        "created_at",
+        "input_features_sha256",
+        "model_sha256",
+        "output_sha256",
+        "receipt_sha256",
+    )
+    if any(not str(receipt.get(key) or "").strip() for key in required_text):
         return False
+
+    def _is_hex(value: Any, length: int) -> bool:
+        raw = str(value or "").strip().lower()
+        if len(raw) != length:
+            return False
+        try:
+            int(raw, 16)
+        except ValueError:
+            return False
+        return True
+
+    if not _is_hex(receipt.get("source_commit"), 40):
+        return False
+    for key in (
+        "manifest_sha256",
+        "input_features_sha256",
+        "model_sha256",
+        "output_sha256",
+        "receipt_sha256",
+    ):
+        if not _is_hex(receipt.get(key), 64):
+            return False
+
     try:
-        int(observed, 16)
-    except ValueError:
+        cutoff = _utc(str(receipt["cutoff_ts"]))
+        created = _utc(str(receipt["created_at"]))
+        outcome_not_before = _utc(str(receipt["outcome_not_before_ts"]))
+        _prob(receipt["p_market"], name="p_market")
+        _prob(receipt["candidate_probability"], name="candidate_probability")
+    except (ChallengerContractError, KeyError, TypeError, ValueError):
         return False
+
+    if created < cutoff or created >= outcome_not_before:
+        return False
+    if receipt.get("paper_only") is not True or receipt.get("live") is not False:
+        return False
+    if type(receipt.get("real_orders")) is not int or receipt.get("real_orders") != 0:
+        return False
+    if type(receipt.get("capital")) not in {int, float} or receipt.get("capital") != 0:
+        return False
+
+    observed = str(receipt["receipt_sha256"]).lower()
     payload = dict(receipt)
     payload.pop("receipt_sha256", None)
     try:
@@ -503,6 +627,7 @@ def append_prospective_receipt(
         raise ChallengerContractError("prospective receipt is invalid")
 
     target = Path(path)
+    created_new = not target.exists()
     key = (
         receipt["challenger_id"],
         receipt["challenger_version"],
@@ -544,4 +669,10 @@ def append_prospective_receipt(
         handle.write(canonical_json(receipt) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+    if created_new and POSIX_DIR_FSYNC:
+        directory_fd = os.open(str(target.parent), os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     return True
