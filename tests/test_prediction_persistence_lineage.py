@@ -280,5 +280,3 @@ def test_restart_retry_keeps_unresolved_receipt_explicit(tmp_path, monkeypatch):
     pending = PredictionPersistenceStore().pending(limit=10)
     assert len(pending) == 1
     assert pending[0]["status"] == "FAILED"
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
