@@ -1,0 +1,52 @@
+[Reading 48 lines from start (total: 48 lines, 0 remaining)]
+
+{
+  "contract": "senex-challenger-manifest-v1",
+  "challenger_id": "RECENCY_CHALLENGER_V1",
+  "version": 1,
+  "stage": "HISTORICAL_SYNTHETIC_ONLY",
+  "zero_spend": true,
+  "external_reference": {
+    "repository": "mvanhorn/last30days-skill",
+    "commit": "7f582ad8c2e140eca08098b245f9e31b68e28b60",
+    "role": "CAPTURE_ADAPTER_REFERENCE_ONLY"
+  },
+  "method": "MARKET_LOGIT_OFFSET_RECENCY_V1",
+  "market_baseline": "p_market",
+  "capture_adapter": "LAST30DAYS_COMPATIBLE_NORMALIZED_DOCUMENTS",
+  "normalizer_contract": "SENEX_RECENCY_NORMALIZER_V1",
+  "required_document_provenance": ["source", "document_id", "published_at", "captured_at", "content_sha256", "extractor_id", "extractor_sha256"],
+  "duplicate_identity_policy": "FAIL_CLOSED_SOURCE_PLUS_DOCUMENT_ID",
+  "mixed_extractor_policy": "FAIL_CLOSED",
+  "allowed_source_types": ["reddit", "hackernews", "github", "public_web"],
+  "forbidden_inputs": ["polymarket_odds", "prediction_market_prices", "post_cutoff_documents", "outcomes", "settlements"],
+  "lookback_seconds": [3600, 21600],
+  "feature_order": [
+    "document_count_6h",
+    "document_count_1h",
+    "source_diversity_6h",
+    "source_concentration_6h",
+    "sentiment_mean_6h",
+    "sentiment_dispersion_6h",
+    "sentiment_direction_balance_6h",
+    "crypto_attention_fraction_6h",
+    "macro_attention_fraction_6h",
+    "breaking_event_flag_6h",
+    "missing_all_sources"
+  ],
+  "model_l2": 0.0001,
+  "model_max_iter": 100,
+  "model_tolerance": 1e-9,
+  "proper_scores": ["brier", "log_loss"],
+  "calibration_diagnostics": {"method": "FIXED_EQUAL_WIDTH_RELIABILITY", "n_bins": 10},
+  "validation": "PURGED_WALK_FORWARD_ONLY",
+  "selection_max_candidates": 2,
+  "prospective_t_star": null,
+  "prospective_n": null,
+  "paper_only": true,
+  "live": false,
+  "real_orders": 0,
+  "capital": 0
+}
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
