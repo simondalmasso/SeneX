@@ -1,3 +1,5 @@
+[Reading 424 lines from start (total: 424 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import json
@@ -336,3 +338,91 @@ console.log(JSON.stringify({status: res.status, body}));
     )
     assert case["status"] == 500
     assert case["body"]["message"] == "DB_TOUCHED"
+
+
+def test_full_audit_hydrates_only_matching_hot_cold_generation(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        """
+async function sha(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
+}
+const audit = {marker: "v1"};
+const auditJson = JSON.stringify(audit);
+const auditDigest = await sha(auditJson);
+const payload = '{"audit":' + auditJson + ',"id":7,"schema":"senex-r2-audit-v1","version":1}';
+const payloadSha = await sha(payload);
+const coldKey = "senex/order071/oracle_predictions/7/" + auditDigest + ".json";
+const hot = {
+  id: 7, ts: "2026-10-05T00:00:00.000000Z", symbol: "BTCUSDT",
+  prediction: "LONG", confidence: 0.7, ev: 0.01, price_now: 100,
+  price_15m_later: null, outcome: null, exchange_used: "okx",
+  created_at: "2026-10-05T00:00:00.000000Z",
+  origin_price_v1_json: null, outcomes_dual_json: null,
+  audit_digest: auditDigest, cold_location: "D1_COLD",
+  cold_key: coldKey, cold_payload_sha256: payloadSha, source_row_digest: "src"
+};
+const cold = {
+  prediction_id: 7, cold_key: coldKey, schema_version: "senex-r2-audit-v1",
+  audit_digest: auditDigest, payload_sha256: payloadSha, payload
+};
+const HOT = {prepare() { return {bind() { return {async all() { return {results: [hot]}; }}; }}; }};
+const COLD = {prepare() { return {bind() { return {async all() { return {results: [cold]}; }}; }}; }};
+const env = {HOT, COLD, GATEWAY_READ_TOKEN: "read"};
+const res = await worker.fetch(
+  new Request("https://unit/rest/v1/oracle_predictions?select=id,audit&id=eq.7&limit=1", {
+    headers: {"apikey": "read"},
+  }),
+  env,
+);
+console.log(JSON.stringify({status: res.status, body: await res.json()}));
+""",
+    )
+    assert case == {"status": 200, "body": [{"id": 7, "audit": {"marker": "v1"}}]}
+
+
+def test_full_audit_rejects_cross_generation_hot_cold_reference_mismatch(tmp_path: Path) -> None:
+    case = _node_case(
+        tmp_path,
+        """
+async function sha(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
+}
+const audit = {marker: "new-cold"};
+const auditJson = JSON.stringify(audit);
+const auditDigest = await sha(auditJson);
+const payload = '{"audit":' + auditJson + ',"id":7,"schema":"senex-r2-audit-v1","version":1}';
+const payloadSha = await sha(payload);
+const coldKey = "senex/order071/oracle_predictions/7/" + auditDigest + ".json";
+const hot = {
+  id: 7, ts: "2026-10-05T00:00:00.000000Z", symbol: "BTCUSDT",
+  prediction: "LONG", confidence: 0.7, ev: 0.01, price_now: 100,
+  price_15m_later: null, outcome: null, exchange_used: "okx",
+  created_at: "2026-10-05T00:00:00.000000Z",
+  origin_price_v1_json: null, outcomes_dual_json: null,
+  audit_digest: "old-hot-digest", cold_location: "D1_COLD",
+  cold_key: "old-hot-key", cold_payload_sha256: "old-hot-payload", source_row_digest: "src"
+};
+const cold = {
+  prediction_id: 7, cold_key: coldKey, schema_version: "senex-r2-audit-v1",
+  audit_digest: auditDigest, payload_sha256: payloadSha, payload
+};
+const HOT = {prepare() { return {bind() { return {async all() { return {results: [hot]}; }}; }}; }};
+const COLD = {prepare() { return {bind() { return {async all() { return {results: [cold]}; }}; }}; }};
+const env = {HOT, COLD, GATEWAY_READ_TOKEN: "read"};
+const res = await worker.fetch(
+  new Request("https://unit/rest/v1/oracle_predictions?select=id,audit&id=eq.7&limit=1", {
+    headers: {"apikey": "read"},
+  }),
+  env,
+);
+console.log(JSON.stringify({status: res.status, body: await res.json()}));
+""",
+    )
+    assert case["status"] == 500
+    assert case["body"]["error"] == "request_failed"
+    assert "reference mismatch" in case["body"]["message"].lower()
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
