@@ -102,11 +102,16 @@ python -m research.edge.order100.prospective_low_disagreement \
   --resolutions /data/datasets/order100/resolutions.jsonl \
   --predictions-manifest /data/datasets/order100/t0_export_manifest.json \
   --resolutions-manifest /data/datasets/order100/resolution_manifest.json \
+  --persistence-receipts /data/datasets/order100/t0_predictions.persistence_receipts.jsonl \
   --bootstrap 10000 \
   --seed 7
 ```
 
 The evaluator contains no fitting path.
+
+The persistence receipt path must be the immutable receipt snapshot emitted
+alongside the prospective ORDER098 v2 prediction artifact, not the live
+append-only runtime ledger.
 
 ## Prohibited
 

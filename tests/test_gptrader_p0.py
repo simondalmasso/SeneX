@@ -101,14 +101,25 @@ def test_restart_is_idempotent_and_sequence_cursor_does_not_skip(tmp_path):
     assert (tmp_path / "packet_seq").read_text().strip() == "3"
 
 
-def test_oracle_runner_seals_after_local_prediction_persistence_before_remote_mirror():
+def test_oracle_runner_seals_receipt_before_local_dedupe_marker_and_remote_authority():
     from pathlib import Path
 
     source = Path("senecio_polymarket/backend/oracle_runner.py").read_text(encoding="utf-8")
-    persisted = source.index("await asyncio.to_thread(log_prediction")
-    sealed = source.index("seal_prediction_t0")
-    remote = source.index("from . import supabase_client")
-    assert persisted < sealed < remote
+    start = source.index("async def _run_one_prediction")
+    end = source.index("async def _fetch_current_price")
+    body = source[start:end]
+
+    preview = body.index("preview_packet = await asyncio.to_thread(")
+    receipt = body.index("receipt_store.enqueue(preview_packet, prediction)")
+    sealed = body.index(
+        "sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)"
+    )
+    persisted = body.index("await asyncio.to_thread(log_prediction")
+    counted = body.index('_state["predictions_count"] += 1')
+    remote = body.index("await _persist_and_route_prediction")
+    assert preview < receipt < sealed < persisted < counted < remote
+    assert "sealed packet identity diverged from receipt outbox" in body
+    assert "store=receipt_store" in body
 
 
 def _oversized_source():
