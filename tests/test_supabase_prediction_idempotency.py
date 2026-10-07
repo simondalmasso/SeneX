@@ -1,3 +1,5 @@
+[Reading 159 lines from start (total: 159 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import asyncio
@@ -115,6 +117,32 @@ def test_ack_lost_retry_recovers_same_committed_t0_without_second_post(monkeypat
     assert result["id"] == 23
 
 
+def test_insert_ack_with_wrong_t0_fails_closed_before_local_authority(monkeypatch):
+    prediction = _prediction()
+    wrong = _existing(prediction, row_id=91)
+    wrong["price_now"] = 999.0
+    persisted = {"n": 0}
+
+    class Client:
+        async def post(self, *args, **kwargs):
+            return _Response([wrong], status_code=201)
+
+    monkeypatch.setattr(supabase_client, "_get_client", lambda: Client())
+    monkeypatch.setattr(
+        supabase_client,
+        "persist_authority_row_local",
+        lambda _row: persisted.__setitem__("n", persisted["n"] + 1),
+    )
+
+    with pytest.raises(
+        supabase_client.PredictionPersistenceConflictError,
+        match="acknowledgement conflicts",
+    ):
+        asyncio.run(supabase_client.insert_prediction(prediction))
+
+    assert persisted["n"] == 0
+
+
 def test_conflicting_same_timestamp_symbol_fails_closed(monkeypatch):
     prediction = _prediction()
     existing = _existing(prediction)
@@ -131,3 +159,5 @@ def test_conflicting_same_timestamp_symbol_fails_closed(monkeypatch):
 
     with pytest.raises(supabase_client.PredictionPersistenceConflictError):
         asyncio.run(supabase_client.ensure_prediction_persisted(prediction))
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
