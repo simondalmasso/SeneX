@@ -641,3 +641,47 @@ def test_new_receipt_ledger_syncs_parent_directory_on_posix(tmp_path, monkeypatc
     assert str(ledger.parent) in opened
     assert 999 in synced
     assert 999 in closed
+
+
+def test_model_digest_ignores_optimizer_iteration_count():
+    a = MarketOffsetModel(
+        challenger_id=RECENCY_ID,
+        feature_names=tuple(FEATURE_ORDER),
+        intercept=0.12345678901,
+        coefficients=tuple([0.01] * len(FEATURE_ORDER)),
+        l2=1e-4,
+        iterations=4,
+        converged=True,
+    )
+    b = MarketOffsetModel(
+        challenger_id=RECENCY_ID,
+        feature_names=tuple(FEATURE_ORDER),
+        intercept=0.12345678901,
+        coefficients=tuple([0.01] * len(FEATURE_ORDER)),
+        l2=1e-4,
+        iterations=7,
+        converged=True,
+    )
+    assert a.digest() == b.digest()
+
+    ra = RecalibrationModel(
+        challenger_id=WOLFRAM_ID,
+        method=WOLFRAM_METHOD,
+        intercept=0.012345678901,
+        slope=0.987654321099,
+        clip_epsilon=1e-6,
+        l2_to_identity=1e-6,
+        iterations=3,
+        converged=True,
+    )
+    rb = RecalibrationModel(
+        challenger_id=WOLFRAM_ID,
+        method=WOLFRAM_METHOD,
+        intercept=0.012345678904,
+        slope=0.987654321096,
+        clip_epsilon=1e-6,
+        l2_to_identity=1e-6,
+        iterations=9,
+        converged=True,
+    )
+    assert ra.digest() == rb.digest()
