@@ -863,6 +863,50 @@ def test_required_v2_rejects_missing_or_tampered_receipt_artifact(tmp_path):
         )
 
 
+def test_required_v2_binds_exported_t0_bytes_to_receipt_payload(tmp_path):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    receipt_path = _bind_v2_receipt_artifact(tmp_path, artifacts)
+
+    predictions, p_manifest, _resolutions, r_manifest = artifacts
+    rows = [
+        json.loads(line)
+        for line in predictions.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    rows[0]["audit"]["pipeline"]["step2_features"]["up_prob"] = 0.73
+    rows[0]["causal_t0_sha256"] = _sha256_text(_canonical({
+        "id": rows[0]["id"],
+        "ts": rows[0]["ts"],
+        "symbol": rows[0]["symbol"],
+        "audit": rows[0]["audit"],
+    }))
+    predictions.write_text(_canonical(rows[0]) + "\n", encoding="utf-8")
+
+    pdata = json.loads(p_manifest.read_text(encoding="utf-8"))
+    pdata["output_file_sha256"] = _sha256_file(predictions)
+    pdata["output_row_hashes_sha256"] = _sha256_text(
+        _canonical([rows[0]["causal_t0_sha256"]])
+    )
+    p_manifest.write_text(json.dumps(pdata), encoding="utf-8")
+
+    rdata = json.loads(r_manifest.read_text(encoding="utf-8"))
+    rdata["predictions_file_sha256"] = _sha256_file(predictions)
+    r_manifest.write_text(json.dumps(rdata), encoding="utf-8")
+
+    with pytest.raises(m.ArtifactContractError, match="receipt-bound T0"):
+        m.verify_order098_artifacts(
+            *artifacts,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+            persistence_receipts_path=receipt_path,
+        )
+
+
 def test_required_v2_recomputes_receipt_counters_from_ledger(tmp_path):
     from senecio_polymarket.backend.prediction_persistence import (
         PredictionPersistenceStore,
