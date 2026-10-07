@@ -1,5 +1,3 @@
-[Reading 330 lines from start (total: 330 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import math
@@ -330,5 +328,3 @@ def select_candidates(
 
     eligible.sort()
     return [challenger_id for _, _, challenger_id in eligible[:max_candidates]]
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
