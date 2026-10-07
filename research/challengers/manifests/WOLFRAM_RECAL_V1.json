@@ -1,4 +1,4 @@
-[Reading 34 lines from start (total: 34 lines, 0 remaining)]
+[Reading 35 lines from start (total: 35 lines, 0 remaining)]
 
 {
   "contract": "senex-challenger-manifest-v1",
@@ -20,6 +20,7 @@
   "max_iter": 100,
   "tolerance": 1e-10,
   "proper_scores": ["brier", "log_loss"],
+  "rank_diagnostics": ["roc_auc"],
   "calibration_diagnostics": {"method": "FIXED_EQUAL_WIDTH_RELIABILITY", "n_bins": 10},
   "validation": "PURGED_WALK_FORWARD_ONLY",
   "selection_max_candidates": 2,
