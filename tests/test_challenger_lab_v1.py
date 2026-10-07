@@ -28,6 +28,7 @@ from research.challengers.evaluation import (
 )
 from research.challengers.recency_challenger_v1 import (
     CHALLENGER_ID as RECENCY_ID,
+    NORMALIZER_SHA256,
     RecencyDocument,
     aggregate_features,
 )
@@ -83,6 +84,7 @@ def test_frozen_manifests_are_zero_spend_and_historical_only():
     assert wolfram["external_reference"]["commit"] == "359f7770bdc49be4390669f9f96d0afd6822d88c"
     assert recency["external_reference"]["commit"] == "7f582ad8c2e140eca08098b245f9e31b68e28b60"
     assert recency["normalizer_contract"] == "SENEX_RECENCY_NORMALIZER_V1"
+    assert recency["normalizer_sha256"] == NORMALIZER_SHA256
     assert recency["mixed_extractor_policy"] == "FAIL_CLOSED"
 
 
@@ -111,6 +113,7 @@ def test_purged_walk_forward_never_allows_overlapping_training_label_window():
         test_start = datetime.fromisoformat(split.test_start_ts.replace("Z", "+00:00"))
         cutoff = test_start - timedelta(seconds=split.embargo_seconds)
         assert set(split.train_indices).isdisjoint(split.test_indices)
+        assert len(split.train_indices) >= 20
         assert all(
             datetime.fromisoformat(rows[idx].label_end_ts.replace("Z", "+00:00"))
             < cutoff
@@ -194,7 +197,7 @@ def test_recency_rejects_post_cutoff_and_market_odds():
         is_breaking=False,
         content_sha256="a" * 64,
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-        extractor_sha256="f" * 64,
+        extractor_sha256=NORMALIZER_SHA256,
     )
     with pytest.raises(ChallengerContractError, match="post-cutoff"):
         aggregate_features([post], cutoff_ts=cutoff)
@@ -209,7 +212,7 @@ def test_recency_rejects_post_cutoff_and_market_odds():
         is_breaking=False,
         content_sha256="b" * 64,
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-        extractor_sha256="f" * 64,
+        extractor_sha256=NORMALIZER_SHA256,
         contains_market_odds=True,
     )
     with pytest.raises(ChallengerContractError, match="forbids Polymarket odds"):
@@ -227,13 +230,13 @@ def test_recency_rejects_non_frozen_source_type():
         is_breaking=False,
         content_sha256="c" * 64,
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-        extractor_sha256="f" * 64,
+        extractor_sha256=NORMALIZER_SHA256,
     )
     with pytest.raises(ChallengerContractError, match="zero-spend source set"):
         aggregate_features([document], cutoff_ts="2026-10-06T12:00:00Z")
 
 
-def test_recency_rejects_duplicate_document_identity_and_mixed_extractor_hashes():
+def test_recency_rejects_duplicate_document_identity_and_nonfrozen_extractor_hash():
     cutoff = "2026-10-06T12:00:00Z"
     base = RecencyDocument(
         source="reddit",
@@ -245,7 +248,7 @@ def test_recency_rejects_duplicate_document_identity_and_mixed_extractor_hashes(
         is_breaking=False,
         content_sha256="1" * 64,
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-        extractor_sha256="f" * 64,
+        extractor_sha256=NORMALIZER_SHA256,
     )
     duplicate = RecencyDocument(
         source="reddit",
@@ -257,7 +260,7 @@ def test_recency_rejects_duplicate_document_identity_and_mixed_extractor_hashes(
         is_breaking=False,
         content_sha256="2" * 64,
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-        extractor_sha256="f" * 64,
+        extractor_sha256=NORMALIZER_SHA256,
     )
     with pytest.raises(ChallengerContractError, match="duplicate recency document"):
         aggregate_features([base, duplicate], cutoff_ts=cutoff)
@@ -274,7 +277,10 @@ def test_recency_rejects_duplicate_document_identity_and_mixed_extractor_hashes(
         extractor_id="SENEX_RECENCY_NORMALIZER_V1",
         extractor_sha256="e" * 64,
     )
-    with pytest.raises(ChallengerContractError, match="mixes extractor hashes"):
+    with pytest.raises(
+        ChallengerContractError,
+        match="does not match frozen SENEX_RECENCY_NORMALIZER_V1",
+    ):
         aggregate_features([base, other], cutoff_ts=cutoff)
 
 
@@ -291,7 +297,7 @@ def test_recency_aggregation_is_causal_and_deterministic():
             is_breaking=True,
             content_sha256="d" * 64,
             extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-            extractor_sha256="f" * 64,
+            extractor_sha256=NORMALIZER_SHA256,
         ),
         RecencyDocument(
             source="hackernews",
@@ -303,7 +309,7 @@ def test_recency_aggregation_is_causal_and_deterministic():
             is_breaking=False,
             content_sha256="e" * 64,
             extractor_id="SENEX_RECENCY_NORMALIZER_V1",
-            extractor_sha256="f" * 64,
+            extractor_sha256=NORMALIZER_SHA256,
         ),
     ]
     first = aggregate_features(docs, cutoff_ts=cutoff)
