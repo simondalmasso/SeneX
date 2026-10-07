@@ -1,3 +1,5 @@
+[Reading 947 lines from start (total: 947 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import hashlib
@@ -409,6 +411,43 @@ def _write_v2_artifacts(tmp_path, prediction_rows, resolution_rows, *, provenanc
     return predictions, p_manifest, resolutions, r_manifest
 
 
+def _bind_v2_receipt_artifact(tmp_path, artifacts):
+    from senecio_polymarket.backend.prediction_persistence import (
+        PredictionPersistenceStore,
+    )
+
+    predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    rows = [
+        json.loads(line)
+        for line in predictions.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    receipt_path = tmp_path / "prediction_persistence_receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipt_path)
+    for index, row in enumerate(rows, start=1):
+        packet_hash = f"{index:064x}"
+        packet = {
+            "packet_id": f"gptrader-t0-{index:024x}",
+            "packet_hash": packet_hash,
+            "packet_seq": index,
+        }
+        prediction = {
+            "timestamp": row["ts"],
+            "symbol": row["symbol"],
+            "_audit": row["audit"],
+        }
+        store.enqueue(packet, prediction)
+        store.mark_persisted(packet_hash, int(row["id"]))
+
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    data["symbol"] = "BTCUSDT"
+    data["source_to_d1_lineage"]["receipt_file_sha256"] = _sha256_file(
+        receipt_path
+    )
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
+    return receipt_path
+
+
 def test_order098_artifact_manifests_are_verified_end_to_end(tmp_path):
     _, m = _modules()
     predictions = tmp_path / "t0_predictions.jsonl"
@@ -782,6 +821,112 @@ def test_artifact_verifier_can_require_v2_without_breaking_historical_v1(tmp_pat
         )
 
 
+def test_required_v2_verifies_receipt_artifact_bytes_and_counters(tmp_path):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    receipt_path = _bind_v2_receipt_artifact(tmp_path, artifacts)
+
+    result = m.verify_order098_artifacts(
+        *artifacts,
+        required_prediction_contract="senex-order098-t0-audit-export-v2",
+        persistence_receipts_path=receipt_path,
+    )
+
+    assert result["prediction_contract"].endswith("-v2")
+
+
+def test_required_v2_rejects_missing_or_tampered_receipt_artifact(tmp_path):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+
+    with pytest.raises(m.ArtifactContractError, match="requires persistence receipt"):
+        m.verify_order098_artifacts(
+            *artifacts,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+        )
+
+    receipt_path = _bind_v2_receipt_artifact(tmp_path, artifacts)
+    receipt_path.write_bytes(receipt_path.read_bytes() + b"\n")
+    with pytest.raises(m.ArtifactContractError, match="artifact SHA256 mismatch"):
+        m.verify_order098_artifacts(
+            *artifacts,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+            persistence_receipts_path=receipt_path,
+        )
+
+
+def test_required_v2_recomputes_receipt_counters_from_ledger(tmp_path):
+    from senecio_polymarket.backend.prediction_persistence import (
+        PredictionPersistenceStore,
+    )
+
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    receipt_path = _bind_v2_receipt_artifact(tmp_path, artifacts)
+    store = PredictionPersistenceStore(path=receipt_path)
+    packet_hash = "9" * 64
+    store.enqueue(
+        {
+            "packet_id": "gptrader-t0-" + "9" * 24,
+            "packet_hash": packet_hash,
+            "packet_seq": 9,
+        },
+        {
+            "timestamp": datetime.fromtimestamp(
+                start + 30, timezone.utc
+            ).isoformat().replace("+00:00", "Z"),
+            "symbol": "BTCUSDT",
+            "_audit": {},
+        },
+    )
+    store.mark_persisted(packet_hash, 99)
+
+    _predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    data["source_to_d1_lineage"]["receipt_file_sha256"] = _sha256_file(
+        receipt_path
+    )
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(m.ArtifactContractError, match="counters do not match"):
+        m.verify_order098_artifacts(
+            *artifacts,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+            persistence_receipts_path=receipt_path,
+        )
+
+
+def test_v2_lineage_rejects_resolution_row_source_mismatch(tmp_path):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [{
+            **_resolution_row(start_ts=start, condition_id="cond-a"),
+            "source": "OTHER_SOURCE",
+        }],
+    )
+
+    with pytest.raises(m.ArtifactContractError, match="row source provenance"):
+        m.verify_order098_artifacts(*artifacts)
+
+
 def test_preregistered_market_floor_blocks_199_and_allows_200():
     _, m = _modules()
 
@@ -802,3 +947,5 @@ def test_direct_cli_help_runs_from_repo_root():
     )
     assert result.returncode == 0
     assert "ORDER099 preregistered tabular falsification" in result.stdout
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
