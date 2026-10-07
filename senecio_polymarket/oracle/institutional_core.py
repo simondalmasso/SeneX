@@ -703,9 +703,7 @@ class SingleDecisionCore:
         # ── Validated win probability gate ──
         # up_prob/down_prob are sigmoid-transformed pressure diagnostics only.
         # They are explicitly NOT validated P(win) and must never authorize EV.
-        raw_probability_semantics = str(
-            features.get("probability_semantics") or "UNVALIDATED"
-        )
+        raw_probability_semantics = "UNVALIDATED"
         calibrated_raw = features.get("p_win_calibrated")
         calibrated_provenance = features.get("p_win_calibrated_provenance")
         calibrated_semantics = ""
@@ -725,6 +723,8 @@ class SingleDecisionCore:
             ).strip().lower()
 
         try:
+            if isinstance(calibrated_raw, bool):
+                raise TypeError("boolean is not a probability")
             candidate = float(calibrated_raw)
             if math.isfinite(candidate) and 0.0 <= candidate <= 1.0:
                 calibrated_value = candidate
@@ -755,7 +755,8 @@ class SingleDecisionCore:
                 "survival_discount": round(survival_discount, 6),
                 "p_win": None,
                 "p_win_source": "NONE",
-                "probability_semantics": raw_probability_semantics,
+                "probability_semantics": "UNVALIDATED",
+                "raw_probability_semantics": raw_probability_semantics,
                 "raw_probability_diagnostic": {
                     "up_prob": features.get("up_prob"),
                     "down_prob": features.get("down_prob"),
