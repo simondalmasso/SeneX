@@ -13,6 +13,7 @@
   "market_baseline": "p_market",
   "capture_adapter": "LAST30DAYS_COMPATIBLE_NORMALIZED_DOCUMENTS",
   "normalizer_contract": "SENEX_RECENCY_NORMALIZER_V1",
+  "normalizer_sha256": "a5519549cb9b8dcbe7132d53005259d114ff74e498402900fdae0fb0e99b996d",
   "required_document_provenance": ["source", "document_id", "published_at", "captured_at", "content_sha256", "extractor_id", "extractor_sha256"],
   "duplicate_identity_policy": "FAIL_CLOSED_SOURCE_PLUS_DOCUMENT_ID",
   "mixed_extractor_policy": "FAIL_CLOSED",
