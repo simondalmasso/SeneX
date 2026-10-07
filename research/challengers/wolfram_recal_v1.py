@@ -33,7 +33,7 @@ class RecalibrationModel:
         # Canonicalize the fitted mapping to a cross-runtime stable precision.
         payload = asdict(self)
         payload.pop("iterations", None)
-        return sha256_json(canonical_numeric(payload, digits=10))
+        return sha256_json(canonical_numeric(payload, digits=9))
 
 
 def _clip_probability(value: float, epsilon: float) -> float:
