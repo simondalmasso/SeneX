@@ -70,9 +70,9 @@ Allowed V1 source types are zero-spend only:
 
 The last30days repository is commit-pinned as an adapter/reference only. It is
 not itself a trusted probability source. Each normalized document must also bind
-the frozen `SENEX_RECENCY_NORMALIZER_V1` extractor id and its exact SHA-256.
-Duplicate `(source, document_id)` identities and mixed extractor hashes fail
-closed before aggregation.
+the frozen `SENEX_RECENCY_NORMALIZER_V1` extractor id and exact frozen contract
+SHA-256. A merely self-consistent but different extractor hash is rejected.
+Duplicate `(source, document_id)` identities fail closed before aggregation.
 
 Forbidden inputs include:
 
@@ -105,7 +105,8 @@ Random K-fold is forbidden for overlapping temporal labels.
 
 `purged_walk_forward_splits()` uses past-only expanding training sets and
 retains a training row only when its label window ends strictly before the test
-start minus the frozen embargo.
+start minus the frozen embargo. The declared `min_train_size` is enforced
+**after** purge/embargo, not before it.
 
 Primary metrics are:
 
