@@ -339,5 +339,3 @@ class PortfolioAnalytics:
     def update_config(self, **overrides: Any) -> None:
         self.cfg.update(overrides)
         log.info("PortfolioAnalytics config updated: %s", overrides)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
