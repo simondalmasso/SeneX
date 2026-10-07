@@ -1,3 +1,5 @@
+[Reading 1179 lines from start (total: 1179 lines, 0 remaining)]
+
 """ORDER099 preregistered tabular falsification for ORDER097.
 
 This module deliberately stays simple. It reuses ORDER097's target-alignment,
@@ -118,6 +120,7 @@ def verify_order098_artifacts(
     resolutions_manifest_path: str | Path,
     *,
     required_prediction_contract: str | None = None,
+    persistence_receipts_path: str | Path | None = None,
 ) -> dict[str, object]:
     """Verify exact ORDER098 bytes, contracts, coverage, and provenance."""
     predictions_sha = _sha256_file(predictions_path)
@@ -264,6 +267,117 @@ def verify_order098_artifacts(
         ):
             raise ArtifactContractError("source-to-D1 lineage is incomplete")
 
+        if required_prediction_contract == "senex-order098-t0-audit-export-v2":
+            if persistence_receipts_path is None:
+                raise ArtifactContractError(
+                    "prospective v2 verification requires persistence receipt artifact"
+                )
+            receipt_path = Path(persistence_receipts_path)
+            if not receipt_path.exists():
+                raise ArtifactContractError(
+                    "prospective v2 persistence receipt artifact is missing"
+                )
+            raw_receipts = receipt_path.read_bytes()
+            if not raw_receipts.endswith(b"\n"):
+                raise ArtifactContractError(
+                    "prospective v2 persistence receipt artifact is not line-terminated"
+                )
+            if hashlib.sha256(raw_receipts).hexdigest() != receipt_sha:
+                raise ArtifactContractError(
+                    "source-to-D1 receipt artifact SHA256 mismatch"
+                )
+
+            from senecio_polymarket.backend.prediction_persistence import (
+                PredictionPersistenceError,
+                PredictionPersistenceStore,
+            )
+
+            try:
+                receipt_states = PredictionPersistenceStore(
+                    path=receipt_path
+                ).states()
+            except PredictionPersistenceError as exc:
+                raise ArtifactContractError(
+                    f"source-to-D1 receipt artifact is invalid: {exc}"
+                ) from exc
+
+            target_symbol = str(p_manifest.get("symbol") or "BTCUSDT")
+            target_symbol = (
+                target_symbol.upper().replace("/", "").replace("-", "").strip()
+            )
+            scoped_states: list[dict[str, object]] = []
+            for state in receipt_states:
+                prediction = state.get("prediction")
+                if not isinstance(prediction, dict):
+                    continue
+                symbol = str(prediction.get("symbol") or "")
+                symbol = symbol.upper().replace("/", "").replace("-", "").strip()
+                if symbol != target_symbol:
+                    continue
+                raw_ts = str(prediction.get("timestamp") or "").strip()
+                try:
+                    receipt_dt = datetime.fromisoformat(
+                        raw_ts.replace("Z", "+00:00")
+                    )
+                except ValueError as exc:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt timestamp is invalid"
+                    ) from exc
+                if receipt_dt.tzinfo is None:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt timestamp is invalid"
+                    )
+                if start_dt <= receipt_dt <= end_dt:
+                    scoped_states.append(state)
+
+            recomputed_expected = len(scoped_states)
+            recomputed_persisted = sum(
+                1 for state in scoped_states
+                if state.get("status") == "PERSISTED"
+            )
+            recomputed_unresolved = recomputed_expected - recomputed_persisted
+            if (
+                recomputed_expected != expected_generated
+                or recomputed_persisted != persisted_t0
+                or recomputed_unresolved != unresolved_t0
+            ):
+                raise ArtifactContractError(
+                    "source-to-D1 receipt counters do not match receipt artifact"
+                )
+
+            persisted_ids: list[int] = []
+            for state in scoped_states:
+                if state.get("status") != "PERSISTED":
+                    continue
+                value = state.get("d1_prediction_id")
+                if isinstance(value, bool):
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    )
+                try:
+                    pred_id = int(value)
+                except (TypeError, ValueError) as exc:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    ) from exc
+                if pred_id <= 0:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    )
+                persisted_ids.append(pred_id)
+            if len(set(persisted_ids)) != len(persisted_ids):
+                raise ArtifactContractError(
+                    "source-to-D1 receipt D1 ids are not one-to-one"
+                )
+            exported_ids = {
+                int(row.get("id"))
+                for row in prediction_rows
+            }
+            if not exported_ids.issubset(set(persisted_ids)):
+                raise ArtifactContractError(
+                    "prospective exported rows are not receipt-bound"
+                )
+
         try:
             fetched_rows_manifest = int(p_manifest.get("fetched_rows"))
             skipped_rows = int(p_manifest.get("skipped_rows"))
@@ -364,6 +478,11 @@ def verify_order098_artifacts(
             (pair.market_slug, pair.condition_id)
             for pair in admissible_pairs
         }
+        for row in resolution_rows:
+            if row.get("source") != order098_resolutions.SOURCE:
+                raise ArtifactContractError(
+                    "resolution row source provenance mismatch"
+                )
         resolution_keys = {
             (str(row.get("slug") or ""), str(row.get("condition_id") or ""))
             for row in resolution_rows
@@ -1060,3 +1179,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
