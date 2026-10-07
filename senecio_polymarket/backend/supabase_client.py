@@ -1,5 +1,3 @@
-[Reading 1629 lines from start (total: 1629 lines, 0 remaining)]
-
 """SENEX R7B runtime overlay candidate for backend.supabase_client.
 
 NON-PRODUCTION CANDIDATE. Baseline authority is the byte-exact R7A runtime.
