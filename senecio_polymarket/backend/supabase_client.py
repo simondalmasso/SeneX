@@ -1629,5 +1629,3 @@ async def close() -> None:
     if _client and not _client.is_closed:
         await _client.aclose()
         _client = None
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
