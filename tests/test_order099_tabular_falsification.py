@@ -1,5 +1,3 @@
-[Reading 947 lines from start (total: 947 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import hashlib
