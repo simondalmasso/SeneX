@@ -603,26 +603,26 @@ def test_model_digests_use_canonical_numeric_precision():
     a = MarketOffsetModel(
         challenger_id=RECENCY_ID,
         feature_names=tuple(FEATURE_ORDER),
-        intercept=0.12345678901231,
+        intercept=0.1234567801,
         coefficients=tuple([0.0] * len(FEATURE_ORDER)),
         l2=1e-4, iterations=5, converged=True,
     )
     b = MarketOffsetModel(
         challenger_id=RECENCY_ID,
         feature_names=tuple(FEATURE_ORDER),
-        intercept=0.12345678901239,
+        intercept=0.1234567806,
         coefficients=tuple([0.0] * len(FEATURE_ORDER)),
         l2=1e-4, iterations=5, converged=True,
     )
     assert a.digest() == b.digest()
     wa = RecalibrationModel(
         challenger_id=WOLFRAM_ID, method=WOLFRAM_METHOD,
-        intercept=0.12345678901231, slope=1.0, clip_epsilon=1e-6,
+        intercept=0.12345678901, slope=1.0, clip_epsilon=1e-6,
         l2_to_identity=1e-6, iterations=5, converged=True,
     )
     wb = RecalibrationModel(
         challenger_id=WOLFRAM_ID, method=WOLFRAM_METHOD,
-        intercept=0.12345678901239, slope=1.0, clip_epsilon=1e-6,
+        intercept=0.12345678906, slope=1.0, clip_epsilon=1e-6,
         l2_to_identity=1e-6, iterations=5, converged=True,
     )
     assert wa.digest() == wb.digest()
