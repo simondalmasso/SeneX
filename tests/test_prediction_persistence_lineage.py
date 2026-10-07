@@ -275,3 +275,42 @@ def test_restart_retry_keeps_unresolved_receipt_explicit(tmp_path, monkeypatch):
     pending = PredictionPersistenceStore().pending(limit=10)
     assert len(pending) == 1
     assert pending[0]["status"] == "FAILED"
+
+
+def test_restart_retry_never_persists_when_reseal_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
+    store = PredictionPersistenceStore()
+    store.enqueue(_packet(), _prediction())
+    store.mark_failed(_packet()["packet_hash"], "NETWORK")
+    calls = {"persist": 0}
+
+    def fail_reseal(_prediction):
+        raise RuntimeError("sealed packet unavailable")
+
+    async def should_not_persist(_prediction):
+        calls["persist"] += 1
+        return {"id": 99}
+
+    monkeypatch.setattr(
+        "senecio_polymarket.backend.gptrader.sealer.seal_prediction_t0",
+        fail_reseal,
+    )
+    monkeypatch.setattr(
+        "senecio_polymarket.backend.supabase_client.ensure_prediction_persisted",
+        should_not_persist,
+    )
+
+    result = asyncio.run(
+        oracle_runner._retry_pending_authority_persistence(
+            limit=4,
+            store=PredictionPersistenceStore(),
+        )
+    )
+
+    assert result == {"attempted": 1, "persisted": 0, "remaining": 1}
+    assert calls["persist"] == 0
+    pending = PredictionPersistenceStore().pending(limit=10)
+    assert len(pending) == 1
+    assert pending[0]["status"] == "FAILED"
+    assert "RETRY_SEAL_RuntimeError" in str(pending[0]["last_reason"])
+
