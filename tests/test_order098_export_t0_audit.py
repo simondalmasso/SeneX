@@ -528,3 +528,50 @@ def test_full_audit_page_size_is_bounded_to_gateway_contract():
             page_size=101,
             symbol="BTCUSDT",
         )
+
+def test_source_to_d1_lineage_accepts_json_equivalent_numeric_spellings(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+    fetched = _row(101)
+    original_audit = json.loads(json.dumps(fetched["audit"]))
+    original = {
+        "timestamp": fetched["ts"],
+        "symbol": fetched["symbol"],
+        "prediction": fetched["prediction"],
+        "_audit": original_audit,
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        original,
+    )
+    store.mark_persisted("1" * 64, 101)
+
+    fetched["audit"]["pipeline"]["step2_features"]["polymarket_context_v1"][
+        "effective_weight"
+    ] = 0
+
+    result = m.validate_persistence_lineage(
+        receipt_path=receipts,
+        fetched_rows=[fetched],
+        symbol="BTCUSDT",
+        start_ts="2026-10-03T23:00:00Z",
+        end_ts="2026-10-04T00:00:00Z",
+    )
+
+    assert result["persisted_t0"] == 1
+
+
+def test_receipt_snapshot_is_immutable_after_live_ledger_grows(tmp_path):
+    m = _load()
+    live = tmp_path / "live_receipts.jsonl"
+    frozen = tmp_path / "frozen_receipts.jsonl"
+    live.write_bytes(b'{"event":"first"}\n')
+
+    m.snapshot_receipt_ledger(live, frozen)
+    frozen_before = frozen.read_bytes()
+    live.write_bytes(live.read_bytes() + b'{"event":"second"}\n')
+
+    assert frozen.read_bytes() == frozen_before
+    with pytest.raises(m.ExportContractError, match="already exists"):
+        m.snapshot_receipt_ledger(live, frozen)
