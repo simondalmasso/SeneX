@@ -1,5 +1,3 @@
-[Reading 21 lines from start (total: 21 lines, 0 remaining)]
-
 {
   "contract": "senex-challenger-historical-real-status-v1",
   "status": "BLOCKED_ARTIFACT_BYTES",
@@ -21,5 +19,3 @@
   "edge_claim": "NONE",
   "next_valid_action": "recover exact historical artifact bytes matching all frozen SHA256 values; then run historical challenger harness without modifying manifests or ORDER100"
 }
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
