@@ -1,4 +1,4 @@
-[Reading 177 lines from start (total: 177 lines, 0 remaining)]
+[Reading 182 lines from start (total: 182 lines, 0 remaining)]
 
 # SENEX Challenger Lab V1
 
@@ -114,6 +114,11 @@ Primary metrics are:
 - Brier score vs `p_market`
 - log loss vs `p_market`
 - fixed 10-bin reliability/ECE diagnostics for market and candidate
+
+Secondary diagnostic:
+
+- ROC AUC for market and candidate, used only to distinguish ranking/discrimination
+  from calibration. AUC is never a V1 candidate-selection criterion.
 
 A V1 candidate is eligible for selection only when both OOS deltas are
 non-positive. At most two candidates may be selected. Zero candidates is a
