@@ -192,14 +192,14 @@ def fetch_full_audit_rows(
     client: httpx.Client,
     *,
     table: str,
-    page_size: int = 500,
+    page_size: int = 100,
     symbol: str = DEFAULT_SYMBOL,
 ) -> list[dict[str, Any]]:
     """GET-only full-audit export using the integer primary key as cursor."""
     if not table or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for char in table):
         raise ExportContractError("table name is invalid")
-    if isinstance(page_size, bool) or not 1 <= int(page_size) <= 1000:
-        raise ExportContractError("page_size must be between 1 and 1000")
+    if isinstance(page_size, bool) or not 1 <= int(page_size) <= 100:
+        raise ExportContractError("page_size must be between 1 and 100")
 
     normalized_symbol = _normalize_symbol(symbol)
     collected: list[dict[str, Any]] = []
@@ -326,7 +326,7 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--symbol", default=DEFAULT_SYMBOL)
     parser.add_argument("--table", default=os.environ.get("SUPABASE_TABLE", DEFAULT_TABLE))
-    parser.add_argument("--page-size", type=int, default=500)
+    parser.add_argument("--page-size", type=int, default=100)
     parser.add_argument("--timeout", type=float, default=20.0)
     args = parser.parse_args()
 

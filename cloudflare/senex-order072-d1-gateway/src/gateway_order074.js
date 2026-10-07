@@ -1,3 +1,4 @@
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -7,15 +8,34 @@ function jresp(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
 }
 __name(jresp, "jresp");
-async function authorized(req, env) {
+function suppliedToken(req) {
   const bearer = req.headers.get("authorization") || "";
   const apiKey = req.headers.get("apikey") || "";
-  const supplied = apiKey || (bearer.startsWith("Bearer ") ? bearer.slice(7) : "");
-  if (!supplied) return false;
-  if (env.GATEWAY_TOKEN && supplied === env.GATEWAY_TOKEN) return true;
-  return await sha256hex(supplied) === "643935c88358867802d8d8f5e1599cdda76ec62bc36d352e067806342fe88d07";
+  return apiKey || (bearer.startsWith("Bearer ") ? bearer.slice(7) : "");
 }
-__name(authorized, "authorized");
+__name(suppliedToken, "suppliedToken");
+async function readAuthorized(req, env) {
+  const supplied = suppliedToken(req);
+  if (!supplied) return false;
+  return [env.GATEWAY_READ_TOKEN, env.GATEWAY_WRITE_TOKEN]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .some((value) => supplied === value);
+}
+__name(readAuthorized, "readAuthorized");
+async function writeAuthorized(req, env) {
+  const supplied = suppliedToken(req);
+  return Boolean(
+    supplied &&
+    typeof env.GATEWAY_WRITE_TOKEN === "string" &&
+    env.GATEWAY_WRITE_TOKEN.length > 0 &&
+    supplied === env.GATEWAY_WRITE_TOKEN
+  );
+}
+__name(writeAuthorized, "writeAuthorized");
+function writesEnabled(env) {
+  return env.D1_WRITES_ENABLED === "1";
+}
+__name(writesEnabled, "writesEnabled");
 function pathKey(path) {
   return JSON.stringify(path);
 }
@@ -199,6 +219,82 @@ function project(row, select) {
 }
 __name(project, "project");
 var HOT_FIELDS = /* @__PURE__ */ new Set(["id", "ts", "symbol", "prediction", "confidence", "ev", "price_now", "price_15m_later", "outcome", "exchange_used", "created_at"]);
+var PATCH_ALLOWED_TOP_LEVEL = /* @__PURE__ */ new Set(["outcome", "price_15m_later", "audit"]);
+function validatePatchShape(value) {
+  if (!value || Array.isArray(value) || typeof value !== "object") throw new Error("patch body");
+  for (const key of Object.keys(value)) if (!PATCH_ALLOWED_TOP_LEVEL.has(key)) throw new Error(`immutable T0 field: ${key}`);
+  if ("outcome" in value && !["WIN", "LOSS"].includes(value.outcome)) throw new Error("invalid outcome patch");
+  if ("price_15m_later" in value) {
+    const price = Number(value.price_15m_later);
+    if (!Number.isFinite(price) || price <= 0) throw new Error("invalid price_15m_later patch");
+  }
+  if ("audit" in value && (!value.audit || Array.isArray(value.audit) || typeof value.audit !== "object")) throw new Error("audit patch must be an object");
+}
+__name(validatePatchShape, "validatePatchShape");
+function validateAuditPatch(oldAudit, newAudit) {
+  const oldValue = oldAudit && typeof oldAudit === "object" && !Array.isArray(oldAudit) ? oldAudit : {};
+  const nextValue = newAudit && typeof newAudit === "object" && !Array.isArray(newAudit) ? newAudit : {};
+  for (const key of Object.keys(oldValue)) {
+    if (key === "outcomes_dual") continue;
+    if (!(key in nextValue) || canonical(nextValue[key]) !== canonical(oldValue[key])) throw new Error(`immutable audit field: ${key}`);
+  }
+  for (const key of Object.keys(nextValue)) {
+    if (!(key in oldValue) && key !== "outcomes_dual") throw new Error(`new audit field not allowed: ${key}`);
+  }
+  if (oldValue.outcomes_dual != null && canonical(nextValue.outcomes_dual) !== canonical(oldValue.outcomes_dual)) throw new Error("outcomes_dual rewrite forbidden");
+}
+__name(validateAuditPatch, "validateAuditPatch");
+function validatePatchTarget(url, patchValue) {
+  const allowedKeys = new Set(["id", "outcome", "audit->outcomes_dual"]);
+  for (const [key] of url.searchParams) {
+    if (!allowedKeys.has(key)) throw new Error(`patch target unsupported filter: ${key}`);
+  }
+
+  const idFilters = url.searchParams.getAll("id");
+  const outcomeFilters = url.searchParams.getAll("outcome");
+  const auditFilters = url.searchParams.getAll("audit->outcomes_dual");
+  if (idFilters.length !== 1 || outcomeFilters.length !== 1 || auditFilters.length !== 1) {
+    throw new Error("patch target requires exact id + outcome CAS + outcomes_dual CAS");
+  }
+
+  const [idOp, idRaw] = decodeFilter(idFilters[0]);
+  const id = Number(idRaw);
+  if (idOp !== "eq" || !Number.isSafeInteger(id) || id < 0) {
+    throw new Error("patch target requires id=eq.<integer>");
+  }
+
+  const [auditOp, auditRaw] = decodeFilter(auditFilters[0]);
+  if (auditOp !== "is" || auditRaw !== "null") {
+    throw new Error("patch target requires audit->outcomes_dual=is.null");
+  }
+
+  const [outcomeOp, outcomeRaw] = decodeFilter(outcomeFilters[0]);
+  if (outcomeOp === "is" && outcomeRaw === "null") {
+    if (!("outcome" in patchValue) || !["WIN", "LOSS"].includes(patchValue.outcome)) {
+      throw new Error("patch target primary settlement requires outcome transition");
+    }
+    return;
+  }
+  if (outcomeOp === "eq" && ["WIN", "LOSS"].includes(String(outcomeRaw).toUpperCase())) {
+    if ("outcome" in patchValue) {
+      throw new Error("patch target repair cannot rewrite settled outcome");
+    }
+    return;
+  }
+  throw new Error("patch target requires approved outcome compare-and-set");
+}
+__name(validatePatchTarget, "validatePatchTarget");
+var QUERY_LIMIT_MAX = 500;
+var FULL_AUDIT_LIMIT_MAX = 100;
+var OFFSET_MAX = 1000;
+function parseBoundedInteger(raw, fallback, min, max, label) {
+  if (raw == null || raw === "") return fallback;
+  if (!/^\d+$/.test(String(raw))) throw new Error(`${label} must be an integer`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < min || value > max) throw new Error(`${label} out of bounds`);
+  return value;
+}
+__name(parseBoundedInteger, "parseBoundedInteger");
 function buildWhere(url) {
   const clauses = [], binds = [];
   for (const [k, raw] of url.searchParams) {
@@ -256,8 +352,31 @@ async function fetchAudits(env, ids) {
   for (let i = 0; i < ids.length; i += 80) {
     const chunk = ids.slice(i, i + 80);
     if (!chunk.length) continue;
-    const got = await env.COLD.prepare(`SELECT prediction_id,payload FROM oracle_prediction_audit_cold WHERE prediction_id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
-    for (const r of got.results) out.set(r.prediction_id, (JSON.parse(r.payload) || {}).audit ?? null);
+    const got = await env.COLD.prepare(`SELECT prediction_id,cold_key,schema_version,audit_digest,payload_sha256,payload FROM oracle_prediction_audit_cold WHERE prediction_id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
+    for (const r of got.results) {
+      if (typeof r.payload !== "string") throw new Error(`full audit cold payload missing id=${r.prediction_id}`);
+      const payloadSha = await sha256hex(r.payload);
+      if (payloadSha !== r.payload_sha256) throw new Error(`full audit cold payload hash mismatch id=${r.prediction_id}`);
+      let envelope;
+      try {
+        envelope = JSON.parse(r.payload);
+      } catch {
+        throw new Error(`full audit cold payload invalid JSON id=${r.prediction_id}`);
+      }
+      if (!envelope || envelope.id !== r.prediction_id || envelope.schema !== "senex-r2-audit-v1" || envelope.version !== 1) {
+        throw new Error(`full audit cold envelope mismatch id=${r.prediction_id}`);
+      }
+      if (r.schema_version !== "senex-r2-audit-v1") throw new Error(`full audit cold schema mismatch id=${r.prediction_id}`);
+      const audit = envelope.audit ?? null;
+      const auditDigest = await sha256hex(canonical(audit));
+      if (auditDigest !== r.audit_digest) throw new Error(`full audit cold audit digest mismatch id=${r.prediction_id}`);
+      out.set(r.prediction_id, {
+        audit,
+        cold_key: r.cold_key,
+        audit_digest: r.audit_digest,
+        payload_sha256: r.payload_sha256
+      });
+    }
   }
   return out;
 }
@@ -279,22 +398,38 @@ function apiRow(r) {
 __name(apiRow, "apiRow");
 async function querySourceRows(env, url, { forceAudit = false, projectResult = true, includeTotal = false } = {}) {
   const { sql: where, binds } = buildWhere(url), order = buildOrder(url);
-  const offset = Math.max(0, Number(url.searchParams.get("offset") || 0)), limit = Math.max(1, Number(url.searchParams.get("limit") || 1e5));
-  const count = includeTotal ? await env.HOT.prepare(`SELECT COUNT(*) AS n FROM oracle_predictions_hot${where}`).bind(...binds).first() : null;
+  if (includeTotal) throw new Error("exact count disabled on compatibility route");
+  const offset = parseBoundedInteger(url.searchParams.get("offset"), 0, 0, OFFSET_MAX, "offset");
+  const limit = parseBoundedInteger(url.searchParams.get("limit"), 100, 1, QUERY_LIMIT_MAX, "limit");
+  const count = null;
+  const sel = url.searchParams.get("select"), full = needsFullAudit(sel, forceAudit);
+  if (full && limit > FULL_AUDIT_LIMIT_MAX) throw new Error("full audit limit out of bounds");
   const got = await env.HOT.prepare(`SELECT * FROM oracle_predictions_hot${where}${order} LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
-  const sel = url.searchParams.get("select"), full = needsFullAudit(sel, forceAudit), audits = full ? await fetchAudits(env, got.results.map((r) => r.id)) : /* @__PURE__ */ new Map();
-  const rows = got.results.map((h) => {
+  const audits = full ? await fetchAudits(env, got.results.map((r) => r.id)) : /* @__PURE__ */ new Map();
+  const rows = [];
+  for (const h of got.results) {
     let audit;
-    if (full) audit = audits.get(h.id) ?? null;
-    else {
+    if (full) {
+      const cold = audits.get(h.id);
+      if (!cold) throw new Error(`full audit missing cold row id=${h.id}`);
+      if (
+        h.cold_location !== "D1_COLD" ||
+        h.cold_key !== cold.cold_key ||
+        h.audit_digest !== cold.audit_digest ||
+        h.cold_payload_sha256 !== cold.payload_sha256
+      ) {
+        throw new Error(`full audit reference mismatch id=${h.id}`);
+      }
+      audit = cold.audit;
+    } else {
       const o = h.origin_price_v1_json == null ? null : JSON.parse(h.origin_price_v1_json), d = h.outcomes_dual_json == null ? null : JSON.parse(h.outcomes_dual_json);
       audit = {};
       if (o !== null) audit.origin_price_v1 = o;
       if (d !== null) audit.outcomes_dual = d;
     }
     const s = hotToSource(h, audit);
-    return projectResult ? project(apiRow(s), sel) : s;
-  });
+    rows.push(projectResult ? project(apiRow(s), sel) : s);
+  }
   return { out: rows, total: count == null ? null : Number(count.n), offset };
 }
 __name(querySourceRows, "querySourceRows");
@@ -359,10 +494,14 @@ __name(rawPost, "rawPost");
 async function rawPatch(req, env, url) {
   if (env.WRITE_FENCE === "1") return jresp({ error: "writer_fenced" }, 503);
   const text = await req.text(), parsed = parseJsonWithNumbers(text);
-  if (!parsed.value || Array.isArray(parsed.value) || typeof parsed.value !== "object") throw new Error("patch body");
+  validatePatchShape(parsed.value);
+  validatePatchTarget(url, parsed.value);
   const { out: matches } = await querySourceRows(env, url, { forceAudit: true, projectResult: false });
+  if (matches.length > 1) throw new Error("patch target matched multiple rows");
   const result = [];
   for (const old of matches) {
+    if ("audit" in parsed.value) validateAuditPatch(old.audit, parsed.value.audit);
+    if ("outcome" in parsed.value && old.outcome != null) throw new Error("outcome rewrite forbidden");
     const src = { ...old, ...parsed.value, id: old.id, ts: old.ts, created_at: old.created_at };
     src.confidence = Number(src.confidence);
     src.ev = Number(src.ev);
@@ -381,7 +520,16 @@ __name(rawPatch, "rawPatch");
 var gateway_order074_default = { async fetch(req, env) {
   const url = new URL(req.url);
   if (url.pathname === "/health") return jresp({ ok: true, storage: "d1", adapter: "order074-postgrest" });
-  if (!await authorized(req, env)) return jresp({ error: "unauthorized" }, 401);
+  const isWrite = req.method === "POST" || req.method === "PATCH";
+  if (isWrite) {
+    if (!await writeAuthorized(req, env)) return jresp({ error: "write_unauthorized" }, 403);
+    if (!writesEnabled(env)) return jresp({ error: "writer_disabled" }, 503);
+  } else if (!await readAuthorized(req, env)) {
+    return jresp({ error: "unauthorized" }, 401);
+  }
+  if ((url.pathname === "/admin/digests" || url.pathname === "/admin/integrity") && req.method === "GET" && !await writeAuthorized(req, env)) {
+    return jresp({ error: "admin_unauthorized" }, 403);
+  }
   if (url.pathname === "/admin/digests" && req.method === "GET") {
     const rows = await env.HOT.prepare("SELECT id,source_row_digest,audit_digest,cold_key,cold_payload_sha256 FROM oracle_predictions_hot ORDER BY id").all();
     return jresp(rows.results);

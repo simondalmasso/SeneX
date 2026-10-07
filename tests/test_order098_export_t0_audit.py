@@ -188,3 +188,14 @@ def test_manifest_contains_hashes_and_no_credentials(tmp_path):
     assert "secret" not in encoded.lower()
     assert "apikey" not in encoded.lower()
     assert "authorization" not in encoded.lower()
+
+
+def test_full_audit_page_size_is_bounded_to_gateway_contract():
+    m = _load()
+    with pytest.raises(m.ExportContractError, match="between 1 and 100"):
+        m.fetch_full_audit_rows(
+            httpx.Client(base_url="https://example.test/rest/v1"),
+            table="oracle_predictions",
+            page_size=101,
+            symbol="BTCUSDT",
+        )
