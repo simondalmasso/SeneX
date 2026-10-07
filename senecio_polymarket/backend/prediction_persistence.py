@@ -310,5 +310,3 @@ class PredictionPersistenceStore:
             )
         )
         return pending[:limit]
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
