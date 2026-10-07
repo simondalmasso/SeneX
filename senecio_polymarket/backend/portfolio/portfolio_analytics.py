@@ -1,5 +1,3 @@
-[Reading 341 lines from start (total: 341 lines, 0 remaining)]
-
 """
 SENECIO ORACLE — ACT XXV: PortfolioAnalytics (priority 5)
 =========================================================
@@ -341,5 +339,3 @@ class PortfolioAnalytics:
     def update_config(self, **overrides: Any) -> None:
         self.cfg.update(overrides)
         log.info("PortfolioAnalytics config updated: %s", overrides)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
