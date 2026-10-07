@@ -1,3 +1,5 @@
+[Reading 341 lines from start (total: 341 lines, 0 remaining)]
+
 """
 SENECIO ORACLE — ACT XXV: PortfolioAnalytics (priority 5)
 =========================================================
@@ -10,7 +12,7 @@ Metrics (per ACT-XXV spec):
   - Sharpe          : annualized return / annualized volatility (risk-free=0)
   - Sortino         : annualized return / annualized downside deviation
   - ProfitFactor    : Σ(wins) / |Σ(losses)|
-  - Expectancy      : (win_rate * avg_win) - (loss_rate * avg_loss)  [in $]
+  - Expectancy      : (win_rate * avg_win) + (loss_rate * avg_loss)  [in $]
   - RecoveryFactor  : total_pnl / max_drawdown_usd
   - Calmar          : annualized return / max_drawdown_pct
   - KellyFraction   : win_rate - (1 - win_rate) / (avg_win / |avg_loss|)
@@ -237,14 +239,14 @@ class PortfolioAnalytics:
 
     @staticmethod
     def _expectancy(wins: list[float], losses: list[float], n: int) -> float:
-        """Expected $ per trade = (win_rate * avg_win) - (loss_rate * avg_loss)."""
+        """Expected $ per trade from signed realized PnL."""
         if n == 0:
             return 0.0
         win_rate = len(wins) / n
         loss_rate = len(losses) / n
         avg_win = (sum(wins) / len(wins)) if wins else 0.0
         avg_loss = (sum(losses) / len(losses)) if losses else 0.0
-        return (win_rate * avg_win) - (loss_rate * avg_loss)
+        return (win_rate * avg_win) + (loss_rate * avg_loss)
 
     @staticmethod
     def _max_drawdown(equity_curve: list[float]) -> tuple[float, float]:
@@ -339,3 +341,5 @@ class PortfolioAnalytics:
     def update_config(self, **overrides: Any) -> None:
         self.cfg.update(overrides)
         log.info("PortfolioAnalytics config updated: %s", overrides)
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
