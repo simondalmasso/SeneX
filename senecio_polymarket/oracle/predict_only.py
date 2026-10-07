@@ -451,22 +451,24 @@ def run_prediction(market_data: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def log_prediction(prediction: dict, path: str = DEFAULT_PREDICTIONS_PATH):
-    """Append prediction to JSONL audit log.
+    """Durably append one prediction to the JSONL audit/dedupe journal.
 
-    Each line is a complete prediction record. Later, verify_predictions()
-    fills price_15m_later and outcome for scoring.
-
-    Args:
-        prediction: Oracle output dict.
-        path: Path to JSONL file.
+    Failure is deliberately propagated. The journal is the local candle-dedupe
+    marker, so routing a prediction after an unsuccessful append would permit a
+    duplicate treatment after restart.
     """
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a") as f:
+        with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(prediction, default=str) + "\n")
-        logger.info(f"Prediction logged to {path}")
-    except IOError as e:
-        logger.error(f"Failed to log prediction: {e}")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        logger.exception("Failed to durably log prediction to %s", path)
+        raise
+    logger.info("Prediction logged to %s", path)
 
 
 def verify_predictions(symbol: str = "ETH/USDT", timeframe: str = "15m",

@@ -4,6 +4,9 @@
   "workers_dev": true,
   "preview_urls": true,
   "compatibility_date": "2026-08-28",
+  "vars": {
+    "D1_WRITES_ENABLED": "0"
+  },
   "d1_databases": [
     {
       "binding": "COLD",

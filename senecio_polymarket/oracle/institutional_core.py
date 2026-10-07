@@ -61,11 +61,10 @@ log = logging.getLogger("senecio.institutional_core")
 
 try:
     from survivability import SurvivabilityFunction
-    from market_ev import MarketEV, compute_market_ev
+    from market_ev import MarketEV
 except ImportError:
     SurvivabilityFunction = None
     MarketEV = None
-    compute_market_ev = None
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -538,6 +537,7 @@ class SingleDecisionCore:
             "total_pressure": round(total_pressure, 6),
             "up_prob": round(up, 6),
             "down_prob": round(down, 6),
+            "probability_semantics": "UNVALIDATED",
             "agreement": round(agreement, 6),
             "pressures": {
                 "orderflow": round(of_pressure, 6),
@@ -674,7 +674,8 @@ class SingleDecisionCore:
 
         EU = P(win) * U(win) - P(loss) * U(loss)
         Where:
-        - P(win) derived from conviction and direction
+        - P(win) MUST come from an explicit OOS-validated calibrated probability
+        - raw up_prob/down_prob remain diagnostic scores and cannot authorize EV
         - U(win/loss) adjusted for volatility, costs, and survival
         - Risk filter MODULATES the EU (not overrides it)
 
@@ -699,13 +700,78 @@ class SingleDecisionCore:
         risk_score = risk_filter["risk_score"]
         size_mult = risk_filter["size_multiplier"]
 
-        # ── Base probability ──
-        if direction == "LONG":
-            p_win = features["up_prob"]
-        elif direction == "SHORT":
-            p_win = features["down_prob"]
-        else:
-            p_win = 0.5
+        # ── Validated win probability gate ──
+        # up_prob/down_prob are sigmoid-transformed pressure diagnostics only.
+        # They are explicitly NOT validated P(win) and must never authorize EV.
+        raw_probability_semantics = "UNVALIDATED"
+        calibrated_raw = features.get("p_win_calibrated")
+        calibrated_provenance = features.get("p_win_calibrated_provenance")
+        calibrated_semantics = ""
+        calibrated_method = ""
+        calibrated_artifact_sha256 = ""
+        calibrated_value = None
+
+        if isinstance(calibrated_provenance, dict):
+            calibrated_semantics = str(
+                calibrated_provenance.get("probability_semantics") or ""
+            )
+            calibrated_method = str(
+                calibrated_provenance.get("method") or ""
+            ).strip()
+            calibrated_artifact_sha256 = str(
+                calibrated_provenance.get("artifact_sha256") or ""
+            ).strip().lower()
+
+        try:
+            if isinstance(calibrated_raw, bool):
+                raise TypeError("boolean is not a probability")
+            candidate = float(calibrated_raw)
+            if math.isfinite(candidate) and 0.0 <= candidate <= 1.0:
+                calibrated_value = candidate
+        except (TypeError, ValueError):
+            calibrated_value = None
+
+        artifact_sha_valid = (
+            len(calibrated_artifact_sha256) == 64
+            and all(ch in "0123456789abcdef" for ch in calibrated_artifact_sha256)
+        )
+        calibrated_probability_valid = bool(
+            calibrated_value is not None
+            and calibrated_semantics == "VALIDATED_OOS_PROBABILITY"
+            and calibrated_method
+            and artifact_sha_valid
+        )
+
+        if not calibrated_probability_valid:
+            one_way_slippage = slippage_bps / 10000.0
+            estimated_cost = (0.0002 + one_way_slippage) * 2
+            entropy_discount = 1.0 - (noise * 0.5)
+            survival_discount = 1.0 - risk_score * 0.8
+            return {
+                "status": "BLOCKED",
+                "reason": "UNVALIDATED_WIN_PROBABILITY",
+                "base_ev": 0.0,
+                "adjusted_ev": 0.0,
+                "survival_discount": round(survival_discount, 6),
+                "p_win": None,
+                "p_win_source": "NONE",
+                "probability_semantics": "UNVALIDATED",
+                "raw_probability_semantics": raw_probability_semantics,
+                "raw_probability_diagnostic": {
+                    "up_prob": features.get("up_prob"),
+                    "down_prob": features.get("down_prob"),
+                },
+                "avg_win": 0.0,
+                "avg_loss": 0.0,
+                "entropy_discount": round(entropy_discount, 6),
+                "entropy_for_size": round(entropy_discount, 6),
+                "tradeable": False,
+                "dynamic_min_ev": 0.0,
+                "vol_ref": round(volatility, 6),
+                "estimated_cost": round(estimated_cost, 8),
+            }
+
+        p_win = calibrated_value
 
         # ── Utility: ATR-based (stable) or single-candle fallback ──
         # ATR of 14 candles gives a realistic average move expectation.
@@ -758,19 +824,19 @@ class SingleDecisionCore:
         survival_discount = 1.0 - risk_score * 0.8  # risk=0→discount=1.0, risk=1→discount=0.2
         adjusted_ev = base_ev * survival_discount
 
-        # ── Market EV anchoring (if available) ──
-        if self.market_ev is not None and compute_market_ev is not None:
+        # ── Market-friction anchoring (if available) ──
+        # P(win) has already been established by the validated calibration
+        # artifact above. MarketEV may only reduce that EV using execution
+        # frictions/latency; it must not derive another probability.
+        if self.market_ev is not None:
             position_usdt = self._capital * conviction * size_mult
-            market_ev_result = compute_market_ev(
+            market_ev_result = self.market_ev.compute_market_ev(
+                model_ev=adjusted_ev,
                 edge=conviction,
-                entropy=noise,
                 atr_pct=volatility,
-                market_ev_instance=self.market_ev,
                 position_usdt=position_usdt,
             )
-            if isinstance(market_ev_result, (int, float)):
-                adjusted_ev = min(adjusted_ev, market_ev_result)
-            elif isinstance(market_ev_result, dict):
+            if isinstance(market_ev_result, dict):
                 mkt_ev = market_ev_result.get("market_ev", adjusted_ev)
                 adjusted_ev = min(adjusted_ev, mkt_ev)
 
@@ -791,10 +857,15 @@ class SingleDecisionCore:
         tradeable = adjusted_ev > dynamic_min_ev
 
         return {
+            "status": "OK",
+            "reason": "CALIBRATED_WIN_PROBABILITY",
             "base_ev": round(base_ev, 8),
             "adjusted_ev": round(adjusted_ev, 8),
             "survival_discount": round(survival_discount, 6),
             "p_win": round(p_win, 6),
+            "p_win_source": "p_win_calibrated",
+            "probability_semantics": "VALIDATED_OOS_PROBABILITY",
+            "p_win_calibrated_provenance": dict(calibrated_provenance),
             "avg_win": round(avg_win, 6),
             "avg_loss": round(avg_loss, 6),
             "entropy_discount": round(entropy_discount, 6),
@@ -970,6 +1041,8 @@ class SingleDecisionCore:
 
         # ── 5. EV not tradeable → HOLD ──
         if not ev_result["tradeable"]:
+            if ev_result.get("reason") == "UNVALIDATED_WIN_PROBABILITY":
+                return self._action_hold("UNVALIDATED_WIN_PROBABILITY")
             return self._action_hold(
                 f"negative_ev: {ev_result['adjusted_ev']:.8f}"
             )

@@ -55,3 +55,5 @@ def test_portfolio_analytics_does_not_double_subtract_fees_from_realized_pnl():
     assert report["ending_equity_usd"] == 1002.0
     assert report["net_pnl_usd"] == report["ending_equity_usd"] - report["starting_equity_usd"]
     assert report["total_return_pct"] == 0.2
+    assert report["expectancy_usd"] == 1.0
+    assert report["expectancy_usd"] == report["net_pnl_usd"] / report["n_trades"]
