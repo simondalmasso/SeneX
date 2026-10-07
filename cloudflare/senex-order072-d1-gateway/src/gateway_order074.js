@@ -1,3 +1,5 @@
+[Reading 571 lines from start (total: 571 lines, 0 remaining)]
+
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
@@ -351,8 +353,31 @@ async function fetchAudits(env, ids) {
   for (let i = 0; i < ids.length; i += 80) {
     const chunk = ids.slice(i, i + 80);
     if (!chunk.length) continue;
-    const got = await env.COLD.prepare(`SELECT prediction_id,payload FROM oracle_prediction_audit_cold WHERE prediction_id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
-    for (const r of got.results) out.set(r.prediction_id, (JSON.parse(r.payload) || {}).audit ?? null);
+    const got = await env.COLD.prepare(`SELECT prediction_id,cold_key,schema_version,audit_digest,payload_sha256,payload FROM oracle_prediction_audit_cold WHERE prediction_id IN (${chunk.map(() => "?").join(",")})`).bind(...chunk).all();
+    for (const r of got.results) {
+      if (typeof r.payload !== "string") throw new Error(`full audit cold payload missing id=${r.prediction_id}`);
+      const payloadSha = await sha256hex(r.payload);
+      if (payloadSha !== r.payload_sha256) throw new Error(`full audit cold payload hash mismatch id=${r.prediction_id}`);
+      let envelope;
+      try {
+        envelope = JSON.parse(r.payload);
+      } catch {
+        throw new Error(`full audit cold payload invalid JSON id=${r.prediction_id}`);
+      }
+      if (!envelope || envelope.id !== r.prediction_id || envelope.schema !== "senex-r2-audit-v1" || envelope.version !== 1) {
+        throw new Error(`full audit cold envelope mismatch id=${r.prediction_id}`);
+      }
+      if (r.schema_version !== "senex-r2-audit-v1") throw new Error(`full audit cold schema mismatch id=${r.prediction_id}`);
+      const audit = envelope.audit ?? null;
+      const auditDigest = await sha256hex(canonical(audit));
+      if (auditDigest !== r.audit_digest) throw new Error(`full audit cold audit digest mismatch id=${r.prediction_id}`);
+      out.set(r.prediction_id, {
+        audit,
+        cold_key: r.cold_key,
+        audit_digest: r.audit_digest,
+        payload_sha256: r.payload_sha256
+      });
+    }
   }
   return out;
 }
@@ -382,18 +407,30 @@ async function querySourceRows(env, url, { forceAudit = false, projectResult = t
   if (full && limit > FULL_AUDIT_LIMIT_MAX) throw new Error("full audit limit out of bounds");
   const got = await env.HOT.prepare(`SELECT * FROM oracle_predictions_hot${where}${order} LIMIT ? OFFSET ?`).bind(...binds, limit, offset).all();
   const audits = full ? await fetchAudits(env, got.results.map((r) => r.id)) : /* @__PURE__ */ new Map();
-  const rows = got.results.map((h) => {
+  const rows = [];
+  for (const h of got.results) {
     let audit;
-    if (full) audit = audits.get(h.id) ?? null;
-    else {
+    if (full) {
+      const cold = audits.get(h.id);
+      if (!cold) throw new Error(`full audit missing cold row id=${h.id}`);
+      if (
+        h.cold_location !== "D1_COLD" ||
+        h.cold_key !== cold.cold_key ||
+        h.audit_digest !== cold.audit_digest ||
+        h.cold_payload_sha256 !== cold.payload_sha256
+      ) {
+        throw new Error(`full audit reference mismatch id=${h.id}`);
+      }
+      audit = cold.audit;
+    } else {
       const o = h.origin_price_v1_json == null ? null : JSON.parse(h.origin_price_v1_json), d = h.outcomes_dual_json == null ? null : JSON.parse(h.outcomes_dual_json);
       audit = {};
       if (o !== null) audit.origin_price_v1 = o;
       if (d !== null) audit.outcomes_dual = d;
     }
     const s = hotToSource(h, audit);
-    return projectResult ? project(apiRow(s), sel) : s;
-  });
+    rows.push(projectResult ? project(apiRow(s), sel) : s);
+  }
   return { out: rows, total: count == null ? null : Number(count.n), offset };
 }
 __name(querySourceRows, "querySourceRows");
@@ -534,3 +571,5 @@ export {
   gateway_order074_default as default
 };
 //# sourceMappingURL=gateway_order074.js.map
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
