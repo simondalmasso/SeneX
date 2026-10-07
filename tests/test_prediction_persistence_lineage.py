@@ -313,4 +313,3 @@ def test_restart_retry_never_persists_when_reseal_fails(tmp_path, monkeypatch):
     assert len(pending) == 1
     assert pending[0]["status"] == "FAILED"
     assert "RETRY_SEAL_RuntimeError" in str(pending[0]["last_reason"])
-
