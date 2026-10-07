@@ -93,4 +93,3 @@ def test_expectancy_equals_mean_realized_pnl_for_net_trade_ledger():
 
     assert expected_mean == 1.0 / 3.0
     assert report["expectancy_usd"] == round(expected_mean, 2)
-
