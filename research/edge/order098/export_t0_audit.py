@@ -179,6 +179,15 @@ def project_t0_row_result(row: dict[str, Any]) -> dict[str, Any]:
     ):
         return {"status": "ERROR", "reason": "POLYMARKET_IDENTITY_INVALID", "row": None}
 
+    expected_slug = f"btc-updown-5m-{start_ts}"
+    if (
+        start_ts <= 0
+        or start_ts % 300 != 0
+        or end_ts != start_ts + 300
+        or slug != expected_slug
+    ):
+        return {"status": "ERROR", "reason": "POLYMARKET_GRID_INVALID", "row": None}
+
     causal = {
         "id": row_id,
         "ts": ts,
@@ -356,12 +365,20 @@ def validate_persistence_lineage(
             f"source-to-D1 lineage has {len(unresolved)} unresolved generated T0 rows"
         )
 
-    fetched_ids = {_row_id(row.get("id")) for row in fetched_rows}
-    persisted_ids = {
+    fetched_id_list = [_row_id(row.get("id")) for row in fetched_rows]
+    fetched_ids = set(fetched_id_list)
+    if len(fetched_ids) != len(fetched_id_list):
+        raise ExportContractError("D1 snapshot contains duplicate prediction ids")
+
+    persisted_id_list = [
         _row_id(state.get("d1_prediction_id"))
         for state in scoped
         if state.get("d1_prediction_id") is not None
-    }
+    ]
+    persisted_ids = set(persisted_id_list)
+    if len(persisted_ids) != len(persisted_id_list):
+        raise ExportContractError("source-to-D1 receipts are not one-to-one")
+
     missing_receipts = sorted(fetched_ids - persisted_ids)
     missing_d1_rows = sorted(persisted_ids - fetched_ids)
     if missing_receipts:
@@ -372,6 +389,45 @@ def validate_persistence_lineage(
         raise ExportContractError(
             f"D1 snapshot missing receipt-bound ids: {missing_d1_rows[:8]}"
         )
+
+    fetched_by_id = {
+        _row_id(row.get("id")): row
+        for row in fetched_rows
+    }
+    for state in scoped:
+        pred_id = _row_id(state.get("d1_prediction_id"))
+        original = state.get("prediction")
+        if not isinstance(original, dict):
+            raise ExportContractError("source-to-D1 receipt lacks original T0 payload")
+        receipt_row = {
+            "id": pred_id,
+            "ts": original.get("timestamp"),
+            "symbol": original.get("symbol"),
+            "audit": original.get("_audit"),
+        }
+        receipt_projection = project_t0_row_result(receipt_row)
+        d1_projection = project_t0_row_result(fetched_by_id[pred_id])
+
+        if receipt_projection["status"] == "ERROR":
+            raise ExportContractError(
+                f"receipt original T0 is not causally projectable for id {pred_id}"
+            )
+        if d1_projection["status"] == "ERROR":
+            raise ExportContractError(
+                f"D1 row is not causally projectable for id {pred_id}"
+            )
+        if receipt_projection["status"] != d1_projection["status"]:
+            raise ExportContractError(
+                f"receipt/D1 scientific eligibility mismatch for id {pred_id}"
+            )
+        if receipt_projection["status"] == "ACCEPTED":
+            if (
+                receipt_projection["row"]["causal_t0_sha256"]
+                != d1_projection["row"]["causal_t0_sha256"]
+            ):
+                raise ExportContractError(
+                    f"receipt/D1 causal T0 mismatch for id {pred_id}"
+                )
 
     return {
         "contract": "senex-source-to-d1-lineage-v1",

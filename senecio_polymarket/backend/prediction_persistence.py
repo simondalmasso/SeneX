@@ -14,6 +14,7 @@ from .portfolio.persistence_paths import resolve_path
 
 CONTRACT = "senex-prediction-persistence-receipt-v1"
 DEFAULT_LEGACY_PATH = "data/portfolio/prediction_persistence_receipts.jsonl"
+_RECOVERY_MARKER_KEY = "_prediction_persistence_recovery_v1"
 
 
 class PredictionPersistenceError(RuntimeError):
@@ -39,6 +40,30 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _recovery_marker(raw_tail: bytes, line_no: int) -> dict[str, Any]:
+    return {
+        _RECOVERY_MARKER_KEY: {
+            "kind": "TORN_TAIL",
+            "line_no": line_no,
+            "sha256": hashlib.sha256(raw_tail).hexdigest(),
+            "bytes": len(raw_tail),
+        }
+    }
+
+
+def _marker_matches(value: Any, raw_tail: bytes, line_no: int) -> bool:
+    if not isinstance(value, dict):
+        return False
+    marker = value.get(_RECOVERY_MARKER_KEY)
+    return (
+        isinstance(marker, dict)
+        and marker.get("kind") == "TORN_TAIL"
+        and marker.get("line_no") == line_no
+        and marker.get("sha256") == hashlib.sha256(raw_tail).hexdigest()
+        and marker.get("bytes") == len(raw_tail)
+    )
+
+
 class PredictionPersistenceStore:
     """Append-only durable mapping from sealed T0 packet to D1 persistence."""
 
@@ -55,24 +80,58 @@ class PredictionPersistenceStore:
     def _read(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
+
         rows: list[dict[str, Any]] = []
-        for line_no, raw in enumerate(
-            self.path.read_text(encoding="utf-8").splitlines(),
-            start=1,
-        ):
-            if not raw.strip():
+        raw_file = self.path.read_bytes()
+        lines = raw_file.splitlines(keepends=True)
+        idx = 0
+
+        while idx < len(lines):
+            line_no = idx + 1
+            raw_line = lines[idx]
+            terminated = raw_line.endswith((b"\n", b"\r"))
+            content = raw_line.rstrip(b"\r\n")
+            if not content.strip():
+                idx += 1
                 continue
+
             try:
-                row = json.loads(raw)
-            except json.JSONDecodeError as exc:
+                row = json.loads(content.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                is_last = idx == len(lines) - 1
+                if is_last and not terminated:
+                    marker = _canonical_json(_recovery_marker(content, line_no)).encode("utf-8")
+                    with open(self.path, "ab") as handle:
+                        handle.write(b"\n" + marker + b"\n")
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    break
+
+                if idx + 1 < len(lines):
+                    marker_content = lines[idx + 1].rstrip(b"\r\n")
+                    try:
+                        marker = json.loads(marker_content.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        marker = None
+                    if _marker_matches(marker, content, line_no):
+                        idx += 2
+                        continue
+
                 raise PredictionPersistenceError(
                     f"invalid persistence receipt JSON at line {line_no}"
                 ) from exc
+
+            if isinstance(row, dict) and _RECOVERY_MARKER_KEY in row:
+                raise PredictionPersistenceError(
+                    f"orphan persistence recovery marker at line {line_no}"
+                )
             if not isinstance(row, dict) or row.get("contract") != CONTRACT:
                 raise PredictionPersistenceError(
                     f"invalid persistence receipt contract at line {line_no}"
                 )
             rows.append(row)
+            idx += 1
+
         return rows
 
     def _append(self, row: dict[str, Any]) -> None:
@@ -85,7 +144,7 @@ class PredictionPersistenceStore:
 
     def _states(self) -> dict[str, dict[str, Any]]:
         states: dict[str, dict[str, Any]] = {}
-        for event in self._read():
+        for event_index, event in enumerate(self._read(), start=1):
             source_hash = str(event.get("source_packet_hash") or "")
             if len(source_hash) != 64:
                 raise PredictionPersistenceError("invalid source packet hash")
@@ -99,6 +158,7 @@ class PredictionPersistenceStore:
                     "status": None,
                     "d1_prediction_id": None,
                     "last_reason": None,
+                    "last_event_index": 0,
                 },
             )
             payload_hash = event.get("source_prediction_sha256")
@@ -124,6 +184,7 @@ class PredictionPersistenceStore:
                 state["d1_prediction_id"] = event.get("d1_prediction_id")
             if event.get("reason") is not None:
                 state["last_reason"] = event.get("reason")
+            state["last_event_index"] = event_index
         return states
 
     def enqueue(
@@ -236,6 +297,7 @@ class PredictionPersistenceStore:
         ]
         pending.sort(
             key=lambda state: (
+                int(state.get("last_event_index") or 0),
                 str(state.get("prediction", {}).get("timestamp") or ""),
                 str(state.get("source_packet_hash") or ""),
             )

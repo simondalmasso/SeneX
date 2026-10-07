@@ -179,6 +179,55 @@ def test_restart_retry_persists_original_t0_without_retroactive_paper_route(tmp_
     assert PredictionPersistenceStore().pending(limit=10) == []
 
 
+def test_receipt_store_recovers_torn_final_tail_append_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
+    store = PredictionPersistenceStore()
+    store.enqueue(_packet(), _prediction())
+    path = tmp_path / "prediction_persistence_receipts.jsonl"
+    with open(path, "ab") as handle:
+        handle.write(b'{"contract":"senex-prediction-persistence-receipt-v1","broken":')
+
+    packet2 = {
+        "packet_id": "gptrader-t0-" + "c" * 24,
+        "packet_hash": "d" * 64,
+        "packet_seq": 2,
+    }
+    prediction2 = _prediction()
+    prediction2["timestamp"] = "2026-10-06T18:15:00Z"
+    restarted = PredictionPersistenceStore()
+    restarted.enqueue(packet2, prediction2)
+
+    states = restarted.states()
+    assert len(states) == 2
+    raw = path.read_text(encoding="utf-8")
+    assert "_prediction_persistence_recovery_v1" in raw
+
+
+def test_pending_retry_rotation_does_not_starve_newer_receipts(tmp_path, monkeypatch):
+    monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
+    store = PredictionPersistenceStore()
+    hashes = []
+    for idx in range(6):
+        packet_hash = f"{idx + 1:064x}"
+        hashes.append(packet_hash)
+        packet = {
+            "packet_id": f"gptrader-t0-{idx + 1:024x}",
+            "packet_hash": packet_hash,
+            "packet_seq": idx + 1,
+        }
+        prediction = _prediction()
+        prediction["timestamp"] = f"2026-10-06T18:{idx:02d}:00Z"
+        store.enqueue(packet, prediction)
+
+    first = store.pending(limit=2)
+    assert [row["source_packet_hash"] for row in first] == hashes[:2]
+    for row in first:
+        store.mark_failed(row["source_packet_hash"], "PERMANENT_CONFLICT")
+
+    second = store.pending(limit=2)
+    assert [row["source_packet_hash"] for row in second] == hashes[2:4]
+
+
 def test_restart_retry_keeps_unresolved_receipt_explicit(tmp_path, monkeypatch):
     monkeypatch.setenv("SENEX_RESULTS_DIR", str(tmp_path))
     store = PredictionPersistenceStore()

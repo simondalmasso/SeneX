@@ -338,19 +338,29 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         except Exception as enrich_err:
             log.warning("audit_enrichment failed (continuing): %s", enrich_err)
 
-        # Persist
-        await asyncio.to_thread(log_prediction, prediction, str(PREDICTIONS_PATH))
-
-        # ORDER086 P0: seal one durable immutable decision-time packet before
-        # any authority persistence or PAPER treatment. A prediction without a
-        # durable T0 identity is quarantined from canonical downstream lanes.
+        # ORDER159: establish durable decision-time custody before writing
+        # predictions.jsonl, because that local append is also the candle-dedupe
+        # marker. A seal/receipt failure must not make the next cycle skip an
+        # observation that has no retryable lineage record.
         sealed_packet = None
+        receipt_store = None
         try:
             from .gptrader.sealer import seal_prediction_t0
+            from .prediction_persistence import PredictionPersistenceStore
+
             sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)
+            receipt_store = PredictionPersistenceStore()
+            receipt_store.enqueue(sealed_packet, prediction)
         except Exception as seal_err:
-            log.error("gptrader T0 sealing failed closed: %s", seal_err)
-        else:
+            log.error("gptrader T0 seal/receipt failed closed: %s", seal_err)
+            sealed_packet = None
+            receipt_store = None
+
+        authority_persisted = False
+        if sealed_packet is not None and receipt_store is not None:
+            # Only after durable seal + receipt do we record the candle marker.
+            await asyncio.to_thread(log_prediction, prediction, str(PREDICTIONS_PATH))
+
             try:
                 from .gptrader.transport import replicate_pending_t0
                 await asyncio.to_thread(replicate_pending_t0)
@@ -360,17 +370,16 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
                     replication_err,
                 )
 
-        authority_persisted = False
-        if sealed_packet is not None:
             authority_persisted = await _persist_and_route_prediction(
                 prediction,
                 market_data,
                 sealed_packet,
+                store=receipt_store,
             )
         else:
             log.error(
-                "prediction quarantined: no durable sealed T0 identity; "
-                "D1/PAPER/BINANCE_SIM routing skipped"
+                "prediction quarantined: no durable sealed T0 receipt; "
+                "local dedupe marker/D1/PAPER/BINANCE_SIM routing skipped"
             )
 
         # Update runtime state. The raw T0 count remains a generation count;

@@ -356,6 +356,8 @@ def _write_v2_artifacts(tmp_path, prediction_rows, resolution_rows, *, provenanc
     predictions_sha = _sha256_file(predictions)
     resolutions_sha = _sha256_file(resolutions)
     p_manifest = tmp_path / "t0_manifest.json"
+    snapshot_start_ts = "2026-10-04T05:00:00Z"
+    snapshot_end_ts = "2026-10-08T00:00:00Z"
     p_manifest.write_text(json.dumps({
         "contract": "senex-order098-t0-audit-export-v2",
         "output_file_sha256": predictions_sha,
@@ -363,8 +365,20 @@ def _write_v2_artifacts(tmp_path, prediction_rows, resolution_rows, *, provenanc
         "fetched_rows": len(prediction_rows),
         "projected_rows": len(prediction_rows),
         "skipped_rows": 0,
+        "snapshot_start_ts": snapshot_start_ts,
+        "snapshot_end_ts": snapshot_end_ts,
         "snapshot_max_prediction_id": max(row["id"] for row in prediction_rows),
         "causal_hash_contract": "CAUSAL_T0_ALLOWLIST_V2",
+        "source_to_d1_lineage": {
+            "contract": "senex-source-to-d1-lineage-v1",
+            "receipt_file_sha256": "a" * 64,
+            "window_start_ts": snapshot_start_ts,
+            "window_end_ts": snapshot_end_ts,
+            "expected_generated_t0": len(prediction_rows),
+            "persisted_t0": len(prediction_rows),
+            "unresolved_t0": 0,
+            "fetched_d1_rows": len(prediction_rows),
+        },
     }), encoding="utf-8")
     provenance = provenance or {}
     r_manifest = tmp_path / "resolution_manifest.json"
@@ -581,6 +595,32 @@ def test_v2_lineage_rejects_fabricated_resolution_provenance(tmp_path, provenanc
         resolution_rows,
         provenance=provenance,
     )
+
+    with pytest.raises(m.ArtifactContractError, match=match):
+        m.verify_order098_artifacts(*artifacts)
+
+
+@pytest.mark.parametrize(
+    "mutation,match",
+    [
+        (lambda data: data.pop("source_to_d1_lineage"), "lineage evidence"),
+        (lambda data: data["source_to_d1_lineage"].update({"unresolved_t0": 1}), "lineage is incomplete"),
+        (lambda data: data.update({"snapshot_start_ts": "2026-10-04T06:00:00Z"}), "lineage start"),
+        (lambda data: data.update({"snapshot_end_ts": "2026-10-07T23:00:00Z"}), "lineage end"),
+    ],
+)
+def test_v2_lineage_requires_snapshot_bound_persistence_evidence(tmp_path, mutation, match):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    _predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    mutation(data)
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
 
     with pytest.raises(m.ArtifactContractError, match=match):
         m.verify_order098_artifacts(*artifacts)

@@ -215,6 +215,45 @@ def verify_order098_artifacts(
         if p_manifest.get("causal_hash_contract") != "CAUSAL_T0_ALLOWLIST_V2":
             raise ArtifactContractError("unexpected causal hash contract")
 
+        snapshot_start_ts = p_manifest.get("snapshot_start_ts")
+        snapshot_end_ts = p_manifest.get("snapshot_end_ts")
+        if not isinstance(snapshot_start_ts, str) or not isinstance(snapshot_end_ts, str):
+            raise ArtifactContractError("prospective snapshot window is missing")
+        try:
+            start_dt = datetime.fromisoformat(snapshot_start_ts.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(snapshot_end_ts.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ArtifactContractError("prospective snapshot window is invalid") from exc
+        if start_dt.tzinfo is None or end_dt.tzinfo is None or end_dt < start_dt:
+            raise ArtifactContractError("prospective snapshot window is invalid")
+
+        lineage = p_manifest.get("source_to_d1_lineage")
+        if not isinstance(lineage, dict):
+            raise ArtifactContractError("source-to-D1 lineage evidence is missing")
+        if lineage.get("contract") != "senex-source-to-d1-lineage-v1":
+            raise ArtifactContractError("unexpected source-to-D1 lineage contract")
+        if lineage.get("window_start_ts") != snapshot_start_ts:
+            raise ArtifactContractError("source-to-D1 lineage start does not match snapshot")
+        if lineage.get("window_end_ts") != snapshot_end_ts:
+            raise ArtifactContractError("source-to-D1 lineage end does not match snapshot")
+        try:
+            expected_generated = int(lineage.get("expected_generated_t0"))
+            persisted_t0 = int(lineage.get("persisted_t0"))
+            unresolved_t0 = int(lineage.get("unresolved_t0"))
+            fetched_d1_rows = int(lineage.get("fetched_d1_rows"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError("source-to-D1 lineage counters are invalid") from exc
+        receipt_sha = lineage.get("receipt_file_sha256")
+        if not isinstance(receipt_sha, str) or len(receipt_sha) != 64:
+            raise ArtifactContractError("source-to-D1 receipt SHA256 is invalid")
+        if (
+            expected_generated <= 0
+            or persisted_t0 != expected_generated
+            or unresolved_t0 != 0
+            or fetched_d1_rows != expected_generated
+        ):
+            raise ArtifactContractError("source-to-D1 lineage is incomplete")
+
         allowed_v2_keys = {
             "id",
             "ts",

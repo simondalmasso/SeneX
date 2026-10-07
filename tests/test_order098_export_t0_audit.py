@@ -118,6 +118,23 @@ def test_projection_result_distinguishes_missing_audit_from_scientific_exclusion
     assert skip["reason"] == "POLYMARKET_NOT_ELIGIBLE"
 
 
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda row: row["audit"]["external_markets_v1"]["polymarket"].update({"slug": "btc-updown-5m-1"}),
+        lambda row: row["audit"]["external_markets_v1"]["polymarket"].update({"start_ts": 1791069601}),
+        lambda row: row["audit"]["external_markets_v1"]["polymarket"].update({"end_ts": 1791069901}),
+    ],
+)
+def test_projection_rejects_malformed_polymarket_grid(mutator):
+    m = _load()
+    row = _row()
+    mutator(row)
+    result = m.project_t0_row_result(row)
+    assert result["status"] == "ERROR"
+    assert result["reason"] == "POLYMARKET_GRID_INVALID"
+
+
 def test_projection_accepts_json_text_audit():
     m = _load()
     result = m.project_t0_row(_row(audit_as_text=True))
@@ -271,6 +288,63 @@ def test_source_to_d1_lineage_counts_failed_tail_to_explicit_snapshot_end(tmp_pa
             symbol="BTCUSDT",
             start_ts="2026-10-06T17:55:00Z",
             end_ts="2026-10-06T18:15:00Z",
+        )
+
+
+def test_source_to_d1_lineage_binds_receipt_to_fetched_causal_t0(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+    fetched = _row(101)
+    original = {
+        "timestamp": fetched["ts"],
+        "symbol": fetched["symbol"],
+        "prediction": fetched["prediction"],
+        "_audit": json.loads(json.dumps(fetched["audit"])),
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        original,
+    )
+    store.mark_persisted("1" * 64, 101)
+
+    result = m.validate_persistence_lineage(
+        receipt_path=receipts,
+        fetched_rows=[fetched],
+        symbol="BTCUSDT",
+        start_ts="2026-10-03T23:00:00Z",
+        end_ts="2026-10-04T00:00:00Z",
+    )
+
+    assert result["persisted_t0"] == 1
+    assert result["unresolved_t0"] == 0
+
+
+def test_source_to_d1_lineage_rejects_same_id_with_different_causal_t0(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+    fetched = _row(101)
+    original = {
+        "timestamp": fetched["ts"],
+        "symbol": fetched["symbol"],
+        "prediction": fetched["prediction"],
+        "_audit": json.loads(json.dumps(fetched["audit"])),
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        original,
+    )
+    store.mark_persisted("1" * 64, 101)
+    fetched["audit"]["external_markets_v1"]["polymarket"]["up_probability"] = 0.58
+
+    with pytest.raises(m.ExportContractError, match="causal T0 mismatch"):
+        m.validate_persistence_lineage(
+            receipt_path=receipts,
+            fetched_rows=[fetched],
+            symbol="BTCUSDT",
+            start_ts="2026-10-03T23:00:00Z",
+            end_ts="2026-10-04T00:00:00Z",
         )
 
 
