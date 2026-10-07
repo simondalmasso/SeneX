@@ -6,6 +6,7 @@ import copy
 import pytest
 
 from senecio_polymarket.backend import oracle_runner
+from senecio_polymarket.backend.gptrader.sealer import build_sealed_packet
 from senecio_polymarket.backend.prediction_persistence import (
     PredictionPersistenceError,
     PredictionPersistenceStore,
@@ -33,11 +34,7 @@ def _prediction():
 
 
 def _packet():
-    return {
-        "packet_id": "gptrader-t0-" + "a" * 24,
-        "packet_hash": "b" * 64,
-        "packet_seq": 1,
-    }
+    return build_sealed_packet(_prediction(), 1)
 
 
 def test_store_restart_preserves_failed_original_t0(tmp_path, monkeypatch):
