@@ -575,3 +575,18 @@ def test_receipt_snapshot_is_immutable_after_live_ledger_grows(tmp_path):
     assert frozen.read_bytes() == frozen_before
     with pytest.raises(m.ExportContractError, match="already exists"):
         m.snapshot_receipt_ledger(live, frozen)
+
+
+def test_prospective_jsonl_exclusive_write_refuses_overwrite(tmp_path):
+    m = _load()
+    path = tmp_path / "frozen.jsonl"
+    row = m.project_t0_row(_row(1))
+    assert row is not None
+
+    m.write_jsonl(path, [row], exclusive=True)
+    original = path.read_bytes()
+
+    with pytest.raises(m.ExportContractError, match="already exists"):
+        m.write_jsonl(path, [row], exclusive=True)
+
+    assert path.read_bytes() == original
