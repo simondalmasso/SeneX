@@ -1,5 +1,3 @@
-[Reading 319 lines from start (total: 319 lines, 0 remaining)]
-
 """ORDER100 prospective confirmation on fresh Polymarket BTC 5m markets.
 
 Frozen before prospective outcomes:
