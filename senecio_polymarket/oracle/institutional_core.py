@@ -1,5 +1,3 @@
-[Reading 1705 lines from start (total: 1705 lines, 0 remaining)]
-
 """
 Module: institutional_core.py — SINGLE DECISION CORE (ACT XXIII)
 
@@ -1705,5 +1703,3 @@ if __name__ == "__main__":
     print("All self-tests PASSED")
     print("INSTITUTIONAL_CORE: single brain, single memory, single execution authority")
     print("=" * 60)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
