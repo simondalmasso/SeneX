@@ -554,7 +554,27 @@ def ensure_prospective_output_paths_available(
         )
 
 
-def write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None:
+def _write_text_artifact(path: Path, text: str, *, exclusive: bool) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = "x" if exclusive else "w"
+    try:
+        with open(path, mode, encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as exc:
+        raise ExportContractError(
+            f"prospective artifact already exists: {path}"
+        ) from exc
+    _fsync_parent(path)
+
+
+def write_jsonl(
+    path: str | Path,
+    rows: Iterable[dict[str, Any]],
+    *,
+    exclusive: bool = False,
+) -> None:
     ordered = sorted(rows, key=lambda row: _row_id(row.get("id")))
     seen: set[int] = set()
     chunks: list[str] = []
@@ -564,7 +584,7 @@ def write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None:
             raise ExportContractError(f"duplicate exported prediction id: {row_id}")
         seen.add(row_id)
         chunks.append(_canonical_json(row) + "\n")
-    Path(path).write_text("".join(chunks), encoding="utf-8")
+    _write_text_artifact(Path(path), "".join(chunks), exclusive=exclusive)
 
 
 def _public_origin(value: str) -> str:
@@ -795,7 +815,7 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
-    write_jsonl(args.output, projected)
+    write_jsonl(args.output, projected, exclusive=prospective_v2)
     contract = (
         EXPORT_CONTRACT_V2
         if args.max_prediction_id is not None
@@ -816,9 +836,10 @@ def main() -> int:
         contract=contract,
     )
     manifest["exporter_file_sha256"] = _file_sha256(Path(__file__).resolve())
-    args.manifest.write_text(
+    _write_text_artifact(
+        args.manifest,
         json.dumps(manifest, sort_keys=True, indent=2) + "\n",
-        encoding="utf-8",
+        exclusive=prospective_v2,
     )
 
     status = "PASS" if projected else "BLOCKED_NO_ORDER097_T0_ROWS"
