@@ -1,4 +1,4 @@
-[Reading 1590 lines from start (total: 1590 lines, 0 remaining)]
+[Reading 1620 lines from start (total: 1620 lines, 0 remaining)]
 
 {
   "capital": 0,
@@ -6,8 +6,8 @@
   "edge_claim": "NONE",
   "live": false,
   "manifest_sha256": {
-    "RECENCY_CHALLENGER_V1": "f3e927ac0f719d85afe703d45022711b35de7b7ffc8205b52142894d7dd0b3a2",
-    "WOLFRAM_RECAL_V1": "f27e8a2c4e629da5501d8ad805a191978bad54bd9e9a4edde3c833cf5b7a134b"
+    "RECENCY_CHALLENGER_V1": "c05bf94608a6508318556f01e7608c1e37ccef7400834b9e875ca8da8d08d7bd",
+    "WOLFRAM_RECAL_V1": "7b09d14449d30bcec62ca3c0201f815c88798067f5d50de29b4bde6e906628fd"
   },
   "market_baseline": "p_market",
   "market_residual_diagnostic": {
@@ -84,6 +84,7 @@
           "observed_rate": 0.56
         },
         "candidate_log_loss": 0.6921736290073746,
+        "candidate_roc_auc": 0.6363636363636364,
         "delta_brier": -0.0028701280115022987,
         "delta_log_loss": -0.008074880707097054,
         "fold_index": 0,
@@ -128,6 +129,7 @@
           "observed_rate": 0.56
         },
         "market_log_loss": 0.7002485097144716,
+        "market_roc_auc": 0.5974025974025974,
         "n": 25
       },
       {
@@ -180,6 +182,7 @@
           "observed_rate": 0.48
         },
         "candidate_log_loss": 0.5838055545936529,
+        "candidate_roc_auc": 0.782051282051282,
         "delta_brier": -0.02268357520917813,
         "delta_log_loss": -0.043943048680011865,
         "fold_index": 1,
@@ -224,6 +227,7 @@
           "observed_rate": 0.48
         },
         "market_log_loss": 0.6277486032736648,
+        "market_roc_auc": 0.782051282051282,
         "n": 25
       },
       {
@@ -269,6 +273,7 @@
           "observed_rate": 0.64
         },
         "candidate_log_loss": 0.654763419214962,
+        "candidate_roc_auc": 0.6458333333333334,
         "delta_brier": -0.006228349091546986,
         "delta_log_loss": -0.012985303284210326,
         "fold_index": 2,
@@ -313,6 +318,7 @@
           "observed_rate": 0.64
         },
         "market_log_loss": 0.6677487224991723,
+        "market_roc_auc": 0.6666666666666666,
         "n": 25
       },
       {
@@ -372,6 +378,7 @@
           "observed_rate": 0.48
         },
         "candidate_log_loss": 0.7590113222936469,
+        "candidate_roc_auc": 0.5641025641025641,
         "delta_brier": 0.026774913321905458,
         "delta_log_loss": 0.06161655900079066,
         "fold_index": 3,
@@ -416,6 +423,7 @@
           "observed_rate": 0.48
         },
         "market_log_loss": 0.6973947632928562,
+        "market_roc_auc": 0.5705128205128205,
         "n": 25
       }
     ],
@@ -490,6 +498,7 @@
         "observed_rate": 0.54
       },
       "candidate_log_loss": 0.672438481277409,
+      "candidate_roc_auc": 0.6352657004830918,
       "delta_brier": -0.00125178474758042,
       "delta_log_loss": -0.000846668417632368,
       "market_brier": 0.24021070205759962,
@@ -533,6 +542,7 @@
         "observed_rate": 0.54
       },
       "market_log_loss": 0.6732851496950414,
+      "market_roc_auc": 0.6215780998389694,
       "n": 100
     },
     "selection_eligible": false
@@ -624,6 +634,7 @@
             "observed_rate": 0.56
           },
           "candidate_log_loss": 1.4546350297045194,
+          "candidate_roc_auc": 0.564935064935065,
           "delta_brier": 0.10459621900048865,
           "delta_log_loss": 0.7543865199900478,
           "fold_index": 0,
@@ -668,6 +679,7 @@
             "observed_rate": 0.56
           },
           "market_log_loss": 0.7002485097144716,
+          "market_roc_auc": 0.5974025974025974,
           "model_digest": "30e29bf06d449214bda04b827b6f77fdeb27e3ba7c76e80f761987ae9d4de17f",
           "n": 25
         },
@@ -727,6 +739,7 @@
             "observed_rate": 0.48
           },
           "candidate_log_loss": 0.58909486121757,
+          "candidate_roc_auc": 0.8012820512820513,
           "delta_brier": -0.016530356929353035,
           "delta_log_loss": -0.03865374205609473,
           "fold_index": 1,
@@ -771,6 +784,7 @@
             "observed_rate": 0.48
           },
           "market_log_loss": 0.6277486032736648,
+          "market_roc_auc": 0.782051282051282,
           "model_digest": "85aeaa0e571e4b78eadbf2fa0e0c1e70bccb8bd502e4ad46fd795f0fd3852293",
           "n": 25
         },
@@ -816,6 +830,7 @@
             "observed_rate": 0.64
           },
           "candidate_log_loss": 0.731472710624971,
+          "candidate_roc_auc": 0.5277777777777778,
           "delta_brier": 0.03157815140379178,
           "delta_log_loss": 0.06372398812579871,
           "fold_index": 2,
@@ -860,6 +875,7 @@
             "observed_rate": 0.64
           },
           "market_log_loss": 0.6677487224991723,
+          "market_roc_auc": 0.6666666666666666,
           "model_digest": "f3902bb8ce0302c18bcdb4bb02e9cf4d665777a6928ea5cfa9c25094acd0d655",
           "n": 25
         },
@@ -905,6 +921,7 @@
             "observed_rate": 0.48
           },
           "candidate_log_loss": 0.8540581495207653,
+          "candidate_roc_auc": 0.48717948717948717,
           "delta_brier": 0.06748891711787292,
           "delta_log_loss": 0.1566633862279091,
           "fold_index": 3,
@@ -949,6 +966,7 @@
             "observed_rate": 0.48
           },
           "market_log_loss": 0.6973947632928562,
+          "market_roc_auc": 0.5705128205128205,
           "model_digest": "a023fe660f7e17ac12cebd94199261ae38b3aee25a76de59667b34f5a9d2b227",
           "n": 25
         }
@@ -1031,6 +1049,7 @@
           "observed_rate": 0.54
         },
         "candidate_log_loss": 0.907315187766957,
+        "candidate_roc_auc": 0.5205314009661836,
         "delta_brier": 0.046783232648200085,
         "delta_log_loss": 0.23403003807191558,
         "market_brier": 0.24021070205759962,
@@ -1074,6 +1093,7 @@
           "observed_rate": 0.54
         },
         "market_log_loss": 0.6732851496950414,
+        "market_roc_auc": 0.6215780998389694,
         "n": 100
       },
       "valid": true
@@ -1144,6 +1164,7 @@
             "observed_rate": 0.56
           },
           "candidate_log_loss": 0.6993298055344165,
+          "candidate_roc_auc": 0.6363636363636364,
           "delta_brier": -0.002592383835469253,
           "delta_log_loss": -0.0009187041800551299,
           "fold_index": 0,
@@ -1188,6 +1209,7 @@
             "observed_rate": 0.56
           },
           "market_log_loss": 0.7002485097144716,
+          "market_roc_auc": 0.5974025974025974,
           "model_digest": "fc3c1fc0295df0ad2f7a709182f98f9dd28e26db083bb3519ace61207fdfcc49",
           "n": 25
         },
@@ -1247,6 +1269,7 @@
             "observed_rate": 0.48
           },
           "candidate_log_loss": 0.582947851188735,
+          "candidate_roc_auc": 0.782051282051282,
           "delta_brier": -0.022024373069419012,
           "delta_log_loss": -0.04480075208492973,
           "fold_index": 1,
@@ -1291,6 +1314,7 @@
             "observed_rate": 0.48
           },
           "market_log_loss": 0.6277486032736648,
+          "market_roc_auc": 0.782051282051282,
           "model_digest": "b166b7c63a0416ff1b0cce4e8ef0515b3336c5e365749693c6b68339ef043266",
           "n": 25
         },
@@ -1336,6 +1360,7 @@
             "observed_rate": 0.64
           },
           "candidate_log_loss": 0.6805377840006777,
+          "candidate_roc_auc": 0.6458333333333334,
           "delta_brier": 0.00600294481674199,
           "delta_log_loss": 0.012789061501505383,
           "fold_index": 2,
@@ -1380,6 +1405,7 @@
             "observed_rate": 0.64
           },
           "market_log_loss": 0.6677487224991723,
+          "market_roc_auc": 0.6666666666666666,
           "model_digest": "2d91e4629ad6e056952fcf694a304087c0b25bc72161a5c6c180bb064163d87f",
           "n": 25
         },
@@ -1425,6 +1451,7 @@
             "observed_rate": 0.48
           },
           "candidate_log_loss": 0.7549335663828198,
+          "candidate_roc_auc": 0.5641025641025641,
           "delta_brier": 0.025340156303860217,
           "delta_log_loss": 0.05753880308996362,
           "fold_index": 3,
@@ -1469,6 +1496,7 @@
             "observed_rate": 0.48
           },
           "market_log_loss": 0.6973947632928562,
+          "market_roc_auc": 0.5705128205128205,
           "model_digest": "867f594ad55b6c9191f10fc753750de4f3feb2f63352c2f8f541bf315054f119",
           "n": 25
         }
@@ -1537,6 +1565,7 @@
           "observed_rate": 0.54
         },
         "candidate_log_loss": 0.6794372517766619,
+        "candidate_roc_auc": 0.6284219001610306,
         "delta_brier": 0.001681586053928541,
         "delta_log_loss": 0.006152102081620536,
         "market_brier": 0.24021070205759962,
@@ -1580,6 +1609,7 @@
           "observed_rate": 0.54
         },
         "market_log_loss": 0.6732851496950414,
+        "market_roc_auc": 0.6215780998389694,
         "n": 100
       },
       "valid": true
