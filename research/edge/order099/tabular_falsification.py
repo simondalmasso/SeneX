@@ -222,6 +222,8 @@ def verify_order098_artifacts(
         "accepted_markets": accepted,
         "rejected_markets": rejected,
     }
+    receipt_expected_accepted_ids: set[int] | None = None
+    receipt_expected_rejections: dict[str, int] | None = None
 
     if prediction_contract == "senex-order098-t0-audit-export-v2":
         if p_manifest.get("causal_hash_contract") != "CAUSAL_T0_ALLOWLIST_V2":
@@ -382,6 +384,34 @@ def verify_order098_artifacts(
                 for state in scoped_states
                 if state.get("status") == "PERSISTED"
             }
+
+            receipt_expected_accepted_ids = set()
+            receipt_expected_rejections = {}
+            for pred_id, state in receipt_by_id.items():
+                prediction = state.get("prediction")
+                if not isinstance(prediction, dict):
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 payload missing for id {pred_id}"
+                    )
+                receipt_projection = order098_export.project_t0_row_result({
+                    "id": pred_id,
+                    "ts": prediction.get("timestamp"),
+                    "symbol": prediction.get("symbol"),
+                    "audit": prediction.get("_audit"),
+                })
+                status = receipt_projection.get("status")
+                if status == "ERROR":
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 is not causally projectable for id {pred_id}"
+                    )
+                if status == "ACCEPTED":
+                    receipt_expected_accepted_ids.add(pred_id)
+                elif status == "EXCLUDED":
+                    reason = str(receipt_projection.get("reason") or "")
+                    receipt_expected_rejections[reason] = (
+                        receipt_expected_rejections.get(reason, 0) + 1
+                    )
+
             for row in prediction_rows:
                 pred_id = int(row.get("id"))
                 state = receipt_by_id.get(pred_id)
@@ -401,10 +431,19 @@ def verify_order098_artifacts(
                         f"receipt-bound T0 is not causally projectable for id {pred_id}"
                     )
                 receipt_row = receipt_projection.get("row") or {}
-                if (
-                    receipt_row.get("causal_t0_sha256")
-                    != row.get("causal_t0_sha256")
-                ):
+                receipt_visible = {
+                    "id": receipt_row.get("id"),
+                    "ts": receipt_row.get("ts"),
+                    "symbol": receipt_row.get("symbol"),
+                    "audit": receipt_row.get("audit"),
+                }
+                exported_visible = {
+                    "id": row.get("id"),
+                    "ts": row.get("ts"),
+                    "symbol": row.get("symbol"),
+                    "audit": row.get("audit"),
+                }
+                if receipt_visible != exported_visible:
                     raise ArtifactContractError(
                         f"receipt-bound T0 mismatch for id {pred_id}"
                     )
@@ -446,6 +485,20 @@ def verify_order098_artifacts(
             raise ArtifactContractError(
                 "prospective rejection accounting does not explain skipped_rows"
             )
+        if receipt_expected_accepted_ids is not None:
+            exported_ids = {int(row.get("id")) for row in prediction_rows}
+            if exported_ids != receipt_expected_accepted_ids:
+                raise ArtifactContractError(
+                    "prospective exported accepted rows do not match receipt classification"
+                )
+            normalized_rejections = {
+                str(reason): int(count)
+                for reason, count in rejection_counts.items()
+            }
+            if normalized_rejections != (receipt_expected_rejections or {}):
+                raise ArtifactContractError(
+                    "prospective rejection accounting does not match receipt classification"
+                )
 
         allowed_v2_keys = {
             "id",
