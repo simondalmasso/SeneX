@@ -1,5 +1,3 @@
-[Reading 1620 lines from start (total: 1620 lines, 0 remaining)]
-
 {
   "capital": 0,
   "contract": "senex-challenger-synthetic-benchmark-v1",
@@ -1620,5 +1618,3 @@
   "synthetic_only": true,
   "validation_contract": "PURGED_WALK_FORWARD_ONLY"
 }
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
