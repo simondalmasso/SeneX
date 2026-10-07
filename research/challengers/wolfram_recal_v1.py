@@ -6,7 +6,7 @@ from typing import Sequence
 
 import numpy as np
 
-from .common import ChallengerContractError, Observation, sha256_json, validate_observation
+from .common import ChallengerContractError, Observation, canonical_numeric, sha256_json, validate_observation
 
 
 CHALLENGER_ID = "WOLFRAM_RECAL_V1"
@@ -29,7 +29,7 @@ class RecalibrationModel:
     converged: bool
 
     def digest(self) -> str:
-        return sha256_json(asdict(self))
+        return sha256_json(canonical_numeric(asdict(self)))
 
 
 def _clip_probability(value: float, epsilon: float) -> float:
