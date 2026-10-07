@@ -49,7 +49,13 @@ class MarketOffsetModel:
     converged: bool
 
     def digest(self) -> str:
-        return sha256_json(canonical_numeric(asdict(self)))
+        # Hash the predictive artifact, not optimizer-path diagnostics.
+        # LAPACK/NumPy builds may converge in a different iteration count or
+        # differ below economically meaningful precision while producing the
+        # same model. Freeze the predictive parameters/hyperparameters only.
+        payload = asdict(self)
+        payload.pop("iterations", None)
+        return sha256_json(canonical_numeric(payload, digits=10))
 
 
 def _clip(value: float) -> float:
