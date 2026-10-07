@@ -1,1 +1,0 @@
-"""SENECIO ORACLE backend package."""

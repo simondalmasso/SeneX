@@ -1,5 +1,3 @@
-[Reading 524 lines from start (total: 524 lines, 0 remaining)]
-
 """
 SENECIO ORACLE — ACT XXV: PortfolioEngine (priority 1)
 ======================================================
@@ -524,5 +522,3 @@ class PortfolioEngine:
         """Hot-patch config (e.g. enable short_only_paper_mode)."""
         self.cfg.update(overrides)
         log.info("PortfolioEngine config updated: %s", overrides)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

@@ -1,5 +1,3 @@
-[Reading 1041 lines from start (total: 1041 lines, 0 remaining)]
-
 """
 SENECIO ORACLE — Real Oracle Runner (ACT XXIII)
 ================================================
@@ -1041,5 +1039,3 @@ async def stop() -> None:
     except Exception:
         pass
     log.info("oracle_runner stopped")
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

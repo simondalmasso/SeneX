@@ -1,5 +1,3 @@
-[Reading 109 lines from start (total: 109 lines, 0 remaining)]
-
 import pytest
 
 from senecio_polymarket.backend.portfolio.portfolio_engine import (
@@ -109,5 +107,3 @@ def test_net_edge_contract_requires_bound_cost_model_hash():
     )
 
     assert proposal is None
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

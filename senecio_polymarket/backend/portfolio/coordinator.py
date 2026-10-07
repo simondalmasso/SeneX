@@ -1,5 +1,3 @@
-[Reading 829 lines from start (total: 829 lines, 0 remaining)]
-
 """
 SENECIO ORACLE — ACT XXV: Portfolio Coordinator
 ================================================
@@ -829,5 +827,3 @@ class PortfolioCoordinator:
         except Exception as e:
             log.exception("exec self-test failed: %s", e)
             return {"verified": False, "error": str(e)}
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
