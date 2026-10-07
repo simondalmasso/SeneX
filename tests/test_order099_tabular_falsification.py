@@ -947,5 +947,3 @@ def test_direct_cli_help_runs_from_repo_root():
     )
     assert result.returncode == 0
     assert "ORDER099 preregistered tabular falsification" in result.stdout
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
