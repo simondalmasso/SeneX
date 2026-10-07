@@ -10,11 +10,14 @@ from .common import (
     ChallengerContractError,
     Observation,
     PurgedSplit,
+    canonical_numeric,
+    canonical_ts,
     logit,
     proper_score_report,
     sha256_json,
     sigmoid,
     validate_observation,
+    validate_purged_splits,
 )
 from .evaluation import fit_market_residual_stack
 from .recency_challenger_v1 import (
@@ -46,7 +49,7 @@ class MarketOffsetModel:
     converged: bool
 
     def digest(self) -> str:
-        return sha256_json(asdict(self))
+        return sha256_json(canonical_numeric(asdict(self)))
 
 
 def _clip(value: float) -> float:
@@ -157,17 +160,30 @@ def predict_market_offset(
     return [float(value) for value in _sigmoid(offset + design @ beta)]
 
 
+def _recency_vector_for_observation(
+    row: Observation,
+    record: Mapping[str, object],
+) -> list[float]:
+    if set(record) != {"cutoff_ts", "features"}:
+        raise ChallengerContractError("recency feature record must contain cutoff_ts and features")
+    if canonical_ts(str(record["cutoff_ts"])) != canonical_ts(row.decision_ts):
+        raise ChallengerContractError(
+            f"recency feature cutoff must match observation decision_ts for {row.market_id}"
+        )
+    features = record["features"]
+    if not isinstance(features, dict):
+        raise ChallengerContractError("recency feature payload must be an object")
+    return feature_vector(features)
+
+
 def evaluate_historical_folds(
     rows: Sequence[Observation],
-    recency_features: Mapping[str, dict[str, float]],
+    recency_features: Mapping[str, Mapping[str, object]],
     splits: Sequence[PurgedSplit],
 ) -> dict[str, dict]:
     if len({row.market_id for row in rows}) != len(rows):
         raise ChallengerContractError("historical challenger rows must be unique by market_id")
-    for row in rows:
-        validate_observation(row)
-    if not splits:
-        raise ChallengerContractError("at least one purged split is required")
+    validate_purged_splits(rows, splits)
 
     collected: dict[str, dict[str, list]] = {
         WOLFRAM_ID: {"labels": [], "market": [], "candidate": [], "folds": []},
@@ -194,7 +210,9 @@ def evaluate_historical_folds(
                 raise ChallengerContractError(
                     f"missing recency features for training market {row.market_id}"
                 )
-            train_features.append(feature_vector(recency_features[row.market_id]))
+            train_features.append(
+                _recency_vector_for_observation(row, recency_features[row.market_id])
+            )
         offset_model = fit_market_offset_model(
             [row.p_market for row in train_rows],
             train_features,
@@ -206,7 +224,9 @@ def evaluate_historical_folds(
                 raise ChallengerContractError(
                     f"missing recency features for test market {row.market_id}"
                 )
-            test_features.append(feature_vector(recency_features[row.market_id]))
+            test_features.append(
+                _recency_vector_for_observation(row, recency_features[row.market_id])
+            )
         recency_probs = predict_market_offset(offset_model, market, test_features)
 
         for challenger_id, probs, model_digest in (
@@ -246,8 +266,7 @@ def evaluate_market_residual_folds(
     """
     if len({row.market_id for row in rows}) != len(rows):
         raise ChallengerContractError("residual diagnostic rows must be unique by market_id")
-    if not splits:
-        raise ChallengerContractError("residual diagnostic requires purged splits")
+    validate_purged_splits(rows, splits)
 
     labels_all: list[int] = []
     market_all: list[float] = []
