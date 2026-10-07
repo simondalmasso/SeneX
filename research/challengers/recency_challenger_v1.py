@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -14,6 +16,33 @@ EXTRACTOR_ID = "SENEX_RECENCY_NORMALIZER_V1"
 LOOKBACK_1H_SECONDS = 3600
 LOOKBACK_6H_SECONDS = 6 * 3600
 ALLOWED_ZERO_SPEND_SOURCES = frozenset({"reddit", "hackernews", "github", "public_web"})
+
+NORMALIZER_CONTRACT = {
+    "id": EXTRACTOR_ID,
+    "version": 1,
+    "allowed_source_types": sorted(ALLOWED_ZERO_SPEND_SOURCES),
+    "topics": ["crypto", "macro", "other"],
+    "sentiment_range": [-1.0, 1.0],
+    "capture_time_rule": "published_at<=captured_at<=cutoff_ts",
+    "forbid_market_odds": True,
+    "required_provenance": [
+        "source",
+        "document_id",
+        "published_at",
+        "captured_at",
+        "content_sha256",
+        "extractor_id",
+        "extractor_sha256",
+    ],
+}
+NORMALIZER_SHA256 = hashlib.sha256(
+    json.dumps(
+        NORMALIZER_CONTRACT,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+).hexdigest()
 
 FEATURE_ORDER = (
     "document_count_6h",
@@ -89,6 +118,10 @@ def _validate_document(document: RecencyDocument, cutoff_ts: str) -> None:
         int(extractor_digest, 16)
     except ValueError as exc:
         raise ChallengerContractError("extractor_sha256 is invalid") from exc
+    if extractor_digest != NORMALIZER_SHA256:
+        raise ChallengerContractError(
+            "extractor_sha256 does not match frozen SENEX_RECENCY_NORMALIZER_V1"
+        )
 
     if type(document.is_breaking) is not bool or type(document.contains_market_odds) is not bool:
         raise ChallengerContractError("recency boolean fields must be bool")
