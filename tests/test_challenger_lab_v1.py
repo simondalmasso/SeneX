@@ -8,11 +8,14 @@ from pathlib import Path
 
 import pytest
 
+import research.challengers.common as challenger_common
 from research.challengers.common import (
     ChallengerContractError,
     Observation,
+    PurgedSplit,
     append_prospective_receipt,
     assert_historical_synthetic_only,
+    binary_label,
     calibration_report,
     load_manifest,
     manifest_sha256,
@@ -20,6 +23,7 @@ from research.challengers.common import (
     purged_walk_forward_splits,
     roc_auc,
     seal_prospective_receipt,
+    sha256_json,
 )
 from research.challengers.evaluation import (
     EvaluationContractError,
@@ -28,17 +32,22 @@ from research.challengers.evaluation import (
 )
 from research.challengers.recency_challenger_v1 import (
     CHALLENGER_ID as RECENCY_ID,
+    FEATURE_ORDER,
     NORMALIZER_SHA256,
     RecencyDocument,
     aggregate_features,
 )
 from research.challengers.selection import (
+    MarketOffsetModel,
+    evaluate_historical_folds,
     evaluate_market_residual_folds,
     select_candidates,
 )
 from research.challengers.synthetic_benchmark import run_synthetic
 from research.challengers.wolfram_recal_v1 import (
     CHALLENGER_ID as WOLFRAM_ID,
+    METHOD as WOLFRAM_METHOD,
+    RecalibrationModel,
     fit_recalibration,
     predict,
 )
@@ -474,3 +483,161 @@ def test_prospective_receipt_ledger_is_append_only_and_idempotent(tmp_path):
     other = seal_prospective_receipt(**conflicting)
     with pytest.raises(ChallengerContractError, match="identity conflict"):
         append_prospective_receipt(ledger, other)
+
+
+def _zero_recency_features() -> dict[str, float]:
+    return {name: 0.0 for name in FEATURE_ORDER}
+
+
+def test_recency_features_must_be_bound_to_each_observation_cutoff():
+    rows = _rows(48)
+    splits = purged_walk_forward_splits(rows, n_splits=1, min_train_size=20, embargo_seconds=0)
+    features = {
+        row.market_id: {"cutoff_ts": row.decision_ts, "features": _zero_recency_features()}
+        for row in rows
+    }
+    victim = rows[splits[0].test_indices[0]]
+    features[victim.market_id] = {
+        "cutoff_ts": _ts(datetime.fromisoformat(victim.decision_ts.replace("Z", "+00:00")), 1),
+        "features": _zero_recency_features(),
+    }
+    with pytest.raises(ChallengerContractError, match="recency feature cutoff"):
+        evaluate_historical_folds(rows, features, splits)
+
+
+def test_supplied_folds_are_revalidated_before_oos_evaluation():
+    rows = _rows(32)
+    features = {
+        row.market_id: {"cutoff_ts": row.decision_ts, "features": _zero_recency_features()}
+        for row in rows
+    }
+    invalid = PurgedSplit(
+        train_indices=tuple(range(20)),
+        test_indices=(19, 20, 21, 22),
+        test_start_ts=rows[19].decision_ts,
+        embargo_seconds=0,
+    )
+    with pytest.raises(ChallengerContractError, match="purged split"):
+        evaluate_historical_folds(rows, features, [invalid])
+
+
+def test_prospective_receipt_hash_cannot_bypass_contract_invariants():
+    manifest = load_manifest(MANIFESTS / "WOLFRAM_RECAL_V1.json")
+    valid = seal_prospective_receipt(
+        challenger_id=WOLFRAM_ID,
+        challenger_version="1",
+        source_commit="d" * 40,
+        manifest_sha256_value=manifest_sha256(manifest),
+        market_id="btc-forged-receipt",
+        cutoff_ts="2026-10-06T12:00:00Z",
+        outcome_not_before_ts="2026-10-06T12:05:00Z",
+        created_at="2026-10-06T12:00:01Z",
+        p_market=0.55,
+        candidate_probability=0.58,
+        input_features={"senex_raw_up": 0.61},
+        model_sha256="6" * 64,
+        output_sha256="4" * 64,
+    )
+    forged = dict(valid)
+    forged["live"] = True
+    payload = dict(forged)
+    payload.pop("receipt_sha256")
+    forged["receipt_sha256"] = sha256_json(payload)
+    from research.challengers.common import verify_prospective_receipt
+    assert verify_prospective_receipt(forged) is False
+
+
+def test_binary_label_rejects_fractional_numeric_values():
+    for value in (0.9, 1.8, -0.2):
+        with pytest.raises(ChallengerContractError, match="label must be 0 or 1"):
+            binary_label(value)
+
+
+def test_market_residual_stack_clips_endpoint_probabilities():
+    result = fit_market_residual_stack(
+        [0.0, 1.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 1.0],
+        [0, 1, 0, 1],
+    )
+    assert all(0.0 < value < 1.0 for value in result["probabilities"])
+
+
+def test_recency_aggregation_is_order_stable_under_cancellation():
+    cutoff = "2026-10-06T12:00:00Z"
+    sentiments = (1.0, 1e-16, -1.0)
+    docs = [
+        RecencyDocument(
+            source="reddit",
+            document_id=f"stable-{index}",
+            published_at=f"2026-10-06T11:0{index}:00Z",
+            captured_at=f"2026-10-06T11:0{index}:30Z",
+            topic="crypto",
+            sentiment=value,
+            is_breaking=False,
+            content_sha256=(str(index + 1) * 64)[:64],
+            extractor_id="SENEX_RECENCY_NORMALIZER_V1",
+            extractor_sha256=NORMALIZER_SHA256,
+        )
+        for index, value in enumerate(sentiments)
+    ]
+    first = aggregate_features(docs, cutoff_ts=cutoff)
+    second = aggregate_features([docs[0], docs[2], docs[1]], cutoff_ts=cutoff)
+    assert first == second
+
+
+def test_model_digests_use_canonical_numeric_precision():
+    a = MarketOffsetModel(
+        challenger_id=RECENCY_ID,
+        feature_names=tuple(FEATURE_ORDER),
+        intercept=0.12345678901231,
+        coefficients=tuple([0.0] * len(FEATURE_ORDER)),
+        l2=1e-4, iterations=5, converged=True,
+    )
+    b = MarketOffsetModel(
+        challenger_id=RECENCY_ID,
+        feature_names=tuple(FEATURE_ORDER),
+        intercept=0.12345678901239,
+        coefficients=tuple([0.0] * len(FEATURE_ORDER)),
+        l2=1e-4, iterations=5, converged=True,
+    )
+    assert a.digest() == b.digest()
+    wa = RecalibrationModel(
+        challenger_id=WOLFRAM_ID, method=WOLFRAM_METHOD,
+        intercept=0.12345678901231, slope=1.0, clip_epsilon=1e-6,
+        l2_to_identity=1e-6, iterations=5, converged=True,
+    )
+    wb = RecalibrationModel(
+        challenger_id=WOLFRAM_ID, method=WOLFRAM_METHOD,
+        intercept=0.12345678901239, slope=1.0, clip_epsilon=1e-6,
+        l2_to_identity=1e-6, iterations=5, converged=True,
+    )
+    assert wa.digest() == wb.digest()
+
+
+def test_new_receipt_ledger_syncs_parent_directory_on_posix(tmp_path, monkeypatch):
+    manifest = load_manifest(MANIFESTS / "WOLFRAM_RECAL_V1.json")
+    receipt = seal_prospective_receipt(
+        challenger_id=WOLFRAM_ID,
+        challenger_version="1",
+        source_commit="d" * 40,
+        manifest_sha256_value=manifest_sha256(manifest),
+        market_id="btc-dir-fsync",
+        cutoff_ts="2026-10-06T12:00:00Z",
+        outcome_not_before_ts="2026-10-06T12:05:00Z",
+        created_at="2026-10-06T12:00:01Z",
+        p_market=0.55,
+        candidate_probability=0.58,
+        input_features={"senex_raw_up": 0.61},
+        model_sha256="6" * 64,
+        output_sha256="4" * 64,
+    )
+    ledger = tmp_path / "nested" / "receipts.jsonl"
+    opened, synced, closed = [], [], []
+    monkeypatch.setattr(challenger_common, "POSIX_DIR_FSYNC", True)
+    monkeypatch.setattr(challenger_common.os, "open", lambda path, flags: opened.append(str(path)) or 999)
+    monkeypatch.setattr(challenger_common.os, "fsync", lambda fd: synced.append(fd))
+    monkeypatch.setattr(challenger_common.os, "close", lambda fd: closed.append(fd))
+    assert append_prospective_receipt(ledger, receipt) is True
+    assert str(ledger.parent) in opened
+    assert 999 in synced
+    assert 999 in closed
