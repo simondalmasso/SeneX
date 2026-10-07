@@ -1126,6 +1126,7 @@ async def _route_to_portfolio(prediction: dict, market_data: dict) -> None:
         last_price=last_price,
         vol_pct=vol_pct,
         win_rate_by_direction=win_rate_by_dir,
+        economic_edge_by_direction=None,
         ohlcv=ohlcv_rows,
         orderbook=orderbook_snap,
         funding_rate=funding_rate,
