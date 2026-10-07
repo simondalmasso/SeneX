@@ -226,6 +226,7 @@ async def _retry_pending_authority_persistence(
 ) -> dict[str, int]:
     """Boundedly retry original T0 persistence without retroactive PAPER routing."""
     from . import supabase_client
+    from .gptrader.sealer import seal_prediction_t0
     from .prediction_persistence import PredictionPersistenceStore
 
     receipt_store = store or PredictionPersistenceStore()
@@ -239,6 +240,25 @@ async def _retry_pending_authority_persistence(
         prediction = state.get("prediction")
         if not isinstance(prediction, dict):
             receipt_store.mark_failed(source_hash, "RETRY_MISSING_ORIGINAL_T0")
+            continue
+
+        try:
+            resealed = await asyncio.to_thread(seal_prediction_t0, prediction)
+        except Exception as exc:
+            receipt_store.mark_failed(
+                source_hash,
+                f"RETRY_SEAL_{type(exc).__name__}: {exc}",
+            )
+            continue
+
+        if (
+            resealed.get("packet_hash") != source_hash
+            or resealed.get("packet_id") != state.get("source_packet_id")
+        ):
+            receipt_store.mark_failed(
+                source_hash,
+                "RETRY_SEAL_IDENTITY_MISMATCH",
+            )
             continue
 
         try:
@@ -261,7 +281,7 @@ async def _retry_pending_authority_persistence(
         receipt_store.mark_persisted(source_hash, pred_id)
         persisted += 1
 
-    remaining = len(receipt_store.pending(limit=100))
+    remaining = int(receipt_store.summary().get("unresolved") or 0)
     return {
         "attempted": attempted,
         "persisted": persisted,
@@ -371,6 +391,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             # Only after durable receipt + idempotent seal do we record the
             # local candle-dedupe marker.
             await asyncio.to_thread(log_prediction, prediction, str(PREDICTIONS_PATH))
+            _state["predictions_count"] += 1
 
             try:
                 from .gptrader.transport import replicate_pending_t0
@@ -393,12 +414,12 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
                 "local dedupe marker/D1/PAPER/BINANCE_SIM routing skipped"
             )
 
-        # Update runtime state. The raw T0 count remains a generation count;
-        # canonical treatment is separately identified by authority_persisted.
+        # Update runtime state. predictions_count is the durable local-journal
+        # observation count and therefore increments only after log_prediction().
+        # Canonical treatment is separately identified by authority_persisted.
         _state["last_prediction_ts"] = prediction.get("timestamp")
         _state["last_prediction_symbol"] = prediction.get("symbol")
         _state["last_prediction_result"] = {k: v for k, v in prediction.items() if not k.startswith("_")}
-        _state["predictions_count"] += 1
         _state["exchange_used_last"] = exchange_used
         _state["last_authority_persisted"] = bool(authority_persisted)
         _state["last_error"] = (
