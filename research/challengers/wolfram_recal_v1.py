@@ -1,5 +1,3 @@
-[Reading 192 lines from start (total: 192 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import math
@@ -192,5 +190,3 @@ def fit_from_observations(
         probabilities.append(row.senex_raw_up)
         labels.append(row.label)
     return fit_recalibration(probabilities, labels)
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
