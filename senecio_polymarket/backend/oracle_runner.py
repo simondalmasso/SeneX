@@ -1,3 +1,5 @@
+[Reading 1041 lines from start (total: 1041 lines, 0 remaining)]
+
 """
 SENECIO ORACLE — Real Oracle Runner (ACT XXIII)
 ================================================
@@ -976,6 +978,9 @@ async def _route_to_portfolio(prediction: dict, market_data: dict) -> None:
         last_price=last_price,
         vol_pct=vol_pct,
         win_rate_by_direction=win_rate_by_dir,
+        # No validated net-economic-edge artifact is wired yet.
+        # Fail closed in PortfolioEngine until research produces one.
+        economic_edge_by_direction=None,
         ohlcv=ohlcv_rows,
         orderbook=orderbook_snap,
         funding_rate=funding_rate,
@@ -1036,3 +1041,5 @@ async def stop() -> None:
     except Exception:
         pass
     log.info("oracle_runner stopped")
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

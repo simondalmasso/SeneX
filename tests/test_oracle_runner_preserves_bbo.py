@@ -1,3 +1,5 @@
+[Reading 45 lines from start (total: 45 lines, 0 remaining)]
+
 import asyncio
 from unittest.mock import patch
 
@@ -42,3 +44,6 @@ def test_synthetic_book_preserves_observed_best_bid_and_ask():
     assert book["bids"][0][0] == 99.0
     assert book["asks"][0][0] == 101.0
     assert book["asks"][0][0] > book["bids"][0][0]
+    assert coord.kwargs["economic_edge_by_direction"] is None
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

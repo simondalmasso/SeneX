@@ -1,3 +1,5 @@
+[Reading 829 lines from start (total: 829 lines, 0 remaining)]
+
 """
 SENECIO ORACLE — ACT XXV: Portfolio Coordinator
 ================================================
@@ -187,6 +189,7 @@ class PortfolioCoordinator:
         last_price: Optional[float] = None,
         vol_pct: Optional[float] = None,
         win_rate_by_direction: Optional[dict[str, float]] = None,
+        economic_edge_by_direction: Optional[dict[str, dict[str, Any]]] = None,
         book_depth_usd: Optional[float] = None,
         # ACT-XXVI additions
         ohlcv: Optional[list[list]] = None,
@@ -298,6 +301,7 @@ class PortfolioCoordinator:
             state=self._portfolio_state,
             vol_pct=vol_pct,
             win_rate_by_direction=win_rate_by_direction,
+            economic_edge_by_direction=economic_edge_by_direction,
         )
         if proposal is None:
             self._persist_control_state()
@@ -825,3 +829,5 @@ class PortfolioCoordinator:
         except Exception as e:
             log.exception("exec self-test failed: %s", e)
             return {"verified": False, "error": str(e)}
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]

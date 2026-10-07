@@ -1,3 +1,5 @@
+[Reading 524 lines from start (total: 524 lines, 0 remaining)]
+
 """
 SENECIO ORACLE — ACT XXV: PortfolioEngine (priority 1)
 ======================================================
@@ -5,7 +7,7 @@ SENECIO ORACLE — ACT XXV: PortfolioEngine (priority 1)
 Converts oracle predictions into sized, exposure-controlled trade proposals.
 
 Responsibilities (per ACT-XXV spec):
-  - position sizing            : risk-fractional sizing keyed off confidence + volatility
+  - position sizing            : fixed base risk gated by validated net economic edge
   - exposure control           : gross + net exposure caps, per-symbol cap
   - multi-position support     : up to N concurrent positions across symbols
   - portfolio heat             : sum of |risk_per_position| / equity capped at heat_max
@@ -21,7 +23,7 @@ Inputs (prediction dict from oracle_runner):
     "symbol": "ETH/USDT",
     "prediction": "LONG" | "SHORT" | "FLAT",
     "confidence": 0.0..1.0,
-    "ev": float,
+    "ev": float,                 # legacy/raw diagnostic; NOT sizing authority
     "price_now": float,
     "_audit": {...},
     ...
@@ -39,19 +41,21 @@ Outputs (TradeProposal):
     "risk_per_unit": float,       # |entry - stop|
     "risk_usd": float,            # size_qty * risk_per_unit (the $ at risk if stop hit)
     "confidence": float,          # passthrough
-    "ev": float,                  # passthrough
+    "ev": float,                  # validated net economic edge as return fraction
     "source": "oracle",           # provenance tag
     "prediction_id": str | int,   # FK to oracle_predictions row
-    "rationale": str,             # why this size (e.g. "kelly_q=0.12 cap=2.0%")
+    "rationale": str,             # validated-edge sizing provenance
   }
 
 Sizing model:
-  base_risk_pct  = 0.5%  of equity  (per-trade risk budget)
-  confidence_mult = sigmoid((conf - 0.50) * 8)  → 0.12..0.99
-  kelly_fraction  = clamp(2*win_rate - 1 + edge_adjust, 0, 0.25)
-  sizing_pct      = min(base_risk_pct * confidence_mult, max_pct=2.0%)
-  stop_distance   = max(volatility_stop, fixed_2pct)
-  size_qty        = sizing_pct * equity / stop_distance
+  validated_edge = explicit VALIDATED_OOS_NET_EDGE contract with CI95_low > 0
+  base_risk_pct  = 0.5% of equity (fixed initial risk budget)
+  win_rate       = diagnostic only; cannot authorize size
+  confidence     = diagnostic/filter only; cannot scale economic risk
+  kelly          = disabled until a validated payoff distribution exists
+  sizing_pct     = min(base_risk_pct, max_pct=2.0%)
+  stop_distance  = max(volatility_stop, fixed_2pct)
+  size_qty       = sizing_pct * equity / stop_distance
 
 Exposure caps:
   max_concurrent     = 3
@@ -78,8 +82,8 @@ DEFAULTS: dict[str, Any] = {
     "starting_equity_usd": 10_000.0,
     "base_risk_pct":           0.005,   # 0.5% per trade
     "max_risk_pct_per_trade":  0.020,   # hard cap at 2.0% per trade
-    "kelly_cap":               0.25,    # never deploy more than 25% of Kelly
-    "kelly_floor":             0.0,     # negative Kelly → no trade
+    "kelly_cap":               0.25,    # legacy compatibility; not sizing authority
+    "kelly_floor":             0.0,     # legacy compatibility; not sizing authority
     # Exposure caps
     "max_concurrent":          3,
     "max_per_symbol":          1,
@@ -166,9 +170,8 @@ class PortfolioEngine:
         self.cfg = {**DEFAULTS, **(config or {})}
         # ACT-XXVI: optional MetaLabeler for LONG-side secondary filtering.
         # If set, build_proposal() consults it AFTER computing stop/target
-        # but BEFORE final Kelly sizing. If the label says take_trade=False,
-        # the proposal is dropped. If True, the proposal's confidence is
-        # multiplied by the labeler's confidence_mult.
+        # but BEFORE fixed-risk sizing. It may reject a proposal, but it cannot
+        # create economic edge or increase the fixed risk budget.
         # Stays None by default so existing tests / behavior are unchanged.
         self.meta_labeler = None
         log.info(
@@ -187,6 +190,7 @@ class PortfolioEngine:
         state: PortfolioState,
         vol_pct: Optional[float] = None,
         win_rate_by_direction: Optional[dict[str, float]] = None,
+        economic_edge_by_direction: Optional[dict[str, dict[str, Any]]] = None,
     ) -> Optional[TradeProposal]:
         """Convert a prediction dict into a sized TradeProposal.
 
@@ -197,22 +201,24 @@ class PortfolioEngine:
           - symbol already has an open position (max_per_symbol)
           - gross/net/heat exposure would be breached
           - sizing would round to zero qty
-          - Kelly says no-edge (kelly_fraction <= kelly_floor)
+          - validated net economic edge is missing/invalid/non-positive
 
         Args:
             prediction: oracle prediction dict
             state: live PortfolioState (read-only)
             vol_pct: realized volatility as fraction (e.g. 0.012 for 1.2%) —
                      used to size the stop. If None, uses fixed_stop_pct.
-            win_rate_by_direction: e.g. {"LONG": 0.49, "SHORT": 0.56}. Used
-                     to compute Kelly fraction. If None, uses a flat 0.50.
+            win_rate_by_direction: diagnostic-only directional win rates.
+                     These values MUST NOT authorize sizing.
+            economic_edge_by_direction: validated OOS net-edge contracts keyed
+                     by LONG/SHORT. Missing/invalid contracts fail closed.
         """
         cfg = self.cfg
         direction = (prediction.get("prediction") or "").upper()
         symbol = prediction.get("symbol") or ""
         price_now = float(prediction.get("price_now") or 0)
         confidence = float(prediction.get("confidence") or 0)
-        ev = float(prediction.get("ev") or 0)
+        raw_ev_diagnostic = float(prediction.get("ev") or 0)
         pred_id = prediction.get("id") or prediction.get("timestamp")
 
         # 1) Direction gating
@@ -231,6 +237,25 @@ class PortfolioEngine:
         if price_now <= 0:
             self._log_skip(symbol, direction, f"invalid price_now={price_now}")
             return None
+
+        # 2.5) Net economic-edge authority gate.
+        # Directional win rate and raw prediction.ev remain diagnostics only.
+        wr_diag = (win_rate_by_direction or {}).get(direction, 0.50)
+        edge_contract = self._validated_net_edge_contract(
+            economic_edge_by_direction,
+            direction,
+        )
+        if edge_contract is None:
+            self._log_skip(
+                symbol,
+                direction,
+                f"validated_net_edge_required wr_diag={wr_diag:.3f}",
+            )
+            return None
+        economic_edge_net_bps = edge_contract["economic_edge_net_bps"]
+        ci95_low_net_bps = edge_contract["ci95_low_net_bps"]
+        execution_cost_bps = edge_contract["execution_cost_bps"]
+        economic_ev_fraction = economic_edge_net_bps / 10_000.0
 
         # 3) Concurrency + per-symbol caps
         if state.open_count >= cfg["max_concurrent"]:
@@ -260,16 +285,16 @@ class PortfolioEngine:
             return None
 
         # 4.5) ACT-XXVI: Meta-labeling (LONG-only secondary filter)
-        # If a MetaLabeler is attached, run it BEFORE Kelly sizing. A REJECT
-        # verdict drops the proposal entirely; an ACCEPT verdict multiplies
-        # the effective confidence (which then feeds the Kelly sizing below).
+        # If a MetaLabeler is attached, run it before fixed-risk sizing. A REJECT
+        # verdict drops the proposal entirely. Confidence remains diagnostic and
+        # may affect later risk filtering, but it does not scale economic risk here.
         meta_label = None
         if self.meta_labeler is not None:
             try:
                 # Extract context for the labeler
                 regime_4h = (prediction.get("_audit") or {}).get("regime_4h") or "NEUTRAL"
                 spread_bps = (prediction.get("_audit") or {}).get("spread_bps", 0.0) or 0.0
-                ev_bps = ev * 10_000  # preserve economic sign when converting to bps
+                ev_bps = economic_edge_net_bps
                 meta_label = self.meta_labeler.evaluate(
                     direction=direction,
                     conviction=confidence,
@@ -298,25 +323,18 @@ class PortfolioEngine:
             except Exception as e:
                 log.warning("meta_labeler evaluate failed (non-fatal): %s", e)
 
-        # 5) Confidence-shaped risk fraction
+        # 5) Confidence remains diagnostic; it cannot scale economic risk.
         conf_mult = self._sigmoid(
             (confidence - cfg["conf_mid"]) * cfg["conf_k"]
-        )  # → 0..1
-        risk_pct = cfg["base_risk_pct"] * conf_mult
+        )
 
-        # 6) Kelly cap (uses per-direction win rate if available)
-        wr = (win_rate_by_direction or {}).get(direction, 0.50)
-        kelly = max(0.0, 2 * wr - 1)   # full-Kelly fraction
-        kelly = min(kelly, cfg["kelly_cap"])
-        if kelly <= cfg["kelly_floor"]:
-            self._log_skip(
-                symbol, direction,
-                f"no kelly edge wr={wr:.3f} kelly={kelly:.3f}",
-            )
-            return None
-        # Use min of confidence-shaped and Kelly-capped risk
-        risk_pct = min(risk_pct, kelly * 0.10)   # 10% of Kelly deployed per trade
-        risk_pct = min(risk_pct, cfg["max_risk_pct_per_trade"])
+        # 6) Validated-edge fixed-risk sizing.
+        # Fractional Kelly is intentionally disabled until a validated payoff
+        # distribution (not a win-rate point estimate) exists.
+        risk_pct = min(
+            cfg["base_risk_pct"],
+            cfg["max_risk_pct_per_trade"],
+        )
 
         # 7) Size in USD = risk_pct * equity, then convert to qty via stop distance
         risk_usd = risk_pct * state.equity
@@ -343,8 +361,17 @@ class PortfolioEngine:
             return None
 
         rationale = (
-            f"conf={confidence:.3f} conf_mult={conf_mult:.3f} "
-            f"wr={wr:.3f} kelly={kelly:.3f} risk_pct={risk_pct*100:.3f}% "
+            "sizing_source=VALIDATED_NET_EDGE_FIXED_RISK "
+            f"edge_net_bps={economic_edge_net_bps:.3f} "
+            f"ci95_low_net_bps={ci95_low_net_bps:.3f} "
+            f"execution_cost_bps={execution_cost_bps:.3f} "
+            f"wr_diag={wr_diag:.3f} "
+            f"raw_ev_diag={raw_ev_diagnostic:.8f} "
+            f"edge_method={edge_contract['method']} "
+            f"edge_artifact_sha256={edge_contract['artifact_sha256']} "
+            f"cost_model_sha256={edge_contract['cost_model_sha256']} "
+            f"conf_diag={confidence:.3f} conf_mult_diag={conf_mult:.3f} "
+            f"risk_pct={risk_pct*100:.3f}% "
             f"stop_pct={stop_pct*100:.2f}% vol_stop={vol_stop*100:.2f}%"
             + (f" meta={meta_label.barrier_hit_prediction}/{meta_label.reward_risk:.2f}" if meta_label else "")
         )
@@ -360,7 +387,7 @@ class PortfolioEngine:
             risk_per_unit=round(risk_per_unit, 6),
             risk_usd=round(risk_usd, 2),
             confidence=round(confidence, 4),
-            ev=round(ev, 8),
+            ev=round(economic_ev_fraction, 8),
             prediction_id=pred_id,
             rationale=rationale,
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -424,6 +451,64 @@ class PortfolioEngine:
     # -------- helpers --------
 
     @staticmethod
+    def _validated_net_edge_contract(
+        economic_edge_by_direction: Optional[dict[str, dict[str, Any]]],
+        direction: str,
+    ) -> Optional[dict[str, Any]]:
+        contract = (economic_edge_by_direction or {}).get(direction)
+        if not isinstance(contract, dict):
+            return None
+
+        semantics = str(contract.get("semantics") or "")
+        target = str(contract.get("target") or "")
+        method = str(contract.get("method") or "").strip()
+        artifact_sha = str(contract.get("artifact_sha256") or "").strip().lower()
+        cost_model_sha = str(contract.get("cost_model_sha256") or "").strip().lower()
+
+        try:
+            horizon_seconds = int(contract.get("horizon_seconds"))
+            edge_bps = float(contract.get("economic_edge_net_bps"))
+            ci95_low_bps = float(contract.get("ci95_low_net_bps"))
+            execution_cost_bps = float(contract.get("execution_cost_bps"))
+        except (TypeError, ValueError):
+            return None
+
+        def _valid_sha256(value: str) -> bool:
+            return (
+                len(value) == 64
+                and all(ch in "0123456789abcdef" for ch in value)
+            )
+
+        if (
+            semantics != "VALIDATED_OOS_NET_EDGE"
+            or target != "NET_RETURN_1H"
+            or horizon_seconds != 3600
+            or not method
+            or not _valid_sha256(artifact_sha)
+            or not _valid_sha256(cost_model_sha)
+            or not math.isfinite(edge_bps)
+            or not math.isfinite(ci95_low_bps)
+            or not math.isfinite(execution_cost_bps)
+            or edge_bps <= 0.0
+            or ci95_low_bps <= 0.0
+            or ci95_low_bps > edge_bps
+            or execution_cost_bps < 0.0
+        ):
+            return None
+
+        return {
+            "semantics": semantics,
+            "target": target,
+            "horizon_seconds": horizon_seconds,
+            "economic_edge_net_bps": edge_bps,
+            "ci95_low_net_bps": ci95_low_bps,
+            "execution_cost_bps": execution_cost_bps,
+            "method": method,
+            "artifact_sha256": artifact_sha,
+            "cost_model_sha256": cost_model_sha,
+        }
+
+    @staticmethod
     def _sigmoid(x: float) -> float:
         if x >= 0:
             z = math.exp(-x)
@@ -439,3 +524,5 @@ class PortfolioEngine:
         """Hot-patch config (e.g. enable short_only_paper_mode)."""
         self.cfg.update(overrides)
         log.info("PortfolioEngine config updated: %s", overrides)
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
