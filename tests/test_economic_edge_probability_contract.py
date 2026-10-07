@@ -96,3 +96,73 @@ def test_compute_ev_rejects_calibrated_probability_without_valid_provenance():
 
     assert result["tradeable"] is False
     assert result["reason"] == "UNVALIDATED_WIN_PROBABILITY"
+
+
+def test_market_friction_layer_consumes_calibrated_model_ev_without_recomputing_probability():
+    class FakeMarketEV:
+        def __init__(self):
+            self.model_ev = None
+
+        def compute_market_ev(self, **kwargs):
+            self.model_ev = kwargs["model_ev"]
+            return {"market_ev": kwargs["model_ev"]}
+
+    core = SingleDecisionCore(min_ev_to_trade=0.001)
+    fake = FakeMarketEV()
+    core.market_ev = fake
+    features = _raw_features()
+    features.update(
+        {
+            "p_win_calibrated": 0.90,
+            "p_win_calibrated_provenance": {
+                "probability_semantics": "VALIDATED_OOS_PROBABILITY",
+                "method": "PLATT_V1",
+                "artifact_sha256": "c" * 64,
+            },
+        }
+    )
+
+    result = core.compute_ev(
+        features,
+        _risk_filter(),
+        _market_state(),
+        slippage_bps=0.0,
+    )
+
+    expected_model_ev = (0.90 * 0.024) - (0.10 * 0.016) - 0.0004
+    assert abs(fake.model_ev - expected_model_ev) < 1e-12
+    assert abs(result["adjusted_ev"] - expected_model_ev) < 1e-12
+
+
+def test_hold_reason_propagates_unvalidated_probability_gate():
+    core = SingleDecisionCore(min_confidence=0.40)
+    features = _raw_features()
+    ev_result = core.compute_ev(
+        features,
+        _risk_filter(),
+        _market_state(),
+        slippage_bps=0.0,
+    )
+    feasibility = core.check_execution_feasibility(
+        ev_result,
+        {
+            "liquidity_quality": 1.0,
+            "slippage_bps": 0.0,
+            "latency_ms": 100.0,
+            "spread_bps": 1.0,
+        },
+    )
+
+    action = core.produce_action(
+        features,
+        _risk_filter(),
+        ev_result,
+        feasibility,
+        {
+            **_market_state(),
+            "liquidity_quality": 1.0,
+        },
+    )
+
+    assert action["action"] == "HOLD"
+    assert action["reason"] == "UNVALIDATED_WIN_PROBABILITY"
