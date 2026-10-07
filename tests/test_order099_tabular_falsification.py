@@ -989,3 +989,62 @@ def test_direct_cli_help_runs_from_repo_root():
     )
     assert result.returncode == 0
     assert "ORDER099 preregistered tabular falsification" in result.stdout
+
+def test_required_v2_recomputes_full_receipt_classification_not_declared_rejections(tmp_path):
+    from senecio_polymarket.backend.prediction_persistence import (
+        PredictionPersistenceStore,
+    )
+
+    _, m = _modules()
+    start = 1791069600
+    row1 = _t0_row(1, start_ts=start, condition_id="cond-a")
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [row1],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    receipt_path = _bind_v2_receipt_artifact(tmp_path, artifacts)
+
+    row2 = _t0_row(2, start_ts=start + 300, condition_id="cond-b")
+    store = PredictionPersistenceStore(path=receipt_path)
+    packet_hash = "e" * 64
+    store.enqueue(
+        {
+            "packet_id": "gptrader-t0-" + "e" * 24,
+            "packet_hash": packet_hash,
+            "packet_seq": 2,
+        },
+        {
+            "timestamp": row2["ts"],
+            "symbol": row2["symbol"],
+            "_audit": row2["audit"],
+        },
+    )
+    store.mark_persisted(packet_hash, 2)
+
+    _predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    data["fetched_rows"] = 2
+    data["projected_rows"] = 1
+    data["skipped_rows"] = 1
+    data["rejection_counts"] = {"POLYMARKET_NOT_ELIGIBLE": 1}
+    data["snapshot_end_ts"] = row2["ts"]
+    data["snapshot_max_prediction_id"] = 2
+    lineage = data["source_to_d1_lineage"]
+    lineage["receipt_file_sha256"] = _sha256_file(receipt_path)
+    lineage["window_end_ts"] = row2["ts"]
+    lineage["expected_generated_t0"] = 2
+    lineage["persisted_t0"] = 2
+    lineage["unresolved_t0"] = 0
+    lineage["fetched_d1_rows"] = 2
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(
+        m.ArtifactContractError,
+        match="exported accepted rows do not match receipt classification",
+    ):
+        m.verify_order098_artifacts(
+            *artifacts,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+            persistence_receipts_path=receipt_path,
+        )
