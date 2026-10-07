@@ -42,3 +42,4 @@ def test_synthetic_book_preserves_observed_best_bid_and_ask():
     assert book["bids"][0][0] == 99.0
     assert book["asks"][0][0] == 101.0
     assert book["asks"][0][0] > book["bids"][0][0]
+    assert coord.kwargs["economic_edge_by_direction"] is None
