@@ -60,6 +60,39 @@ def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _fsync_parent(path: Path) -> None:
+    if os.name == "nt":
+        return
+    fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def snapshot_receipt_ledger(source_path: Path, snapshot_path: Path) -> Path:
+    """Freeze the append-only receipt ledger into immutable snapshot bytes."""
+    if source_path.resolve() == snapshot_path.resolve():
+        raise ExportContractError("receipt snapshot must differ from live ledger path")
+    if not source_path.exists():
+        raise ExportContractError(f"source-to-D1 receipt file missing: {source_path}")
+    raw = source_path.read_bytes()
+    if not raw or not raw.endswith(b"\n"):
+        raise ExportContractError("source-to-D1 receipt ledger is not durably line-terminated")
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(snapshot_path, "xb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as exc:
+        raise ExportContractError(
+            f"prospective receipt snapshot already exists: {snapshot_path}"
+        ) from exc
+    _fsync_parent(snapshot_path)
+    return snapshot_path
+
+
 def _normalize_symbol(value: object) -> str:
     return str(value or "").upper().replace("/", "").replace("-", "").strip()
 
@@ -484,22 +517,13 @@ def validate_persistence_lineage(
 
         receipt_binding = _lineage_t0_binding(receipt_row)
         d1_binding = _lineage_t0_binding(fetched_by_id[pred_id])
-        if (
-            _sha256_text(_canonical_json(receipt_binding))
-            != _sha256_text(_canonical_json(d1_binding))
-        ):
+        # Python structural equality intentionally treats JSON-equivalent
+        # numeric representations (for example 0 and 0.0) as the same value.
+        # Hashing their raw JSON spellings would create false lineage breaks.
+        if receipt_binding != d1_binding:
             raise ExportContractError(
                 f"receipt/D1 causal T0 mismatch for id {pred_id}"
             )
-
-        if receipt_projection["status"] == "ACCEPTED":
-            if (
-                receipt_projection["row"]["causal_t0_sha256"]
-                != d1_projection["row"]["causal_t0_sha256"]
-            ):
-                raise ExportContractError(
-                    f"receipt/D1 causal T0 mismatch for id {pred_id}"
-                )
 
     return {
         "contract": "senex-source-to-d1-lineage-v1",
@@ -516,9 +540,13 @@ def validate_persistence_lineage(
 def ensure_prospective_output_paths_available(
     output_path: Path,
     manifest_path: Path,
+    receipt_snapshot_path: Path | None = None,
 ) -> None:
     """Prospective artifacts are immutable: never replace existing paths."""
-    existing = [path for path in (output_path, manifest_path) if path.exists()]
+    paths = [output_path, manifest_path]
+    if receipt_snapshot_path is not None:
+        paths.append(receipt_snapshot_path)
+    existing = [path for path in paths if path.exists()]
     if existing:
         raise ExportContractError(
             "prospective snapshot path already exists; choose a new immutable path: "
@@ -671,6 +699,11 @@ def main() -> int:
     args = parser.parse_args()
 
     prospective_v2 = args.max_prediction_id is not None
+    receipt_snapshot_path = (
+        args.output.with_name(f"{args.output.stem}.persistence_receipts.jsonl")
+        if prospective_v2
+        else None
+    )
     if prospective_v2:
         if not args.start_ts:
             parser.error("--start-ts is required with --max-prediction-id")
@@ -680,7 +713,11 @@ def main() -> int:
             parser.error("--persistence-receipts is required with --max-prediction-id")
         if _timestamp_epoch(args.end_ts) < _timestamp_epoch(args.start_ts):
             parser.error("--end-ts must be at or after --start-ts")
-        ensure_prospective_output_paths_available(args.output, args.manifest)
+        ensure_prospective_output_paths_available(
+            args.output,
+            args.manifest,
+            receipt_snapshot_path,
+        )
     elif args.start_ts or args.end_ts or args.persistence_receipts is not None:
         parser.error("--start-ts/--end-ts/--persistence-receipts require --max-prediction-id")
 
@@ -693,6 +730,14 @@ def main() -> int:
     )
     if not api_key:
         parser.error("SUPABASE_READ_KEY or SUPABASE_KEY is required")
+
+    if prospective_v2:
+        assert args.persistence_receipts is not None
+        assert receipt_snapshot_path is not None
+        snapshot_receipt_ledger(
+            args.persistence_receipts,
+            receipt_snapshot_path,
+        )
 
     base_url = source_url.rstrip("/") + "/rest/v1"
     with httpx.Client(
@@ -713,12 +758,16 @@ def main() -> int:
 
     source_to_d1_lineage = None
     if prospective_v2:
+        assert receipt_snapshot_path is not None
         source_to_d1_lineage = validate_persistence_lineage(
-            receipt_path=args.persistence_receipts,
+            receipt_path=receipt_snapshot_path,
             fetched_rows=fetched,
             symbol=args.symbol,
             start_ts=args.start_ts,
             end_ts=args.end_ts,
+        )
+        source_to_d1_lineage["receipt_artifact_filename"] = (
+            receipt_snapshot_path.name
         )
 
     projection_results = [project_t0_row_result(row) for row in fetched]
@@ -780,6 +829,9 @@ def main() -> int:
         "skipped_rows": len(fetched) - len(projected),
         "output": str(args.output),
         "manifest": str(args.manifest),
+        "receipt_snapshot": (
+            str(receipt_snapshot_path) if receipt_snapshot_path is not None else None
+        ),
     }, sort_keys=True))
     return 0 if projected else 2
 
