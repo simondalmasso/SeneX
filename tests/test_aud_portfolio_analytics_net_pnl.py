@@ -1,5 +1,3 @@
-[Reading 59 lines from start (total: 59 lines, 0 remaining)]
-
 from senecio_polymarket.backend.portfolio.portfolio_analytics import PortfolioAnalytics
 
 
@@ -59,5 +57,3 @@ def test_portfolio_analytics_does_not_double_subtract_fees_from_realized_pnl():
     assert report["total_return_pct"] == 0.2
     assert report["expectancy_usd"] == 1.0
     assert report["expectancy_usd"] == report["net_pnl_usd"] / report["n_trades"]
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
