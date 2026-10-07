@@ -28,12 +28,12 @@ def _synthetic_fixture(
     *,
     n_rows: int = 180,
     seed: int = 7,
-) -> tuple[list[Observation], dict[str, dict[str, float]]]:
+) -> tuple[list[Observation], dict[str, dict[str, object]]]:
     """Deterministic bug-finding fixture. It is not market evidence."""
     rng = random.Random(seed)
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     rows: list[Observation] = []
-    features: dict[str, dict[str, float]] = {}
+    features: dict[str, dict[str, object]] = {}
 
     for index in range(n_rows):
         decision = start + timedelta(hours=index)
@@ -72,7 +72,10 @@ def _synthetic_fixture(
                 "missing_all_sources": 0.0,
             }
         )
-        features[market_id] = payload
+        features[market_id] = {
+            "cutoff_ts": decision.isoformat().replace("+00:00", "Z"),
+            "features": payload,
+        }
 
     return rows, features
 
