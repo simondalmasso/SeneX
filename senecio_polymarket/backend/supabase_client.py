@@ -1,3 +1,5 @@
+[Reading 1629 lines from start (total: 1629 lines, 0 remaining)]
+
 """SENEX R7B runtime overlay candidate for backend.supabase_client.
 
 NON-PRODUCTION CANDIDATE. Baseline authority is the byte-exact R7A runtime.
@@ -365,14 +367,24 @@ async def insert_prediction(prediction: dict) -> Optional[dict]:
         r = await c.post(f"/{SUPABASE_TABLE}", json=row)
         if r.status_code in (200, 201):
             data = r.json()
-            if isinstance(data, list) and data:
-                inserted = data[0]
-                log.info("supabase insert OK id=%s", inserted.get("id"))
-                persist_authority_row_local(inserted)
-                return inserted
-            return data
+            inserted = data[0] if isinstance(data, list) and data else data
+            if not isinstance(inserted, dict):
+                raise PredictionPersistenceConflictError(
+                    "authority insert acknowledgement is not an object"
+                )
+            expected = _persistence_t0_projection(prediction, persisted=False)
+            actual = _persistence_t0_projection(inserted, persisted=True)
+            if actual != expected:
+                raise PredictionPersistenceConflictError(
+                    "authority insert acknowledgement conflicts with generated T0"
+                )
+            log.info("supabase insert OK id=%s", inserted.get("id"))
+            persist_authority_row_local(inserted)
+            return inserted
         log.error("supabase insert failed: %s %s", r.status_code, r.text[:300])
         return None
+    except PredictionPersistenceConflictError:
+        raise
     except Exception as e:
         log.error("supabase insert error: %s", e)
         return None
@@ -1617,3 +1629,5 @@ async def close() -> None:
     if _client and not _client.is_closed:
         await _client.aclose()
         _client = None
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
