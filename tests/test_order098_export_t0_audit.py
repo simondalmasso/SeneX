@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -60,6 +63,35 @@ def _row(row_id=1, *, outcome="WIN", audit_as_text=False):
         "outcome": outcome,
         "audit": json.dumps(audit) if audit_as_text else audit,
     }
+
+
+def test_direct_module_bootstraps_repo_root_before_backend_import(tmp_path):
+    code = (
+        "import runpy\n"
+        "from pathlib import Path\n"
+        f"m = runpy.run_path({str(MODULE_PATH)!r})\n"
+        "try:\n"
+        "    m['validate_persistence_lineage']("
+        "receipt_path=Path('missing.jsonl'), "
+        "fetched_rows=[{'id': 1}], "
+        "symbol='BTCUSDT', "
+        "start_ts='2026-10-06T18:00:00Z', "
+        "end_ts='2026-10-06T18:00:00Z')\n"
+        "except m['ExportContractError']:\n"
+        "    print('OK')\n"
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = ""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "OK"
 
 
 def test_projection_exports_only_order097_t0_fields_and_ignores_outcome():
