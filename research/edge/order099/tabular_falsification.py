@@ -35,6 +35,7 @@ import numpy as np
 from scipy.stats import binomtest
 
 from research.edge.order097 import market_prior_calibration as order097
+from research.edge.order098 import export_t0_audit as order098_export
 from research.edge.order098 import polymarket_5m_resolutions as order098_resolutions
 from senecio_polymarket.backend.research.statistical_validation import (
     multiple_hypothesis_correction,
@@ -375,6 +376,38 @@ def verify_order098_artifacts(
                 raise ArtifactContractError(
                     "prospective exported rows are not receipt-bound"
                 )
+
+            receipt_by_id = {
+                int(state["d1_prediction_id"]): state
+                for state in scoped_states
+                if state.get("status") == "PERSISTED"
+            }
+            for row in prediction_rows:
+                pred_id = int(row.get("id"))
+                state = receipt_by_id.get(pred_id)
+                prediction = state.get("prediction") if isinstance(state, dict) else None
+                if not isinstance(prediction, dict):
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 payload missing for id {pred_id}"
+                    )
+                receipt_projection = order098_export.project_t0_row_result({
+                    "id": pred_id,
+                    "ts": prediction.get("timestamp"),
+                    "symbol": prediction.get("symbol"),
+                    "audit": prediction.get("_audit"),
+                })
+                if receipt_projection.get("status") != "ACCEPTED":
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 is not causally projectable for id {pred_id}"
+                    )
+                receipt_row = receipt_projection.get("row") or {}
+                if (
+                    receipt_row.get("causal_t0_sha256")
+                    != row.get("causal_t0_sha256")
+                ):
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 mismatch for id {pred_id}"
+                    )
 
         try:
             fetched_rows_manifest = int(p_manifest.get("fetched_rows"))
