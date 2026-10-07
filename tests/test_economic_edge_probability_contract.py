@@ -166,3 +166,45 @@ def test_hold_reason_propagates_unvalidated_probability_gate():
 
     assert action["action"] == "HOLD"
     assert action["reason"] == "UNVALIDATED_WIN_PROBABILITY"
+
+
+def test_probability_semantics_cannot_be_spoofed_without_calibration_artifact():
+    core = SingleDecisionCore()
+    features = _raw_features()
+    features["probability_semantics"] = "VALIDATED_OOS_PROBABILITY"
+
+    result = core.compute_ev(
+        features,
+        _risk_filter(),
+        _market_state(),
+        slippage_bps=0.0,
+    )
+
+    assert result["tradeable"] is False
+    assert result["reason"] == "UNVALIDATED_WIN_PROBABILITY"
+    assert result["probability_semantics"] == "UNVALIDATED"
+
+
+def test_boolean_calibrated_probability_is_rejected():
+    core = SingleDecisionCore()
+    features = _raw_features()
+    features.update(
+        {
+            "p_win_calibrated": True,
+            "p_win_calibrated_provenance": {
+                "probability_semantics": "VALIDATED_OOS_PROBABILITY",
+                "method": "PLATT_V1",
+                "artifact_sha256": "d" * 64,
+            },
+        }
+    )
+
+    result = core.compute_ev(
+        features,
+        _risk_filter(),
+        _market_state(),
+        slippage_bps=0.0,
+    )
+
+    assert result["tradeable"] is False
+    assert result["reason"] == "UNVALIDATED_WIN_PROBABILITY"
