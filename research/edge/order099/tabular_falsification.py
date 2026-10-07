@@ -35,6 +35,8 @@ import numpy as np
 from scipy.stats import binomtest
 
 from research.edge.order097 import market_prior_calibration as order097
+from research.edge.order098 import export_t0_audit as order098_export
+from research.edge.order098 import polymarket_5m_resolutions as order098_resolutions
 from senecio_polymarket.backend.research.statistical_validation import (
     multiple_hypothesis_correction,
 )
@@ -115,15 +117,30 @@ def verify_order098_artifacts(
     predictions_manifest_path: str | Path,
     resolutions_path: str | Path,
     resolutions_manifest_path: str | Path,
+    *,
+    required_prediction_contract: str | None = None,
+    persistence_receipts_path: str | Path | None = None,
 ) -> dict[str, object]:
-    """Verify exact ORDER098 bytes, contracts, and cross-manifest lineage."""
+    """Verify exact ORDER098 bytes, contracts, coverage, and provenance."""
     predictions_sha = _sha256_file(predictions_path)
     resolutions_sha = _sha256_file(resolutions_path)
     p_manifest = _read_manifest(predictions_manifest_path)
     r_manifest = _read_manifest(resolutions_manifest_path)
 
-    if p_manifest.get("contract") != "senex-order098-t0-audit-export-v1":
+    prediction_contract = str(p_manifest.get("contract") or "")
+    if prediction_contract not in {
+        "senex-order098-t0-audit-export-v1",
+        "senex-order098-t0-audit-export-v2",
+    }:
         raise ArtifactContractError("unexpected ORDER098 T0 export contract")
+    if (
+        required_prediction_contract is not None
+        and prediction_contract != required_prediction_contract
+    ):
+        raise ArtifactContractError(
+            "required prediction contract mismatch: "
+            f"expected {required_prediction_contract}, found {prediction_contract}"
+        )
     if (
         r_manifest.get("contract")
         != "senex-order098-polymarket-5m-resolution-corpus-v1"
@@ -140,7 +157,14 @@ def verify_order098_artifacts(
         )
 
     prediction_rows = _read_jsonl_objects(predictions_path)
-    source_hashes = [row.get("source_audit_sha256") for row in prediction_rows]
+    row_hash_field = (
+        "causal_t0_sha256"
+        if prediction_contract == "senex-order098-t0-audit-export-v2"
+        else "source_audit_sha256"
+    )
+    source_hashes = [row.get(row_hash_field) for row in prediction_rows]
+    if any(not isinstance(value, str) or len(value) != 64 for value in source_hashes):
+        raise ArtifactContractError("prediction row causal/source hashes are invalid")
     if (
         p_manifest.get("output_row_hashes_sha256")
         != _sha256_text(_canonical_json(source_hashes))
@@ -188,16 +212,408 @@ def verify_order098_artifacts(
             "resolution manifest accepted_markets does not match JSONL"
         )
 
-    return {
+    result = {
         "predictions_sha256": predictions_sha,
         "resolutions_sha256": resolutions_sha,
-        "prediction_contract": p_manifest["contract"],
+        "prediction_contract": prediction_contract,
         "resolution_contract": r_manifest["contract"],
         "prediction_rows": len(prediction_rows),
         "requested_markets": requested,
         "accepted_markets": accepted,
         "rejected_markets": rejected,
     }
+    receipt_expected_accepted_ids: set[int] | None = None
+    receipt_expected_rejections: dict[str, int] | None = None
+
+    if prediction_contract == "senex-order098-t0-audit-export-v2":
+        if p_manifest.get("causal_hash_contract") != "CAUSAL_T0_ALLOWLIST_V2":
+            raise ArtifactContractError("unexpected causal hash contract")
+
+        snapshot_start_ts = p_manifest.get("snapshot_start_ts")
+        snapshot_end_ts = p_manifest.get("snapshot_end_ts")
+        if not isinstance(snapshot_start_ts, str) or not isinstance(snapshot_end_ts, str):
+            raise ArtifactContractError("prospective snapshot window is missing")
+        try:
+            start_dt = datetime.fromisoformat(snapshot_start_ts.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(snapshot_end_ts.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ArtifactContractError("prospective snapshot window is invalid") from exc
+        if start_dt.tzinfo is None or end_dt.tzinfo is None or end_dt < start_dt:
+            raise ArtifactContractError("prospective snapshot window is invalid")
+
+        lineage = p_manifest.get("source_to_d1_lineage")
+        if not isinstance(lineage, dict):
+            raise ArtifactContractError("source-to-D1 lineage evidence is missing")
+        if lineage.get("contract") != "senex-source-to-d1-lineage-v1":
+            raise ArtifactContractError("unexpected source-to-D1 lineage contract")
+        if lineage.get("window_start_ts") != snapshot_start_ts:
+            raise ArtifactContractError("source-to-D1 lineage start does not match snapshot")
+        if lineage.get("window_end_ts") != snapshot_end_ts:
+            raise ArtifactContractError("source-to-D1 lineage end does not match snapshot")
+        try:
+            expected_generated = int(lineage.get("expected_generated_t0"))
+            persisted_t0 = int(lineage.get("persisted_t0"))
+            unresolved_t0 = int(lineage.get("unresolved_t0"))
+            fetched_d1_rows = int(lineage.get("fetched_d1_rows"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError("source-to-D1 lineage counters are invalid") from exc
+        receipt_sha = lineage.get("receipt_file_sha256")
+        if not isinstance(receipt_sha, str) or len(receipt_sha) != 64:
+            raise ArtifactContractError("source-to-D1 receipt SHA256 is invalid")
+        if (
+            expected_generated <= 0
+            or persisted_t0 != expected_generated
+            or unresolved_t0 != 0
+            or fetched_d1_rows != expected_generated
+        ):
+            raise ArtifactContractError("source-to-D1 lineage is incomplete")
+
+        if required_prediction_contract == "senex-order098-t0-audit-export-v2":
+            if persistence_receipts_path is None:
+                raise ArtifactContractError(
+                    "prospective v2 verification requires persistence receipt artifact"
+                )
+            receipt_path = Path(persistence_receipts_path)
+            if not receipt_path.exists():
+                raise ArtifactContractError(
+                    "prospective v2 persistence receipt artifact is missing"
+                )
+            raw_receipts = receipt_path.read_bytes()
+            if not raw_receipts.endswith(b"\n"):
+                raise ArtifactContractError(
+                    "prospective v2 persistence receipt artifact is not line-terminated"
+                )
+            if hashlib.sha256(raw_receipts).hexdigest() != receipt_sha:
+                raise ArtifactContractError(
+                    "source-to-D1 receipt artifact SHA256 mismatch"
+                )
+
+            from senecio_polymarket.backend.prediction_persistence import (
+                PredictionPersistenceError,
+                PredictionPersistenceStore,
+            )
+
+            try:
+                receipt_states = PredictionPersistenceStore(
+                    path=receipt_path
+                ).states()
+            except PredictionPersistenceError as exc:
+                raise ArtifactContractError(
+                    f"source-to-D1 receipt artifact is invalid: {exc}"
+                ) from exc
+
+            target_symbol = str(p_manifest.get("symbol") or "BTCUSDT")
+            target_symbol = (
+                target_symbol.upper().replace("/", "").replace("-", "").strip()
+            )
+            scoped_states: list[dict[str, object]] = []
+            for state in receipt_states:
+                prediction = state.get("prediction")
+                if not isinstance(prediction, dict):
+                    continue
+                symbol = str(prediction.get("symbol") or "")
+                symbol = symbol.upper().replace("/", "").replace("-", "").strip()
+                if symbol != target_symbol:
+                    continue
+                raw_ts = str(prediction.get("timestamp") or "").strip()
+                try:
+                    receipt_dt = datetime.fromisoformat(
+                        raw_ts.replace("Z", "+00:00")
+                    )
+                except ValueError as exc:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt timestamp is invalid"
+                    ) from exc
+                if receipt_dt.tzinfo is None:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt timestamp is invalid"
+                    )
+                if start_dt <= receipt_dt <= end_dt:
+                    scoped_states.append(state)
+
+            recomputed_expected = len(scoped_states)
+            recomputed_persisted = sum(
+                1 for state in scoped_states
+                if state.get("status") == "PERSISTED"
+            )
+            recomputed_unresolved = recomputed_expected - recomputed_persisted
+            if (
+                recomputed_expected != expected_generated
+                or recomputed_persisted != persisted_t0
+                or recomputed_unresolved != unresolved_t0
+            ):
+                raise ArtifactContractError(
+                    "source-to-D1 receipt counters do not match receipt artifact"
+                )
+
+            persisted_ids: list[int] = []
+            for state in scoped_states:
+                if state.get("status") != "PERSISTED":
+                    continue
+                value = state.get("d1_prediction_id")
+                if isinstance(value, bool):
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    )
+                try:
+                    pred_id = int(value)
+                except (TypeError, ValueError) as exc:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    ) from exc
+                if pred_id <= 0:
+                    raise ArtifactContractError(
+                        "source-to-D1 receipt D1 prediction id is invalid"
+                    )
+                persisted_ids.append(pred_id)
+            if len(set(persisted_ids)) != len(persisted_ids):
+                raise ArtifactContractError(
+                    "source-to-D1 receipt D1 ids are not one-to-one"
+                )
+            exported_ids = {
+                int(row.get("id"))
+                for row in prediction_rows
+            }
+            if not exported_ids.issubset(set(persisted_ids)):
+                raise ArtifactContractError(
+                    "prospective exported rows are not receipt-bound"
+                )
+
+            receipt_by_id = {
+                int(state["d1_prediction_id"]): state
+                for state in scoped_states
+                if state.get("status") == "PERSISTED"
+            }
+
+            receipt_expected_accepted_ids = set()
+            receipt_expected_rejections = {}
+            for pred_id, state in receipt_by_id.items():
+                prediction = state.get("prediction")
+                if not isinstance(prediction, dict):
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 payload missing for id {pred_id}"
+                    )
+                receipt_projection = order098_export.project_t0_row_result({
+                    "id": pred_id,
+                    "ts": prediction.get("timestamp"),
+                    "symbol": prediction.get("symbol"),
+                    "audit": prediction.get("_audit"),
+                })
+                status = receipt_projection.get("status")
+                if status == "ERROR":
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 is not causally projectable for id {pred_id}"
+                    )
+                if status == "ACCEPTED":
+                    receipt_expected_accepted_ids.add(pred_id)
+                elif status == "EXCLUDED":
+                    reason = str(receipt_projection.get("reason") or "")
+                    receipt_expected_rejections[reason] = (
+                        receipt_expected_rejections.get(reason, 0) + 1
+                    )
+
+            for row in prediction_rows:
+                pred_id = int(row.get("id"))
+                state = receipt_by_id.get(pred_id)
+                prediction = state.get("prediction") if isinstance(state, dict) else None
+                if not isinstance(prediction, dict):
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 payload missing for id {pred_id}"
+                    )
+                receipt_projection = order098_export.project_t0_row_result({
+                    "id": pred_id,
+                    "ts": prediction.get("timestamp"),
+                    "symbol": prediction.get("symbol"),
+                    "audit": prediction.get("_audit"),
+                })
+                if receipt_projection.get("status") != "ACCEPTED":
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 is not causally projectable for id {pred_id}"
+                    )
+                receipt_row = receipt_projection.get("row") or {}
+                receipt_visible = {
+                    "id": receipt_row.get("id"),
+                    "ts": receipt_row.get("ts"),
+                    "symbol": receipt_row.get("symbol"),
+                    "audit": receipt_row.get("audit"),
+                }
+                exported_visible = {
+                    "id": row.get("id"),
+                    "ts": row.get("ts"),
+                    "symbol": row.get("symbol"),
+                    "audit": row.get("audit"),
+                }
+                if receipt_visible != exported_visible:
+                    raise ArtifactContractError(
+                        f"receipt-bound T0 mismatch for id {pred_id}"
+                    )
+
+        try:
+            fetched_rows_manifest = int(p_manifest.get("fetched_rows"))
+            skipped_rows = int(p_manifest.get("skipped_rows"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError(
+                "prospective projection accounting counters are invalid"
+            ) from exc
+        if fetched_rows_manifest != fetched_d1_rows:
+            raise ArtifactContractError(
+                "fetched_rows does not match source-to-D1 lineage total"
+            )
+        if projected + skipped_rows != fetched_rows_manifest:
+            raise ArtifactContractError(
+                "prospective projection accounting is incomplete"
+            )
+        rejection_counts = p_manifest.get("rejection_counts", {})
+        if not isinstance(rejection_counts, dict):
+            raise ArtifactContractError("prospective rejection accounting is invalid")
+        rejection_total = 0
+        for reason, count in rejection_counts.items():
+            if not isinstance(reason, str) or not reason:
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            if isinstance(count, bool):
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            try:
+                count_int = int(count)
+            except (TypeError, ValueError) as exc:
+                raise ArtifactContractError(
+                    "prospective rejection accounting is invalid"
+                ) from exc
+            if count_int < 0:
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            rejection_total += count_int
+        if rejection_total != skipped_rows:
+            raise ArtifactContractError(
+                "prospective rejection accounting does not explain skipped_rows"
+            )
+        if receipt_expected_accepted_ids is not None:
+            exported_ids = {int(row.get("id")) for row in prediction_rows}
+            if exported_ids != receipt_expected_accepted_ids:
+                raise ArtifactContractError(
+                    "prospective exported accepted rows do not match receipt classification"
+                )
+            normalized_rejections = {
+                str(reason): int(count)
+                for reason, count in rejection_counts.items()
+            }
+            if normalized_rejections != (receipt_expected_rejections or {}):
+                raise ArtifactContractError(
+                    "prospective rejection accounting does not match receipt classification"
+                )
+
+        allowed_v2_keys = {
+            "id",
+            "ts",
+            "symbol",
+            "audit",
+            "source_audit_sha256",
+            "causal_t0_sha256",
+        }
+        for row in prediction_rows:
+            if set(row) != allowed_v2_keys:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row contains unexpected top-level fields"
+                )
+            try:
+                row_dt = datetime.fromisoformat(
+                    str(row.get("ts") or "").replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row timestamp is invalid"
+                ) from exc
+            if row_dt.tzinfo is None:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row timestamp is invalid"
+                )
+            if row_dt < start_dt or row_dt > end_dt:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row is outside prospective snapshot window"
+                )
+            causal_payload = {
+                "id": row["id"],
+                "ts": row["ts"],
+                "symbol": row["symbol"],
+                "audit": row["audit"],
+            }
+            expected_causal_hash = _sha256_text(
+                _canonical_json(causal_payload)
+            )
+            if row.get("causal_t0_sha256") != expected_causal_hash:
+                raise ArtifactContractError(
+                    "causal T0 hash does not match visible decision-time bytes"
+                )
+
+        try:
+            max_prediction_id = int(p_manifest.get("snapshot_max_prediction_id"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError("snapshot_max_prediction_id is invalid") from exc
+        if max_prediction_id < 0 or any(
+            int(row.get("id")) > max_prediction_id for row in prediction_rows
+        ):
+            raise ArtifactContractError("prediction row exceeds frozen snapshot boundary")
+
+        broad_identities = order098_resolutions.extract_market_identities(prediction_rows)
+        broad_keys = {
+            (str(item["slug"]), str(item["condition_id"]))
+            for item in broad_identities
+        }
+        admissible_pairs = order097.extract_t0_pairs(prediction_rows)
+        admissible_keys = {
+            (pair.market_slug, pair.condition_id)
+            for pair in admissible_pairs
+        }
+        for row in resolution_rows:
+            if row.get("source") != order098_resolutions.SOURCE:
+                raise ArtifactContractError(
+                    "resolution row source provenance mismatch"
+                )
+        resolution_keys = {
+            (str(row.get("slug") or ""), str(row.get("condition_id") or ""))
+            for row in resolution_rows
+        }
+
+        missing_admissible = sorted(admissible_keys - resolution_keys)
+        if missing_admissible:
+            raise ArtifactContractError(
+                f"resolution corpus missing admissible scientific identities: {missing_admissible[:5]}"
+            )
+        missing_broad = sorted(broad_keys - resolution_keys)
+        extra_resolutions = sorted(resolution_keys - broad_keys)
+        if missing_broad or extra_resolutions:
+            raise ArtifactContractError(
+                "resolution corpus does not exactly cover broad exported identities"
+            )
+
+        if requested != len(broad_keys):
+            raise ArtifactContractError(
+                "resolution requested_markets does not match broad exported identities"
+            )
+
+        if r_manifest.get("source") != order098_resolutions.SOURCE:
+            raise ArtifactContractError("resolution source provenance mismatch")
+        if r_manifest.get("gamma_base") != order098_resolutions.GAMMA_BASE:
+            raise ArtifactContractError("resolution gamma_base provenance mismatch")
+        expected_collector_sha = _sha256_file(Path(order098_resolutions.__file__).resolve())
+        if r_manifest.get("collector_file_sha256") != expected_collector_sha:
+            raise ArtifactContractError("resolution collector provenance mismatch")
+
+        expected_queries = [
+            {
+                "slug": str(item["slug"]),
+                "condition_id": item.get("condition_id"),
+            }
+            for item in broad_identities
+        ]
+        if r_manifest.get("queries") != expected_queries:
+            raise ArtifactContractError("resolution queries provenance mismatch")
+
+        result.update({
+            "broad_collector_markets": len(broad_keys),
+            "admissible_scientific_markets": len(admissible_keys),
+            "extra_resolution_markets": len(extra_resolutions),
+        })
+
+    return result
 
 
 def _market_key(item: order097.JoinedObservation) -> tuple[str, str]:

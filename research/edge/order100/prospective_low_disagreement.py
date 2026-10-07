@@ -210,6 +210,7 @@ def run_offline(
     *,
     predictions_manifest_path: str | Path,
     resolutions_manifest_path: str | Path,
+    persistence_receipts_path: str | Path,
     n_bootstrap: int = DEFAULT_BOOTSTRAP,
     seed: int = DEFAULT_SEED,
 ) -> dict[str, object]:
@@ -219,6 +220,8 @@ def run_offline(
         predictions_manifest_path,
         resolutions_path,
         resolutions_manifest_path,
+        required_prediction_contract="senex-order098-t0-audit-export-v2",
+        persistence_receipts_path=persistence_receipts_path,
     )
     predictions = order097.read_jsonl(predictions_path)
     resolutions = order097.read_jsonl(resolutions_path)
@@ -294,6 +297,7 @@ def main() -> int:
     parser.add_argument("--resolutions", required=True)
     parser.add_argument("--predictions-manifest", required=True)
     parser.add_argument("--resolutions-manifest", required=True)
+    parser.add_argument("--persistence-receipts", required=True)
     parser.add_argument("--bootstrap", type=int, default=DEFAULT_BOOTSTRAP)
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     args = parser.parse_args()
@@ -303,6 +307,7 @@ def main() -> int:
         args.resolutions,
         predictions_manifest_path=args.predictions_manifest,
         resolutions_manifest_path=args.resolutions_manifest,
+        persistence_receipts_path=args.persistence_receipts,
         n_bootstrap=args.bootstrap,
         seed=args.seed,
     )

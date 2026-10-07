@@ -141,12 +141,12 @@ def test_quota_breaker_survives_in_memory_reset_and_suppresses_retry(tmp_path, m
     assert client.get.await_count == 1
 
 
-def test_gateway_count_is_explicit_only_and_normal_get_is_count_free():
+def test_gateway_compatibility_route_disables_exact_count():
     path = Path("cloudflare/senex-order072-d1-gateway/src/gateway_order074.js")
     source = path.read_text(encoding="utf-8")
     count_sql = "SELECT COUNT(*) AS n FROM oracle_predictions_hot"
-    assert source.count(count_sql) == 1
-    assert "includeTotal ? await env.HOT.prepare" in source
+    assert source.count(count_sql) == 0
+    assert 'throw new Error("exact count disabled on compatibility route")' in source
     assert 'const includeTotal = /(?:^|,)\\s*count=exact' in source
     assert 'total == null ? "*" : total' in source
 
