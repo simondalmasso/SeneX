@@ -1,5 +1,3 @@
-[Reading 98 lines from start (total: 98 lines, 0 remaining)]
-
 from senecio_polymarket.oracle.institutional_core import SingleDecisionCore
 
 
@@ -98,5 +96,3 @@ def test_compute_ev_rejects_calibrated_probability_without_valid_provenance():
 
     assert result["tradeable"] is False
     assert result["reason"] == "UNVALIDATED_WIN_PROBABILITY"
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
