@@ -77,6 +77,21 @@ def _synthetic_fixture(
     return rows, features
 
 
+def _stable_report_value(value):
+    """Canonicalize synthetic-report floats across Python/NumPy runtimes."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("synthetic report contains non-finite float")
+        return round(value, 12)
+    if isinstance(value, dict):
+        return {key: _stable_report_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_stable_report_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_stable_report_value(item) for item in value]
+    return value
+
+
 def run_synthetic() -> dict:
     rows, features = _synthetic_fixture()
     root = Path(__file__).resolve().parent
@@ -97,7 +112,7 @@ def run_synthetic() -> dict:
     reports = evaluate_historical_folds(rows, features, splits)
     residual_diagnostic = evaluate_market_residual_folds(rows, splits)
     selected = select_candidates(reports, max_candidates=2)
-    return {
+    report = {
         "contract": "senex-challenger-synthetic-benchmark-v1",
         "synthetic_only": True,
         "seed": 7,
@@ -117,6 +132,7 @@ def run_synthetic() -> dict:
         "real_orders": 0,
         "capital": 0,
     }
+    return _stable_report_value(report)
 
 
 def main() -> int:
