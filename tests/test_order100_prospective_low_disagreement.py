@@ -1,3 +1,5 @@
+[Reading 219 lines from start (total: 219 lines, 0 remaining)]
+
 from __future__ import annotations
 
 import importlib.util
@@ -202,6 +204,8 @@ def test_order100_requires_prospective_v2_lineage_contract():
         'required_prediction_contract="senex-order098-t0-audit-export-v2"'
         in source
     )
+    assert "persistence_receipts_path=persistence_receipts_path" in source
+    assert 'parser.add_argument("--persistence-receipts", required=True)' in source
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -215,3 +219,5 @@ def test_prospective_verdict_rejects_nonfinite_metrics(bad):
         m.prospective_verdict(bootstrap, n_markets=300)
         == "PROSPECTIVE_INCREMENTAL_EDGE_NOT_CONFIRMED"
     )
+
+[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
