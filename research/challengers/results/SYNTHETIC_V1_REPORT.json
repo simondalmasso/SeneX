@@ -489,7 +489,7 @@
           },
           "market_log_loss": 0.541211377048,
           "market_roc_auc": 0.636363636364,
-          "model_digest": "b826cc6c2637809a3f6450b8553fb07a8f6d8760241a1221df658933ae4170d6",
+          "model_digest": "076ac4508d0255e98eb4f5a6f0689eb5bb92931b579f828261bef16196b5791c",
           "n": 13
         },
         {
@@ -573,7 +573,7 @@
           },
           "market_log_loss": 0.771635352458,
           "market_roc_auc": 0.380952380952,
-          "model_digest": "012c483fbf9aa85bcb01746245882e5e7b8b7af2c3c768637962e07628d81660",
+          "model_digest": "1df6f526260207b23a34e1ccbbd02c210fe9380642535ef83680d2283b36c0ea",
           "n": 13
         },
         {
@@ -650,7 +650,7 @@
           },
           "market_log_loss": 0.695430818716,
           "market_roc_auc": 0.642857142857,
-          "model_digest": "41584404c8dbd16e848bdf81321787feaa0e91c7e9fb4de7bdef3aab26b8b93c",
+          "model_digest": "d3c11184d2d87bcf0dc60bc4133b148a3a1162d5266fdcbf5d07e2b363276d31",
           "n": 13
         },
         {
@@ -720,7 +720,7 @@
           },
           "market_log_loss": 0.67452768122,
           "market_roc_auc": 0.714285714286,
-          "model_digest": "3c1e1b5b652029a4fff3fa0bd011177abe7faa2cb5facf93e0b0c6b1422273ab",
+          "model_digest": "9c5d6993b4c4480d7af5e104a414f941636017206d8d2503bf21fa4b3ee3080c",
           "n": 13
         }
       ],
@@ -907,7 +907,7 @@
           },
           "market_log_loss": 0.541211377048,
           "market_roc_auc": 0.636363636364,
-          "model_digest": "12edfcf9d2621535709e001818c7848261f8db0207d77e628d364920ef92a580",
+          "model_digest": "64834c212141bc570b632feea6ff3e26a55428503ba27e1bfd45df5063091923",
           "n": 13
         },
         {
@@ -977,7 +977,7 @@
           },
           "market_log_loss": 0.771635352458,
           "market_roc_auc": 0.380952380952,
-          "model_digest": "d701e22b10cce3399783fcf440456f220f125fd6a6cd7ec504482af5c1112c7f",
+          "model_digest": "dcd1f10e41342e140efdf6df96f0c071ed04a4d7de633a06978adb560c9f9993",
           "n": 13
         },
         {
@@ -1047,7 +1047,7 @@
           },
           "market_log_loss": 0.695430818716,
           "market_roc_auc": 0.642857142857,
-          "model_digest": "42c93036345adb398d30699187f39042b58aecf1ad30d8d936f21e4208941169",
+          "model_digest": "5790d9103b49c2ece12a7aef6589905b3a55e02258c0fc7878a8126b357bbd7d",
           "n": 13
         },
         {
@@ -1117,7 +1117,7 @@
           },
           "market_log_loss": 0.67452768122,
           "market_roc_auc": 0.714285714286,
-          "model_digest": "bdd6663de47db2f818c886e979c5f9bacbc7cc66c184e6324c601490c6058d61",
+          "model_digest": "3305241902325a230d333c926e32ee16423bab0dbe168cbe2263c289292a5f89",
           "n": 13
         }
       ],
