@@ -55,7 +55,7 @@ class MarketOffsetModel:
         # same model. Freeze the predictive parameters/hyperparameters only.
         payload = asdict(self)
         payload.pop("iterations", None)
-        return sha256_json(canonical_numeric(payload, digits=10))
+        return sha256_json(canonical_numeric(payload, digits=8))
 
 
 def _clip(value: float) -> float:
