@@ -29,7 +29,11 @@ class RecalibrationModel:
     converged: bool
 
     def digest(self) -> str:
-        return sha256_json(canonical_numeric(asdict(self)))
+        # Iteration count is optimizer-path metadata, not predictive identity.
+        # Canonicalize the fitted mapping to a cross-runtime stable precision.
+        payload = asdict(self)
+        payload.pop("iterations", None)
+        return sha256_json(canonical_numeric(payload, digits=10))
 
 
 def _clip_probability(value: float, epsilon: float) -> float:
