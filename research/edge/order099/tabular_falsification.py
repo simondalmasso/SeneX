@@ -116,6 +116,8 @@ def verify_order098_artifacts(
     predictions_manifest_path: str | Path,
     resolutions_path: str | Path,
     resolutions_manifest_path: str | Path,
+    *,
+    required_prediction_contract: str | None = None,
 ) -> dict[str, object]:
     """Verify exact ORDER098 bytes, contracts, coverage, and provenance."""
     predictions_sha = _sha256_file(predictions_path)
@@ -129,6 +131,14 @@ def verify_order098_artifacts(
         "senex-order098-t0-audit-export-v2",
     }:
         raise ArtifactContractError("unexpected ORDER098 T0 export contract")
+    if (
+        required_prediction_contract is not None
+        and prediction_contract != required_prediction_contract
+    ):
+        raise ArtifactContractError(
+            "required prediction contract mismatch: "
+            f"expected {required_prediction_contract}, found {prediction_contract}"
+        )
     if (
         r_manifest.get("contract")
         != "senex-order098-polymarket-5m-resolution-corpus-v1"
@@ -254,6 +264,44 @@ def verify_order098_artifacts(
         ):
             raise ArtifactContractError("source-to-D1 lineage is incomplete")
 
+        try:
+            fetched_rows_manifest = int(p_manifest.get("fetched_rows"))
+            skipped_rows = int(p_manifest.get("skipped_rows"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError(
+                "prospective projection accounting counters are invalid"
+            ) from exc
+        if fetched_rows_manifest != fetched_d1_rows:
+            raise ArtifactContractError(
+                "fetched_rows does not match source-to-D1 lineage total"
+            )
+        if projected + skipped_rows != fetched_rows_manifest:
+            raise ArtifactContractError(
+                "prospective projection accounting is incomplete"
+            )
+        rejection_counts = p_manifest.get("rejection_counts", {})
+        if not isinstance(rejection_counts, dict):
+            raise ArtifactContractError("prospective rejection accounting is invalid")
+        rejection_total = 0
+        for reason, count in rejection_counts.items():
+            if not isinstance(reason, str) or not reason:
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            if isinstance(count, bool):
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            try:
+                count_int = int(count)
+            except (TypeError, ValueError) as exc:
+                raise ArtifactContractError(
+                    "prospective rejection accounting is invalid"
+                ) from exc
+            if count_int < 0:
+                raise ArtifactContractError("prospective rejection accounting is invalid")
+            rejection_total += count_int
+        if rejection_total != skipped_rows:
+            raise ArtifactContractError(
+                "prospective rejection accounting does not explain skipped_rows"
+            )
+
         allowed_v2_keys = {
             "id",
             "ts",
@@ -266,6 +314,22 @@ def verify_order098_artifacts(
             if set(row) != allowed_v2_keys:
                 raise ArtifactContractError(
                     "prospective v2 T0 row contains unexpected top-level fields"
+                )
+            try:
+                row_dt = datetime.fromisoformat(
+                    str(row.get("ts") or "").replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row timestamp is invalid"
+                ) from exc
+            if row_dt.tzinfo is None:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row timestamp is invalid"
+                )
+            if row_dt < start_dt or row_dt > end_dt:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row is outside prospective snapshot window"
                 )
             causal_payload = {
                 "id": row["id"],

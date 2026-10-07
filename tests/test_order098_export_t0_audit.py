@@ -348,6 +348,63 @@ def test_source_to_d1_lineage_rejects_same_id_with_different_causal_t0(tmp_path)
         )
 
 
+def test_source_to_d1_lineage_canonicalizes_equivalent_utc_timestamps(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+    fetched = _row(101)
+    original = {
+        "timestamp": fetched["ts"].replace("Z", "+00:00"),
+        "symbol": fetched["symbol"],
+        "prediction": fetched["prediction"],
+        "_audit": json.loads(json.dumps(fetched["audit"])),
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        original,
+    )
+    store.mark_persisted("1" * 64, 101)
+
+    result = m.validate_persistence_lineage(
+        receipt_path=receipts,
+        fetched_rows=[fetched],
+        symbol="BTCUSDT",
+        start_ts="2026-10-03T23:00:00Z",
+        end_ts="2026-10-04T00:00:00Z",
+    )
+    assert result["persisted_t0"] == 1
+
+
+def test_source_to_d1_lineage_compares_excluded_row_causal_bytes(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+    fetched = _row(101)
+    fetched["audit"]["external_markets_v1"]["polymarket"]["eligible_for_prediction"] = False
+    original_audit = json.loads(json.dumps(fetched["audit"]))
+    original_audit["external_markets_v1"]["polymarket"]["up_probability"] = 0.58
+    original = {
+        "timestamp": fetched["ts"],
+        "symbol": fetched["symbol"],
+        "prediction": fetched["prediction"],
+        "_audit": original_audit,
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        original,
+    )
+    store.mark_persisted("1" * 64, 101)
+
+    with pytest.raises(m.ExportContractError, match="causal T0 mismatch"):
+        m.validate_persistence_lineage(
+            receipt_path=receipts,
+            fetched_rows=[fetched],
+            symbol="BTCUSDT",
+            start_ts="2026-10-03T23:00:00Z",
+            end_ts="2026-10-04T00:00:00Z",
+        )
+
+
 def test_fetch_full_audit_fails_closed_on_non_monotonic_id():
     m = _load()
 

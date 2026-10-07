@@ -219,6 +219,7 @@ def run_offline(
         predictions_manifest_path,
         resolutions_path,
         resolutions_manifest_path,
+        required_prediction_contract="senex-order098-t0-audit-export-v2",
     )
     predictions = order097.read_jsonl(predictions_path)
     resolutions = order097.read_jsonl(resolutions_path)

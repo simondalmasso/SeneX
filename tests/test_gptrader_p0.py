@@ -109,11 +109,15 @@ def test_oracle_runner_seals_receipt_before_local_dedupe_marker_and_remote_autho
     end = source.index("async def _fetch_current_price")
     body = source[start:end]
 
-    sealed = body.index("seal_prediction_t0")
-    receipt = body.index("receipt_store.enqueue")
+    preview = body.index("preview_packet = await asyncio.to_thread(")
+    receipt = body.index("receipt_store.enqueue(preview_packet, prediction)")
+    sealed = body.index(
+        "sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)"
+    )
     persisted = body.index("await asyncio.to_thread(log_prediction")
     remote = body.index("await _persist_and_route_prediction")
-    assert sealed < receipt < persisted < remote
+    assert preview < receipt < sealed < persisted < remote
+    assert "sealed packet identity diverged from receipt outbox" in body
     assert "store=receipt_store" in body
 
 

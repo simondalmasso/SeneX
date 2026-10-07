@@ -338,27 +338,38 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         except Exception as enrich_err:
             log.warning("audit_enrichment failed (continuing): %s", enrich_err)
 
-        # ORDER159: establish durable decision-time custody before writing
-        # predictions.jsonl, because that local append is also the candle-dedupe
-        # marker. A seal/receipt failure must not make the next cycle skip an
-        # observation that has no retryable lineage record.
+        # ORDER159: establish a durable receipt before the sealed-packet append.
+        # This makes the receipt ledger the recoverable outbox: a crash before
+        # seal leaves a retryable receipt and no orphan packet; a crash after
+        # seal is safe because PacketSealer.seal() is idempotent by packet_id.
         sealed_packet = None
         receipt_store = None
         try:
-            from .gptrader.sealer import seal_prediction_t0
+            from .gptrader.sealer import build_sealed_packet, seal_prediction_t0
             from .prediction_persistence import PredictionPersistenceStore
 
-            sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)
+            preview_packet = await asyncio.to_thread(
+                build_sealed_packet,
+                prediction,
+                1,
+            )
             receipt_store = PredictionPersistenceStore()
-            receipt_store.enqueue(sealed_packet, prediction)
+            receipt_store.enqueue(preview_packet, prediction)
+
+            sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)
+            if (
+                sealed_packet.get("packet_hash") != preview_packet.get("packet_hash")
+                or sealed_packet.get("packet_id") != preview_packet.get("packet_id")
+            ):
+                raise RuntimeError("sealed packet identity diverged from receipt outbox")
         except Exception as seal_err:
-            log.error("gptrader T0 seal/receipt failed closed: %s", seal_err)
+            log.error("gptrader T0 receipt/seal failed closed: %s", seal_err)
             sealed_packet = None
-            receipt_store = None
 
         authority_persisted = False
         if sealed_packet is not None and receipt_store is not None:
-            # Only after durable seal + receipt do we record the candle marker.
+            # Only after durable receipt + idempotent seal do we record the
+            # local candle-dedupe marker.
             await asyncio.to_thread(log_prediction, prediction, str(PREDICTIONS_PATH))
 
             try:

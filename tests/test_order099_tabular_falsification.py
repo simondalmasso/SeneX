@@ -5,7 +5,7 @@ import importlib.util
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -356,8 +356,12 @@ def _write_v2_artifacts(tmp_path, prediction_rows, resolution_rows, *, provenanc
     predictions_sha = _sha256_file(predictions)
     resolutions_sha = _sha256_file(resolutions)
     p_manifest = tmp_path / "t0_manifest.json"
-    snapshot_start_ts = "2026-10-04T05:00:00Z"
-    snapshot_end_ts = "2026-10-08T00:00:00Z"
+    row_times = [
+        datetime.fromisoformat(str(row["ts"]).replace("Z", "+00:00"))
+        for row in prediction_rows
+    ]
+    snapshot_start_ts = min(row_times).isoformat().replace("+00:00", "Z")
+    snapshot_end_ts = max(row_times).isoformat().replace("+00:00", "Z")
     p_manifest.write_text(json.dumps({
         "contract": "senex-order098-t0-audit-export-v2",
         "output_file_sha256": predictions_sha,
@@ -605,8 +609,24 @@ def test_v2_lineage_rejects_fabricated_resolution_provenance(tmp_path, provenanc
     [
         (lambda data: data.pop("source_to_d1_lineage"), "lineage evidence"),
         (lambda data: data["source_to_d1_lineage"].update({"unresolved_t0": 1}), "lineage is incomplete"),
-        (lambda data: data.update({"snapshot_start_ts": "2026-10-04T06:00:00Z"}), "lineage start"),
-        (lambda data: data.update({"snapshot_end_ts": "2026-10-07T23:00:00Z"}), "lineage end"),
+        (
+            lambda data: data.update({
+                "snapshot_start_ts": (
+                    datetime.fromisoformat(data["snapshot_start_ts"].replace("Z", "+00:00"))
+                    - timedelta(seconds=1)
+                ).isoformat().replace("+00:00", "Z")
+            }),
+            "lineage start",
+        ),
+        (
+            lambda data: data.update({
+                "snapshot_end_ts": (
+                    datetime.fromisoformat(data["snapshot_end_ts"].replace("Z", "+00:00"))
+                    + timedelta(seconds=1)
+                ).isoformat().replace("+00:00", "Z")
+            }),
+            "lineage end",
+        ),
     ],
 )
 def test_v2_lineage_requires_snapshot_bound_persistence_evidence(tmp_path, mutation, match):
@@ -651,6 +671,115 @@ def test_v2_lineage_recomputes_causal_row_hash_from_visible_t0_bytes(tmp_path):
 
     with pytest.raises(m.ArtifactContractError, match="causal T0 hash"):
         m.verify_order098_artifacts(*artifacts)
+
+
+def test_v2_lineage_rejects_rows_outside_declared_snapshot_window(tmp_path):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    _predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    row_ts = datetime.fromtimestamp(start + 30, timezone.utc)
+    later = (row_ts + timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
+    later_end = (row_ts + timedelta(minutes=2)).isoformat().replace("+00:00", "Z")
+    data["snapshot_start_ts"] = later
+    data["snapshot_end_ts"] = later_end
+    data["source_to_d1_lineage"]["window_start_ts"] = later
+    data["source_to_d1_lineage"]["window_end_ts"] = later_end
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(m.ArtifactContractError, match="outside prospective snapshot"):
+        m.verify_order098_artifacts(*artifacts)
+
+
+@pytest.mark.parametrize(
+    "mutation,match",
+    [
+        (lambda data: data.update({"fetched_rows": 2}), "fetched_rows"),
+        (lambda data: data.update({"skipped_rows": 1}), "projection accounting"),
+        (
+            lambda data: (
+                data.update({"skipped_rows": 1, "fetched_rows": 2, "rejection_counts": {}}),
+                data["source_to_d1_lineage"].update({
+                    "expected_generated_t0": 2,
+                    "persisted_t0": 2,
+                    "fetched_d1_rows": 2,
+                }),
+            ),
+            "rejection accounting",
+        ),
+    ],
+)
+def test_v2_lineage_binds_projection_accounting_to_lineage_totals(tmp_path, mutation, match):
+    _, m = _modules()
+    start = 1791069600
+    artifacts = _write_v2_artifacts(
+        tmp_path,
+        [_t0_row(1, start_ts=start, condition_id="cond-a")],
+        [_resolution_row(start_ts=start, condition_id="cond-a")],
+    )
+    _predictions, p_manifest, _resolutions, _r_manifest = artifacts
+    data = json.loads(p_manifest.read_text(encoding="utf-8"))
+    mutation(data)
+    p_manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(m.ArtifactContractError, match=match):
+        m.verify_order098_artifacts(*artifacts)
+
+
+def test_artifact_verifier_can_require_v2_without_breaking_historical_v1(tmp_path):
+    _, m = _modules()
+    predictions = tmp_path / "t0_predictions.jsonl"
+    resolutions = tmp_path / "resolutions.jsonl"
+    prediction_rows = [{"id": 1, "source_audit_sha256": "a" * 64}]
+    resolution_rows = [{
+        "slug": "btc-updown-5m-1791069600",
+        "condition_id": "0xabc",
+        "start_ts": 1791069600,
+        "end_ts": 1791069900,
+        "outcome": "UP",
+        "resolved_at": 1791069901,
+        "source": "POLYMARKET_GAMMA_RESOLVED_V1",
+    }]
+    predictions.write_text(_canonical(prediction_rows[0]) + "\n", encoding="utf-8")
+    resolutions.write_text(_canonical(resolution_rows[0]) + "\n", encoding="utf-8")
+    predictions_sha = _sha256_file(predictions)
+    resolutions_sha = _sha256_file(resolutions)
+    p_manifest = tmp_path / "t0_manifest.json"
+    p_manifest.write_text(json.dumps({
+        "contract": "senex-order098-t0-audit-export-v1",
+        "output_file_sha256": predictions_sha,
+        "output_row_hashes_sha256": _sha256_text(_canonical(["a" * 64])),
+        "fetched_rows": 1,
+        "projected_rows": 1,
+        "skipped_rows": 0,
+    }), encoding="utf-8")
+    r_manifest = tmp_path / "resolution_manifest.json"
+    r_manifest.write_text(json.dumps({
+        "contract": "senex-order098-polymarket-5m-resolution-corpus-v1",
+        "predictions_file_sha256": predictions_sha,
+        "output_file_sha256": resolutions_sha,
+        "resolution_records_sha256": _sha256_text(_canonical(resolution_rows)),
+        "requested_markets": 1,
+        "accepted_markets": 1,
+        "rejected_markets": 0,
+    }), encoding="utf-8")
+
+    assert m.verify_order098_artifacts(
+        predictions, p_manifest, resolutions, r_manifest
+    )["prediction_contract"].endswith("-v1")
+    with pytest.raises(m.ArtifactContractError, match="required prediction contract"):
+        m.verify_order098_artifacts(
+            predictions,
+            p_manifest,
+            resolutions,
+            r_manifest,
+            required_prediction_contract="senex-order098-t0-audit-export-v2",
+        )
 
 
 def test_preregistered_market_floor_blocks_199_and_allows_200():

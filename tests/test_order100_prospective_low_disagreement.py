@@ -196,6 +196,14 @@ def test_frozen_eval_parameters_reject_noncanonical_values(bootstrap, seed):
     m._require_frozen_eval_parameters(m.DEFAULT_BOOTSTRAP, m.DEFAULT_SEED)
 
 
+def test_order100_requires_prospective_v2_lineage_contract():
+    source = O100_PATH.read_text(encoding="utf-8")
+    assert (
+        'required_prediction_contract="senex-order098-t0-audit-export-v2"'
+        in source
+    )
+
+
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_prospective_verdict_rejects_nonfinite_metrics(bad):
     _, m = _modules()

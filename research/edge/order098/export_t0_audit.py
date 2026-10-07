@@ -136,9 +136,10 @@ def project_t0_row_result(row: dict[str, Any]) -> dict[str, Any]:
     except ExportContractError:
         return {"status": "ERROR", "reason": "PREDICTION_ID_INVALID", "row": None}
 
-    ts = str(row.get("ts") or "").strip()
-    if not ts:
-        return {"status": "ERROR", "reason": "TIMESTAMP_MISSING", "row": None}
+    try:
+        ts = _canonical_utc_ts(row.get("ts"))
+    except ExportContractError:
+        return {"status": "ERROR", "reason": "TIMESTAMP_MISSING_OR_INVALID", "row": None}
     audit = _audit_object(row.get("audit"))
     if audit is None:
         return {"status": "ERROR", "reason": "AUDIT_MISSING_OR_INVALID", "row": None}
@@ -228,6 +229,59 @@ def project_t0_row(row: dict[str, Any]) -> dict[str, Any] | None:
     """Backward-compatible wrapper returning only accepted causal rows."""
     result = project_t0_row_result(row)
     return result["row"] if result["status"] == "ACCEPTED" else None
+
+
+def _lineage_t0_binding(row: dict[str, Any]) -> dict[str, Any]:
+    """Canonical decision-time bytes used to bind receipt -> D1 for all non-error rows."""
+    if not isinstance(row, dict):
+        raise ExportContractError("lineage row must be an object")
+    audit = _audit_object(row.get("audit"))
+    if audit is None:
+        raise ExportContractError("lineage row audit is missing or invalid")
+
+    pipeline = audit.get("pipeline")
+    step2 = pipeline.get("step2_features") if isinstance(pipeline, dict) else None
+    context = (
+        step2.get("polymarket_context_v1")
+        if isinstance(step2, dict)
+        else None
+    )
+    external = audit.get("external_markets_v1")
+    poly = external.get("polymarket") if isinstance(external, dict) else None
+    poly_payload = None
+    if isinstance(poly, dict):
+        poly_payload = {
+            key: poly.get(key)
+            for key in (
+                "source",
+                "version",
+                "eligible_for_prediction",
+                "slug",
+                "condition_id",
+                "start_ts",
+                "end_ts",
+                "up_probability",
+            )
+        }
+
+    return {
+        "id": _row_id(row.get("id")),
+        "ts": _canonical_utc_ts(row.get("ts")),
+        "symbol": _normalize_symbol(row.get("symbol")),
+        "audit": {
+            "pipeline": {
+                "step2_features": {
+                    "up_prob": step2.get("up_prob") if isinstance(step2, dict) else None,
+                    "polymarket_context_v1": (
+                        dict(context) if isinstance(context, dict) else None
+                    ),
+                }
+            },
+            "external_markets_v1": {
+                "polymarket": poly_payload,
+            },
+        },
+    }
 
 
 def fetch_full_audit_rows(
@@ -420,6 +474,17 @@ def validate_persistence_lineage(
             raise ExportContractError(
                 f"receipt/D1 scientific eligibility mismatch for id {pred_id}"
             )
+
+        receipt_binding = _lineage_t0_binding(receipt_row)
+        d1_binding = _lineage_t0_binding(fetched_by_id[pred_id])
+        if (
+            _sha256_text(_canonical_json(receipt_binding))
+            != _sha256_text(_canonical_json(d1_binding))
+        ):
+            raise ExportContractError(
+                f"receipt/D1 causal T0 mismatch for id {pred_id}"
+            )
+
         if receipt_projection["status"] == "ACCEPTED":
             if (
                 receipt_projection["row"]["causal_t0_sha256"]
