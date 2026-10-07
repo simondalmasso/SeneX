@@ -66,8 +66,14 @@ def fit_market_residual_stack(
     beta=0 is exactly market-only. This is historical/synthetic diagnostics,
     not a prospective challenger until separately preregistered.
     """
-    market = [common.probability(value, name="p_market") for value in p_market]
-    senex = [common.probability(value, name="p_senex") for value in p_senex]
+    market = [
+        min(1.0 - common.EPS, max(common.EPS, common.bounded_probability(value, name="p_market")))
+        for value in p_market
+    ]
+    senex = [
+        min(1.0 - common.EPS, max(common.EPS, common.bounded_probability(value, name="p_senex")))
+        for value in p_senex
+    ]
     ys = [common.binary_label(value) for value in labels]
     if not ys or not (len(ys) == len(market) == len(senex)):
         raise EvaluationContractError("market, SENEX and labels must be aligned")
