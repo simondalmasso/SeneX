@@ -1,5 +1,3 @@
-[Reading 152 lines from start (total: 152 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import math
@@ -152,5 +150,3 @@ def evaluate_historical_records(records: list[dict[str, Any]]) -> dict[str, Any]
         "n": len(records),
         **compare_to_market(labels, market, candidate),
     }
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
