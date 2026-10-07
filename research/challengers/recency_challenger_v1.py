@@ -1,5 +1,3 @@
-[Reading 182 lines from start (total: 182 lines, 0 remaining)]
-
 from __future__ import annotations
 
 import math
@@ -182,5 +180,3 @@ def feature_vector(features: dict[str, float]) -> list[float]:
     if not all(math.isfinite(value) for value in values):
         raise ChallengerContractError("recency features must all be finite")
     return values
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
