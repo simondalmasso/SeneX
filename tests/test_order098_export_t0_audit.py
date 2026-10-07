@@ -7,6 +7,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from senecio_polymarket.backend.prediction_persistence import PredictionPersistenceStore
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "research" / "edge" / "order098" / "export_t0_audit.py"
@@ -84,6 +86,38 @@ def test_projection_exports_only_order097_t0_fields_and_ignores_outcome():
     assert "other_market" not in encoded
 
 
+def test_causal_hash_is_invariant_to_post_t0_audit_mutation():
+    m = _load()
+    a = _row()
+    b = _row()
+    b["audit"]["outcomes_dual"] = {"outcome_1h": "LOSS", "price_1h_later": 1.0}
+    b["audit"]["settlement_proof_v1"] = {"different": True}
+
+    pa = m.project_t0_row(a)
+    pb = m.project_t0_row(b)
+
+    assert pa is not None and pb is not None
+    assert pa["audit"] == pb["audit"]
+    assert pa["causal_t0_sha256"] == pb["causal_t0_sha256"]
+    assert pa["source_audit_sha256"] != pb["source_audit_sha256"]
+
+
+def test_projection_result_distinguishes_missing_audit_from_scientific_exclusion():
+    m = _load()
+    missing = _row()
+    missing["audit"] = None
+    excluded = _row()
+    excluded["audit"]["external_markets_v1"]["polymarket"]["eligible_for_prediction"] = False
+
+    fatal = m.project_t0_row_result(missing)
+    skip = m.project_t0_row_result(excluded)
+
+    assert fatal["status"] == "ERROR"
+    assert fatal["reason"] == "AUDIT_MISSING_OR_INVALID"
+    assert skip["status"] == "EXCLUDED"
+    assert skip["reason"] == "POLYMARKET_NOT_ELIGIBLE"
+
+
 def test_projection_accepts_json_text_audit():
     m = _load()
     result = m.project_t0_row(_row(audit_as_text=True))
@@ -142,6 +176,104 @@ def test_fetch_full_audit_uses_get_only_and_keyset_pagination():
     assert len(calls) == 2
 
 
+def test_fetch_full_audit_respects_frozen_max_prediction_id():
+    m = _load()
+    seen_id_filters = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_id_filters.append(request.url.params.get_list("id"))
+        if len(seen_id_filters) == 1:
+            return httpx.Response(200, json=[_row(1), _row(2)])
+        return httpx.Response(200, json=[_row(3)])
+
+    with httpx.Client(
+        base_url="https://example.test/rest/v1",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        rows = m.fetch_full_audit_rows(
+            client,
+            table="oracle_predictions",
+            page_size=2,
+            symbol="BTCUSDT",
+            max_prediction_id=3,
+        )
+
+    assert [row["id"] for row in rows] == [1, 2, 3]
+    assert seen_id_filters[0] == ["lte.3"]
+    assert seen_id_filters[1] == ["gt.2", "lte.3"]
+
+
+def test_fetch_full_audit_respects_explicit_snapshot_time_window():
+    m = _load()
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(list(request.url.params.multi_items()))
+        return httpx.Response(200, json=[])
+
+    with httpx.Client(
+        base_url="https://example.test/rest/v1",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        rows = m.fetch_full_audit_rows(
+            client,
+            table="oracle_predictions",
+            page_size=100,
+            symbol="BTCUSDT",
+            max_prediction_id=9,
+            start_ts="2026-10-06T17:00:00Z",
+            end_ts="2026-10-06T18:15:00Z",
+        )
+
+    assert rows == []
+    # Both lower and upper timestamp filters must be present, not overwritten.
+    ts_filters = [value for key, value in seen[0] if key == "ts"]
+    assert "gte.2026-10-06T17:00:00Z" in ts_filters
+    assert "lte.2026-10-06T18:15:00Z" in ts_filters
+
+
+def test_source_to_d1_lineage_counts_failed_tail_to_explicit_snapshot_end(tmp_path):
+    m = _load()
+    receipts = tmp_path / "receipts.jsonl"
+    store = PredictionPersistenceStore(path=receipts)
+
+    persisted_prediction = {
+        "timestamp": "2026-10-06T18:00:00Z",
+        "symbol": "BTCUSDT",
+        "prediction": "LONG",
+    }
+    failed_tail_prediction = {
+        "timestamp": "2026-10-06T18:10:00Z",
+        "symbol": "BTCUSDT",
+        "prediction": "SHORT",
+    }
+    store.enqueue(
+        {"packet_id": "p1", "packet_hash": "1" * 64},
+        persisted_prediction,
+    )
+    store.mark_persisted("1" * 64, 101)
+    store.enqueue(
+        {"packet_id": "p2", "packet_hash": "2" * 64},
+        failed_tail_prediction,
+    )
+    store.mark_failed("2" * 64, "NETWORK")
+
+    with pytest.raises(m.ExportContractError, match="unresolved generated T0"):
+        m.validate_persistence_lineage(
+            receipt_path=receipts,
+            fetched_rows=[
+                {
+                    "id": 101,
+                    "ts": "2026-10-06T18:00:00Z",
+                    "symbol": "BTCUSDT",
+                }
+            ],
+            symbol="BTCUSDT",
+            start_ts="2026-10-06T17:55:00Z",
+            end_ts="2026-10-06T18:15:00Z",
+        )
+
+
 def test_fetch_full_audit_fails_closed_on_non_monotonic_id():
     m = _load()
 
@@ -188,6 +320,40 @@ def test_manifest_contains_hashes_and_no_credentials(tmp_path):
     assert "secret" not in encoded.lower()
     assert "apikey" not in encoded.lower()
     assert "authorization" not in encoded.lower()
+
+
+def test_prospective_manifest_records_boundary_and_rejection_reasons(tmp_path):
+    m = _load()
+    raw = [_row(1), _row(2)]
+    projected = [m.project_t0_row(row) for row in raw]
+    projected = [row for row in projected if row is not None]
+    output = tmp_path / "t0.jsonl"
+    m.write_jsonl(output, projected)
+
+    manifest = m.build_manifest(
+        source_origin="https://example.test",
+        table="oracle_predictions",
+        symbol="BTCUSDT",
+        fetched_rows=raw,
+        projected_rows=projected,
+        output_path=output,
+        generated_at="2026-10-06T18:00:00Z",
+        max_prediction_id=1234,
+        snapshot_start_ts="2026-10-04T05:00:00Z",
+        snapshot_end_ts="2026-10-06T18:00:00Z",
+        rejection_counts={"POLYMARKET_NOT_ELIGIBLE": 2},
+        source_to_d1_lineage={
+            "contract": "senex-source-to-d1-lineage-v1",
+            "unresolved_t0": 0,
+        },
+        contract="senex-order098-t0-audit-export-v2",
+    )
+
+    assert manifest["contract"] == "senex-order098-t0-audit-export-v2"
+    assert manifest["snapshot_max_prediction_id"] == 1234
+    assert manifest["snapshot_end_ts"] == "2026-10-06T18:00:00Z"
+    assert manifest["rejection_counts"] == {"POLYMARKET_NOT_ELIGIBLE": 2}
+    assert manifest["causal_hash_contract"] == "CAUSAL_T0_ALLOWLIST_V2"
 
 
 def test_full_audit_page_size_is_bounded_to_gateway_contract():

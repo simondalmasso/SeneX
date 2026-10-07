@@ -35,6 +35,7 @@ import numpy as np
 from scipy.stats import binomtest
 
 from research.edge.order097 import market_prior_calibration as order097
+from research.edge.order098 import polymarket_5m_resolutions as order098_resolutions
 from senecio_polymarket.backend.research.statistical_validation import (
     multiple_hypothesis_correction,
 )
@@ -116,13 +117,17 @@ def verify_order098_artifacts(
     resolutions_path: str | Path,
     resolutions_manifest_path: str | Path,
 ) -> dict[str, object]:
-    """Verify exact ORDER098 bytes, contracts, and cross-manifest lineage."""
+    """Verify exact ORDER098 bytes, contracts, coverage, and provenance."""
     predictions_sha = _sha256_file(predictions_path)
     resolutions_sha = _sha256_file(resolutions_path)
     p_manifest = _read_manifest(predictions_manifest_path)
     r_manifest = _read_manifest(resolutions_manifest_path)
 
-    if p_manifest.get("contract") != "senex-order098-t0-audit-export-v1":
+    prediction_contract = str(p_manifest.get("contract") or "")
+    if prediction_contract not in {
+        "senex-order098-t0-audit-export-v1",
+        "senex-order098-t0-audit-export-v2",
+    }:
         raise ArtifactContractError("unexpected ORDER098 T0 export contract")
     if (
         r_manifest.get("contract")
@@ -140,7 +145,14 @@ def verify_order098_artifacts(
         )
 
     prediction_rows = _read_jsonl_objects(predictions_path)
-    source_hashes = [row.get("source_audit_sha256") for row in prediction_rows]
+    row_hash_field = (
+        "causal_t0_sha256"
+        if prediction_contract == "senex-order098-t0-audit-export-v2"
+        else "source_audit_sha256"
+    )
+    source_hashes = [row.get(row_hash_field) for row in prediction_rows]
+    if any(not isinstance(value, str) or len(value) != 64 for value in source_hashes):
+        raise ArtifactContractError("prediction row causal/source hashes are invalid")
     if (
         p_manifest.get("output_row_hashes_sha256")
         != _sha256_text(_canonical_json(source_hashes))
@@ -188,16 +200,114 @@ def verify_order098_artifacts(
             "resolution manifest accepted_markets does not match JSONL"
         )
 
-    return {
+    result = {
         "predictions_sha256": predictions_sha,
         "resolutions_sha256": resolutions_sha,
-        "prediction_contract": p_manifest["contract"],
+        "prediction_contract": prediction_contract,
         "resolution_contract": r_manifest["contract"],
         "prediction_rows": len(prediction_rows),
         "requested_markets": requested,
         "accepted_markets": accepted,
         "rejected_markets": rejected,
     }
+
+    if prediction_contract == "senex-order098-t0-audit-export-v2":
+        if p_manifest.get("causal_hash_contract") != "CAUSAL_T0_ALLOWLIST_V2":
+            raise ArtifactContractError("unexpected causal hash contract")
+
+        allowed_v2_keys = {
+            "id",
+            "ts",
+            "symbol",
+            "audit",
+            "source_audit_sha256",
+            "causal_t0_sha256",
+        }
+        for row in prediction_rows:
+            if set(row) != allowed_v2_keys:
+                raise ArtifactContractError(
+                    "prospective v2 T0 row contains unexpected top-level fields"
+                )
+            causal_payload = {
+                "id": row["id"],
+                "ts": row["ts"],
+                "symbol": row["symbol"],
+                "audit": row["audit"],
+            }
+            expected_causal_hash = _sha256_text(
+                _canonical_json(causal_payload)
+            )
+            if row.get("causal_t0_sha256") != expected_causal_hash:
+                raise ArtifactContractError(
+                    "causal T0 hash does not match visible decision-time bytes"
+                )
+
+        try:
+            max_prediction_id = int(p_manifest.get("snapshot_max_prediction_id"))
+        except (TypeError, ValueError) as exc:
+            raise ArtifactContractError("snapshot_max_prediction_id is invalid") from exc
+        if max_prediction_id < 0 or any(
+            int(row.get("id")) > max_prediction_id for row in prediction_rows
+        ):
+            raise ArtifactContractError("prediction row exceeds frozen snapshot boundary")
+
+        broad_identities = order098_resolutions.extract_market_identities(prediction_rows)
+        broad_keys = {
+            (str(item["slug"]), str(item["condition_id"]))
+            for item in broad_identities
+        }
+        admissible_pairs = order097.extract_t0_pairs(prediction_rows)
+        admissible_keys = {
+            (pair.market_slug, pair.condition_id)
+            for pair in admissible_pairs
+        }
+        resolution_keys = {
+            (str(row.get("slug") or ""), str(row.get("condition_id") or ""))
+            for row in resolution_rows
+        }
+
+        missing_admissible = sorted(admissible_keys - resolution_keys)
+        if missing_admissible:
+            raise ArtifactContractError(
+                f"resolution corpus missing admissible scientific identities: {missing_admissible[:5]}"
+            )
+        missing_broad = sorted(broad_keys - resolution_keys)
+        extra_resolutions = sorted(resolution_keys - broad_keys)
+        if missing_broad or extra_resolutions:
+            raise ArtifactContractError(
+                "resolution corpus does not exactly cover broad exported identities"
+            )
+
+        if requested != len(broad_keys):
+            raise ArtifactContractError(
+                "resolution requested_markets does not match broad exported identities"
+            )
+
+        if r_manifest.get("source") != order098_resolutions.SOURCE:
+            raise ArtifactContractError("resolution source provenance mismatch")
+        if r_manifest.get("gamma_base") != order098_resolutions.GAMMA_BASE:
+            raise ArtifactContractError("resolution gamma_base provenance mismatch")
+        expected_collector_sha = _sha256_file(Path(order098_resolutions.__file__).resolve())
+        if r_manifest.get("collector_file_sha256") != expected_collector_sha:
+            raise ArtifactContractError("resolution collector provenance mismatch")
+
+        expected_queries = [
+            {
+                "slug": str(item["slug"]),
+                "condition_id": item.get("condition_id"),
+            }
+            for item in broad_identities
+        ]
+        if r_manifest.get("queries") != expected_queries:
+            raise ArtifactContractError("resolution queries provenance mismatch")
+
+        result.update({
+            "broad_collector_markets": len(broad_keys),
+            "admissible_scientific_markets": len(admissible_keys),
+            "extra_resolution_markets": len(extra_resolutions),
+        })
+
+    return result
 
 
 def _market_key(item: order097.JoinedObservation) -> tuple[str, str]:

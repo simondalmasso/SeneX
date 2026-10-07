@@ -163,6 +163,112 @@ def get_state() -> dict[str, Any]:
     return dict(_state)
 
 
+async def _persist_and_route_prediction(
+    prediction: dict[str, Any],
+    market_data: dict[str, Any],
+    sealed_packet: dict[str, Any],
+    *,
+    store=None,
+) -> bool:
+    """Bind one T0 to durable D1 authority before any PAPER evaluation lane."""
+    from . import supabase_client
+    from .prediction_persistence import (
+        PredictionPersistenceError,
+        PredictionPersistenceStore,
+    )
+
+    receipt_store = store or PredictionPersistenceStore()
+    source_hash = str((sealed_packet or {}).get("packet_hash") or "")
+    try:
+        receipt_store.enqueue(sealed_packet, prediction)
+    except PredictionPersistenceError as exc:
+        log.error("prediction persistence enqueue failed closed: %s", exc)
+        return False
+
+    try:
+        sb_row = await supabase_client.ensure_prediction_persisted(prediction)
+    except Exception as exc:
+        log.warning("authoritative D1 persistence failed closed: %s", exc)
+        try:
+            receipt_store.mark_failed(source_hash, f"{type(exc).__name__}: {exc}")
+        except Exception:
+            log.exception("failed to record D1 persistence failure receipt")
+        return False
+
+    pred_id = sb_row.get("id") if isinstance(sb_row, dict) else None
+    if isinstance(pred_id, bool) or not isinstance(pred_id, int) or pred_id <= 0:
+        try:
+            receipt_store.mark_failed(source_hash, "NO_AUTHORITATIVE_D1_ID")
+        except Exception:
+            log.exception("failed to record missing-authority-id receipt")
+        return False
+
+    prediction["id"] = pred_id
+    receipt_store.mark_persisted(source_hash, pred_id)
+
+    try:
+        await _route_to_portfolio(prediction, market_data)
+    except Exception as pe_err:
+        log.warning("portfolio routing failed (non-fatal): %s", pe_err)
+
+    try:
+        _route_to_binance_sim(prediction)
+    except Exception as sim_err:
+        log.warning("binance-sim PAPER routing failed (non-fatal): %s", sim_err)
+
+    return True
+
+
+async def _retry_pending_authority_persistence(
+    *,
+    limit: int = 4,
+    store=None,
+) -> dict[str, int]:
+    """Boundedly retry original T0 persistence without retroactive PAPER routing."""
+    from . import supabase_client
+    from .prediction_persistence import PredictionPersistenceStore
+
+    receipt_store = store or PredictionPersistenceStore()
+    pending = receipt_store.pending(limit=limit)
+    attempted = 0
+    persisted = 0
+
+    for state in pending:
+        attempted += 1
+        source_hash = str(state.get("source_packet_hash") or "")
+        prediction = state.get("prediction")
+        if not isinstance(prediction, dict):
+            receipt_store.mark_failed(source_hash, "RETRY_MISSING_ORIGINAL_T0")
+            continue
+
+        try:
+            row = await supabase_client.ensure_prediction_persisted(prediction)
+        except Exception as exc:
+            receipt_store.mark_failed(
+                source_hash,
+                f"RETRY_{type(exc).__name__}: {exc}",
+            )
+            continue
+
+        pred_id = row.get("id") if isinstance(row, dict) else None
+        if isinstance(pred_id, bool) or not isinstance(pred_id, int) or pred_id <= 0:
+            receipt_store.mark_failed(source_hash, "RETRY_UNRESOLVED")
+            continue
+
+        # Deliberately DO NOT route recovered historical observations through
+        # PortfolioCoordinator or BINANCE_SIM. Recovery repairs authority
+        # lineage only; it never backdates a PAPER treatment decision.
+        receipt_store.mark_persisted(source_hash, pred_id)
+        persisted += 1
+
+    remaining = len(receipt_store.pending(limit=100))
+    return {
+        "attempted": attempted,
+        "persisted": persisted,
+        "remaining": remaining,
+    }
+
+
 async def _run_one_prediction(symbol: str) -> Optional[dict]:
     """Run a single prediction for a symbol. Returns the prediction dict or None."""
     # Import inside the function so module load is cheap and errors are isolated
@@ -235,14 +341,15 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         # Persist
         await asyncio.to_thread(log_prediction, prediction, str(PREDICTIONS_PATH))
 
-        # ORDER086 P0: seal an immutable decision-time packet from the same
-        # freshly-created prediction before any remote mirror or later outcome
-        # reconciliation can add post-T0 evidence. Additive and non-fatal.
+        # ORDER086 P0: seal one durable immutable decision-time packet before
+        # any authority persistence or PAPER treatment. A prediction without a
+        # durable T0 identity is quarantined from canonical downstream lanes.
+        sealed_packet = None
         try:
             from .gptrader.sealer import seal_prediction_t0
-            await asyncio.to_thread(seal_prediction_t0, prediction)
+            sealed_packet = await asyncio.to_thread(seal_prediction_t0, prediction)
         except Exception as seal_err:
-            log.warning("gptrader T0 sealing failed (continuing): %s", seal_err)
+            log.error("gptrader T0 sealing failed closed: %s", seal_err)
         else:
             try:
                 from .gptrader.transport import replicate_pending_t0
@@ -253,43 +360,31 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
                     replication_err,
                 )
 
-        # Dual-write to Supabase (best-effort — failure doesn't block the cycle)
-        try:
-            from . import supabase_client
-            sb_row = await supabase_client.insert_prediction(prediction)
-            if sb_row:
-                log.info("supabase insert OK id=%s", sb_row.get("id"))
-                # Attach the Supabase row id back onto the prediction dict so
-                # the portfolio coordinator can use it as prediction_id FK.
-                prediction["id"] = sb_row.get("id")
-            else:
-                log.warning("supabase insert returned None — predictions.jsonl is source of truth")
-        except Exception as sb_err:
-            log.warning("supabase insert failed (continuing): %s", sb_err)
+        authority_persisted = False
+        if sealed_packet is not None:
+            authority_persisted = await _persist_and_route_prediction(
+                prediction,
+                market_data,
+                sealed_packet,
+            )
+        else:
+            log.error(
+                "prediction quarantined: no durable sealed T0 identity; "
+                "D1/PAPER/BINANCE_SIM routing skipped"
+            )
 
-        # Update runtime state
+        # Update runtime state. The raw T0 count remains a generation count;
+        # canonical treatment is separately identified by authority_persisted.
         _state["last_prediction_ts"] = prediction.get("timestamp")
         _state["last_prediction_symbol"] = prediction.get("symbol")
         _state["last_prediction_result"] = {k: v for k, v in prediction.items() if not k.startswith("_")}
         _state["predictions_count"] += 1
         _state["exchange_used_last"] = exchange_used
-        _state["last_error"] = None
-
-        # ACT-XXV: Route prediction through the institutional portfolio
-        # pipeline (PortfolioEngine → RiskKernel → ExecutionEngine → Journal
-        # → ShadowLive). This is ADDITIVE — the prediction model, feature
-        # engineering, signal generation, and verifier are NOT touched.
-        try:
-            await _route_to_portfolio(prediction, market_data)
-        except Exception as pe_err:
-            log.warning("portfolio routing failed (non-fatal): %s", pe_err)
-
-        # Isolated owner-requested PAPER wallet. This is deliberately separate
-        # from ACT-XXV and structurally incapable of real exchange orders.
-        try:
-            _route_to_binance_sim(prediction)
-        except Exception as sim_err:
-            log.warning("binance-sim PAPER routing failed (non-fatal): %s", sim_err)
+        _state["last_authority_persisted"] = bool(authority_persisted)
+        _state["last_error"] = (
+            None if authority_persisted
+            else "PREDICTION_QUARANTINED_NO_DURABLE_AUTHORITY"
+        )
 
         log.info(
             "prediction logged: %s %s conf=%.4f ev=%.8f price=%s exchange=%s",
@@ -707,6 +802,20 @@ async def _oracle_loop() -> None:
                 log.info("verifier settled %d outcomes in cycle #%d", settled, _state["cycles_run"])
         except Exception as e:
             log.exception("verifier error (non-fatal, continuing): %s", e)
+
+        # Repair unresolved source->D1 authority lineage from the original
+        # sealed T0 bytes only. This bounded retry never backdates PAPER routes.
+        try:
+            retry = await _retry_pending_authority_persistence(limit=4)
+            _state["last_persistence_retry_attempted"] = retry["attempted"]
+            _state["last_persistence_retry_persisted"] = retry["persisted"]
+            _state["persistence_unresolved_receipts"] = retry["remaining"]
+        except Exception as retry_err:
+            log.exception(
+                "authority persistence retry failed (non-fatal, receipts retained): %s",
+                retry_err,
+            )
+            _state["last_persistence_retry_error"] = str(retry_err)[:240]
 
         for symbol in SYMBOLS:
             try:

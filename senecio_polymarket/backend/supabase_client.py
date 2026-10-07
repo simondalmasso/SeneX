@@ -216,6 +216,137 @@ async def _d1_get(client: Any, path: str, **kwargs: Any) -> Any:
     return response
 
 
+class PredictionPersistenceConflictError(RuntimeError):
+    """Exact T0 identity conflicts with an already-persisted authority row."""
+
+
+def _canonical_t0_timestamp(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise PredictionPersistenceConflictError("prediction timestamp is missing")
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise PredictionPersistenceConflictError("prediction timestamp is invalid") from exc
+    if parsed.tzinfo is None:
+        raise PredictionPersistenceConflictError("prediction timestamp must be timezone-aware")
+    return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _persistence_t0_projection(value: dict[str, Any], *, persisted: bool) -> dict[str, Any]:
+    audit_key = "audit" if persisted else "_audit"
+    audit = value.get(audit_key)
+    if not isinstance(audit, dict):
+        audit = {}
+
+    pipeline = audit.get("pipeline") if isinstance(audit.get("pipeline"), dict) else {}
+    projected_pipeline = {
+        key: pipeline[key]
+        for key in ("step2_features", "step4_ev")
+        if key in pipeline
+    }
+    projected_audit = {
+        key: audit[key]
+        for key in (
+            "origin_price_v1",
+            "confidence_semantics_v1",
+            "execution_state",
+            "external_markets_v1",
+            "decision_replay_v1",
+            "canonical_ev_contract_v1",
+        )
+        if key in audit
+    }
+    if projected_pipeline:
+        projected_audit["pipeline"] = projected_pipeline
+
+    candle_ts = value.get("candle_ts")
+    if candle_ts is None:
+        candle_ts = audit.get("candle_ts")
+
+    projection: dict[str, Any] = {
+        "timestamp": _canonical_t0_timestamp(
+            value.get("ts") if persisted else value.get("timestamp")
+        ),
+        "symbol": _normalize_symbol(value.get("symbol")),
+        "prediction": str(value.get("prediction") or ""),
+        "confidence": float(value.get("confidence", 0)),
+        "ev": float(value.get("ev", 0)),
+        "price_now": float(value.get("price_now", 0)),
+        "exchange_used": str(value.get("exchange_used") or "unknown"),
+        "audit": projected_audit,
+    }
+    if candle_ts is not None:
+        projection["candle_ts"] = candle_ts
+    return projection
+
+
+async def _lookup_exact_prediction_t0(prediction: dict[str, Any]) -> Optional[dict]:
+    client = _get_client()
+    timestamp = _canonical_t0_timestamp(prediction.get("timestamp"))
+    symbol = _normalize_symbol(prediction.get("symbol"))
+    params = {
+        "select": "id,ts,symbol,prediction,confidence,ev,price_now,exchange_used,audit",
+        "ts": f"eq.{timestamp}",
+        "symbol": f"eq.{symbol}",
+        "order": "id.asc",
+        "limit": "4",
+    }
+    response = await _d1_get(client, f"/{SUPABASE_TABLE}", params=params)
+    if response.status_code != 200:
+        raise PredictionPersistenceConflictError(
+            f"authority idempotency lookup HTTP {response.status_code}"
+        )
+    rows = response.json()
+    if not isinstance(rows, list):
+        raise PredictionPersistenceConflictError(
+            "authority idempotency lookup returned non-list payload"
+        )
+
+    expected = _persistence_t0_projection(prediction, persisted=False)
+    candidates = [
+        row for row in rows
+        if isinstance(row, dict)
+        and _normalize_symbol(row.get("symbol")) == symbol
+        and _canonical_t0_timestamp(row.get("ts")) == timestamp
+    ]
+    matching = [
+        row for row in candidates
+        if _persistence_t0_projection(row, persisted=True) == expected
+    ]
+    conflicting = [row for row in candidates if row not in matching]
+
+    if conflicting:
+        raise PredictionPersistenceConflictError(
+            "existing authority row conflicts with exact generated T0"
+        )
+    if len(matching) > 1:
+        raise PredictionPersistenceConflictError(
+            "multiple authority rows match one generated T0"
+        )
+    if not matching:
+        return None
+
+    existing = matching[0]
+    persist_authority_row_local(existing)
+    return existing
+
+
+async def ensure_prediction_persisted(prediction: dict[str, Any]) -> Optional[dict]:
+    """Idempotently bind one generated T0 to exactly one D1 authority row."""
+    existing = await _lookup_exact_prediction_t0(prediction)
+    if existing is not None:
+        return existing
+
+    inserted = await insert_prediction(prediction)
+    if inserted is not None:
+        return inserted
+
+    # A transport/ACK failure can occur after the gateway committed the row.
+    # Re-read the exact T0 once before declaring unresolved persistence.
+    return await _lookup_exact_prediction_t0(prediction)
+
+
 async def insert_prediction(prediction: dict) -> Optional[dict]:
     row = {
         "ts": prediction.get("timestamp"),
