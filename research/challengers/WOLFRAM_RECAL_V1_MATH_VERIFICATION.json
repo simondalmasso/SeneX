@@ -1,5 +1,3 @@
-[Reading 20 lines from start (total: 20 lines, 0 remaining)]
-
 {
   "contract": "senex-wolfram-math-verification-v1",
   "challenger_id": "WOLFRAM_RECAL_V1",
@@ -20,5 +18,3 @@
   },
   "interpretation": "For lambda>0 determinant and trace are positive, so the penalized 2-parameter Hessian is positive definite; the Newton objective is strictly convex."
 }
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
