@@ -1,5 +1,3 @@
-[Reading 1179 lines from start (total: 1179 lines, 0 remaining)]
-
 """ORDER099 preregistered tabular falsification for ORDER097.
 
 This module deliberately stays simple. It reuses ORDER097's target-alignment,
