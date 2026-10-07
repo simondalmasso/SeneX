@@ -1,5 +1,3 @@
-[Reading 182 lines from start (total: 182 lines, 0 remaining)]
-
 # SENEX Challenger Lab V1
 
 Isolated research lane for testing candidate information sources and probability
@@ -182,5 +180,3 @@ bootstrap, threshold, or verdict.
 
 T* for Challenger Lab will be declared only after historical/synthetic
 verification and explicit selection of at most two candidates.
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
