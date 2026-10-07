@@ -1,5 +1,3 @@
-[Reading 49 lines from start (total: 49 lines, 0 remaining)]
-
 {
   "contract": "senex-challenger-manifest-v1",
   "challenger_id": "RECENCY_CHALLENGER_V1",
@@ -49,5 +47,3 @@
   "real_orders": 0,
   "capital": 0
 }
-
-[executed on device: DESKTOP-DPH3941 (f5db7315-cdea-42b4-b067-243411e4a115)]
