@@ -1,4 +1,4 @@
-[Reading 452 lines from start (total: 452 lines, 0 remaining)]
+[Reading 470 lines from start (total: 470 lines, 0 remaining)]
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from research.challengers.common import (
     manifest_sha256,
     proper_score_report,
     purged_walk_forward_splits,
+    roc_auc,
     seal_prospective_receipt,
 )
 from research.challengers.evaluation import (
@@ -75,6 +76,7 @@ def test_frozen_manifests_are_zero_spend_and_historical_only():
         assert manifest["zero_spend"] is True
         assert manifest["prospective_t_star"] is None
         assert manifest["prospective_n"] is None
+        assert manifest["rank_diagnostics"] == ["roc_auc"]
         assert_historical_synthetic_only(manifest)
         assert len(manifest_sha256(manifest)) == 64
 
@@ -137,6 +139,22 @@ def test_calibration_report_is_explicit_and_fixed_bin():
     assert math.isfinite(underconfident["ece"])
     assert len(underconfident["bins"]) > 0
     assert near_deterministic["ece"] < underconfident["ece"]
+
+
+def test_roc_auc_is_rank_diagnostic_only_and_handles_ties():
+    labels = [0, 0, 1, 1]
+    assert roc_auc(labels, [0.1, 0.2, 0.8, 0.9]) == pytest.approx(1.0)
+    assert roc_auc(labels, [0.9, 0.8, 0.2, 0.1]) == pytest.approx(0.0)
+    assert roc_auc(labels, [0.5, 0.5, 0.5, 0.5]) == pytest.approx(0.5)
+    assert roc_auc([1, 1], [0.4, 0.6]) is None
+
+    report = proper_score_report(
+        [1, 0, 1, 0],
+        [0.6, 0.4, 0.6, 0.4],
+        [0.8, 0.2, 0.8, 0.2],
+    )
+    assert report["market_roc_auc"] == pytest.approx(1.0)
+    assert report["candidate_roc_auc"] == pytest.approx(1.0)
 
 
 def test_wolfram_recalibration_reference_is_deterministic():
