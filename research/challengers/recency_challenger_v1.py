@@ -152,6 +152,12 @@ def aggregate_features(
             "recency batch mixes extractor hashes; one frozen extractor is required"
         )
 
+    docs.sort(
+        key=lambda document: (
+            document.source.strip().lower(),
+            document.document_id.strip(),
+        )
+    )
     six_hour_floor = cutoff - timedelta(seconds=LOOKBACK_6H_SECONDS)
     one_hour_floor = cutoff - timedelta(seconds=LOOKBACK_1H_SECONDS)
     recent = [doc for doc in docs if _utc(doc.published_at) >= six_hour_floor]
