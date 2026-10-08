@@ -6,18 +6,28 @@
 <meta name="theme-color" content="#07090d" />
 <title>senex · PAPER observability</title>
 <meta name="oracle-version" content="AUD060-DASHBOARD-TRUTH-V1" />
-<link rel="stylesheet" href="/static/styles.css" />
+<link rel="stylesheet" href="/static/styles.css?v=order199-modern-dashboard-20261008-r2" />
 </head>
 <body>
 <div id="app">
+  <aside id="sidebar" aria-label="SENEX navigation">
+    <a href="#score-panel" class="sidebar-brand" aria-label="SENEX dashboard">
+      <span class="sidebar-mark" aria-hidden="true">⬡</span>
+      <span><strong>senex</strong><small>Research · PAPER-only</small></span>
+    </a>
+    <p class="nav-caption">WORKSPACE</p>
+    <nav class="sidebar-nav" aria-label="Dashboard sections">
+      <a class="nav-link current" href="#score-panel"><span aria-hidden="true">◈</span> Dashboard</a>
+      <a class="nav-link" href="#predictions-panel"><span aria-hidden="true">▤</span> Evidence & predictions</a>
+      <a class="nav-link" href="#poly-book-panel"><span aria-hidden="true">▥</span> Orderbook</a>
+      <a class="nav-link" href="#poly-panel"><span aria-hidden="true">◇</span> Market context</a>
+      <a class="nav-link" href="#safety-panel"><span aria-hidden="true">◉</span> Runtime & safety</a>
+      <a class="nav-link" href="#model-quality-panel"><span aria-hidden="true">▦</span> Diagnostics</a>
+    </nav>
+    <div class="sidebar-note"><span class="live-dot" aria-hidden="true"></span><span>Read-only dashboard<strong>Paper capital locked</strong></span></div>
+  </aside>
   <header id="topbar">
-    <div class="brand">
-      <div class="logo">⬡</div>
-      <div>
-        <div class="title">senex</div>
-        <div class="subtitle">Read-only observability · PAPER-only</div>
-      </div>
-    </div>
+    <div class="workspace-title"><span>RESEARCH / OBSERVABILITY</span><h1>Dashboard overview</h1></div>
     <div id="conn-status" class="pill pill-amber" data-claim-class="UNKNOWN/STALE">loading real market…</div>
     <div class="topbar-stats">
       <span class="stat">mode: <b id="stat-mode" data-claim-class="UNKNOWN/STALE">—</b></span>
@@ -52,7 +62,16 @@
           <div class="evidence-item"><span class="evidence-label">Evidence · 1h authority</span><strong id="ui-evidence-status">UNKNOWN</strong></div>
           <div class="evidence-item"><span class="evidence-label">EDGE · scientific status</span><strong id="ui-edge-status">UNKNOWN</strong></div>
         </div>
-        <div class="oracle-score-grid">
+        <div class="score-content">
+          <div id="raw-history" class="raw-history" aria-label="Recent timestamped BTC raw conviction history">
+            <div class="history-heading">
+              <div><strong>BTC raw conviction history</strong><span>Observed decision snapshots · NOT P(correct)</span></div>
+              <span class="history-badge">API · BTC</span>
+            </div>
+            <div id="raw-history-visual" class="history-visual" role="img" aria-label="Waiting for timestamped BTC conviction samples">Waiting for timestamped BTC decision snapshots…</div>
+            <div class="history-foot">Only real timestamped samples · lines connect observations, not a validated edge signal</div>
+          </div>
+          <div class="oracle-score-grid">
           <div class="score-card"><div class="score-label">BTC input rows · API scope</div><div class="score-value" id="score-total">—</div></div>
           <div class="score-card"><div class="score-label">Proof-qualified raw · diagnostic N</div><div class="score-value" id="score-proof-raw">—</div></div>
           <div class="score-card"><div class="score-label">Independent 1h · authority N</div><div class="score-value" id="score-independent">—</div></div>
@@ -61,6 +80,7 @@
           <div class="score-card"><div class="score-label">Score status</div><div class="score-value compact" id="score-status">UNKNOWN</div></div>
           <div class="score-card diagnostic-card" data-claim-class="DIAGNOSTIC"><div class="score-label">Raw observed WR · DIAGNOSTIC ONLY</div><div class="score-value" id="score-raw-diagnostic">—</div></div>
           <div class="score-card"><div class="score-label">Next oracle cycle · runtime</div><div class="score-value compact" id="score-next">—</div></div>
+          </div>
         </div>
       </div>
 
@@ -265,7 +285,7 @@
     <span id="footer-freshness" data-claim-class="UNKNOWN/STALE">[UNKNOWN/STALE] source freshness awaiting API</span>
   </footer>
 </div>
-<script src="/static/dashboard_truth.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/dashboard_truth.js?v=order199-modern-dashboard-20261008-r2"></script>
+<script src="/static/app.js?v=order199-modern-dashboard-20261008-r2"></script>
 </body>
 </html>
