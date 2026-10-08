@@ -1,0 +1,20 @@
+{
+  "contract": "senex-wolfram-math-verification-v1",
+  "challenger_id": "WOLFRAM_RECAL_V1",
+  "verified_on": "2026-10-07",
+  "engine": "Wolfram Language",
+  "purpose": "Independent symbolic verification of Bernoulli log-loss derivatives for local deterministic Newton recalibrator.",
+  "model": "p=Sigmoid[a+b*x]; loss=-y Log[p]-(1-y) Log[1-p]+(lambda/2)(a^2+(b-1)^2)",
+  "expected_gradient": [
+    "p-y+lambda*a",
+    "(p-y)*x+lambda*(b-1)"
+  ],
+  "expected_hessian": "p(1-p){{1,x},{x,x^2}}+lambda I2",
+  "wolfram_result": {
+    "gradient_match": true,
+    "hessian_match": true,
+    "determinant": "lambda^2 + lambda*(1+x^2)/(2*(1+Cosh[a+b*x]))",
+    "trace": "2*lambda + (1+x^2)/(2+2*Cosh[a+b*x])"
+  },
+  "interpretation": "For lambda>0 determinant and trace are positive, so the penalized 2-parameter Hessian is positive definite; the Newton objective is strictly convex."
+}

@@ -1,0 +1,21 @@
+{
+  "contract": "senex-challenger-historical-real-status-v1",
+  "status": "BLOCKED_ARTIFACT_BYTES",
+  "checked_at": "2026-10-07T04:58:00Z",
+  "scope": "ORDER099 historical real re-evaluation for Challenger Lab V1",
+  "expected_artifacts": {
+    "t0_predictions_sha256": "2cee4c452916e4e0a5a2bc6b23d72159a140af0de0a4d06af9cf1d35c0324329",
+    "t0_export_manifest_sha256": "a6767fb71b0e734a31d8b00144d426203d1644e5e9869194b917edc3e217cf1e",
+    "resolutions_sha256": "8673f0c2c3e93a5df30130fd20d3c6fac3f35b35b31744fe0631ed173ea9293d",
+    "resolution_manifest_sha256": "6f11efd8208868a87a11533ae190f12d07fe334a27b815b2146f5bdda193e181"
+  },
+  "searched_surfaces": [
+    "authorized local workspace C:\\GPT-SANDBOX",
+    "connected Google Drive",
+    "GitHub repository/index"
+  ],
+  "reconstruction_forbidden": true,
+  "prospective_order100_untouched": true,
+  "edge_claim": "NONE",
+  "next_valid_action": "recover exact historical artifact bytes matching all frozen SHA256 values; then run historical challenger harness without modifying manifests or ORDER100"
+}
