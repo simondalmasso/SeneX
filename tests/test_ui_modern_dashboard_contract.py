@@ -23,7 +23,7 @@ def test_sidebar_destinations_are_existing_readonly_panels():
 def test_coherent_static_assets_and_mobile_grid():
     html = (FRONTEND / "index.html").read_text(encoding="utf-8")
     css = (FRONTEND / "styles.css").read_text(encoding="utf-8")
-    tag = "order199-modern-dashboard-20261008-r2"
+    tag = "order199-modern-dashboard-20261008-r3"
     for name, attribute in (
         ("styles.css", "href"),
         ("dashboard_truth.js", "src"),
@@ -61,3 +61,12 @@ def test_frontend_javascript_syntax():
             text=True, timeout=20, check=False,
         )
         assert result.returncode == 0, result.stderr
+
+
+def test_first_screen_evidence_precedes_unranked_diagnostics():
+    """Missing order on a display:contents child formerly hid evidence below the fold."""
+    css = (FRONTEND / "styles.css").read_text(encoding="utf-8")
+    assert "main > section.col { display: contents !important; }" in css
+    assert "main .panel {\n  /* Unranked diagnostics must not precede the primary evidence. */\n  order: 99;" in css
+    assert "#score-panel { order:1;" in css
+    assert "#learning-panel { order:16; grid-column:1/-1; }" in css
