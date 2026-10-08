@@ -1,4 +1,4 @@
-/* SENECIO ORACLE — Polymarket-style dark terminal UI (v2 — responsive + scrollable panels) */
+/* SENEX · research/PAPER observability. Styling only; authority remains API-derived. */
 :root {
   --bg: #07090d;
   --bg-panel: #0d1117;
@@ -8,8 +8,8 @@
   --text: #d7dde6;
   --text-dim: #7a8699;
   --text-faint: #4d5666;
-  --accent: #00ffa3;
-  --accent-2: #00d4ff;
+  --accent: #76dabb;
+  --accent-2: #90c5da;
   --warn: #ffb000;
   --danger: #ff3d6e;
   --long: #00ffa3;
@@ -17,7 +17,7 @@
   --hold: #ffb000;
   --watch: #7a8699;
   --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Menlo', monospace;
-  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -89,6 +89,57 @@ body {
 }
 .topbar-stats .stat b { color: var(--text); font-weight: 600; margin-left: 4px; }
 .topbar-stats .stat b[data-claim-class="UNKNOWN/STALE"] { color: var(--danger); }
+
+/* Persistent, read-only safety strip: never disappear on narrow screens. */
+#safety-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.safety-chip {
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-panel-2);
+  color: var(--text-dim);
+  padding: 5px 9px;
+  font: 600 10px/1.4 var(--mono);
+  white-space: nowrap;
+}
+.safety-chip.ok { border-color: rgba(118,218,187,.4); color: var(--accent); }
+.safety-chip.blocked { border-color: rgba(255,61,110,.45); color: var(--danger); }
+.safety-chip.unknown { color: var(--text-dim); }
+.safety-chip[data-claim-class="UNKNOWN/STALE"] { border-style: dashed; }
+
+.evidence-compact {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 10px 0;
+}
+.evidence-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-2);
+}
+.evidence-label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.evidence-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font: 600 14px/1.35 var(--mono);
+}
+#ui-evidence-status, #ui-edge-status { color: var(--warn); }
 
 /* ============= DOMAIN HEALTH / FRESHNESS ============= */
 #domain-health {
@@ -471,6 +522,7 @@ footer {
 /* Mobile portrait (< 768px) */
 @media (max-width: 768px) {
   body { font-size: 12px; }
+  .evidence-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #app { grid-template-rows: auto auto 1fr auto; height: auto; min-height: 100vh; }
   body { overflow-y: auto; overflow-x: hidden; }
 
@@ -551,9 +603,17 @@ footer {
 /* Very small phones (< 480px) */
 @media (max-width: 480px) {
   body { font-size: 11px; }
+  #topbar { padding: 9px 10px; gap: 7px; }
+  #safety-strip { gap: 5px; }
+  .safety-chip { padding: 4px 7px; font-size: 9px; }
+  .evidence-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 7px 7px 0; }
+  .evidence-item { padding: 8px; }
+  .evidence-item strong { font-size: 12px; }
+  .evidence-label { font-size: 9px; }
   .title { font-size: 12px; }
   .subtitle { display: none; }
-  .topbar-stats .stat:nth-child(n+4) { display: none; } /* show only first 3 stats */
+  .topbar-stats { justify-content: flex-start; }
+  .topbar-stats .stat { display: inline-flex; align-items: baseline; }
   .feed-row { grid-template-columns: 50px 70px 1fr; padding: 3px 6px; }
   .feed-row .type { font-size: 8px; }
   .feed-row .body { font-size: 9px; }
@@ -594,9 +654,8 @@ footer {
   letter-spacing: 0.10em;
 }
 .col-oracle .panel-head h2::before {
-  content: '● ';
-  color: var(--accent);
-  animation: pulse-live 2s ease-in-out infinite;
+  /* Evidence is not equivalent to a live or validated trading signal. */
+  content: none;
 }
 @keyframes pulse-live {
   0%, 100% { opacity: 1; }
