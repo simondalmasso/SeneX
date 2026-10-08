@@ -134,6 +134,7 @@
     element.className = `pill ${wsLive ? 'pill-green' : restSnapshot ? 'pill-amber' : 'pill-red'}`;
     element.textContent = wsLive ? 'CLOB WS LIVE'
       : restSnapshot ? 'POLYMARKET REST SNAPSHOT'
+      : status === 'LIVE_WS' ? 'CLOB WS NOT CONNECTED'
       : status ? `MARKET ${status}` : 'MARKET UNKNOWN';
     element.dataset.claimClass = status ? 'RUNTIME_OBSERVED' : 'UNKNOWN/STALE';
   }
