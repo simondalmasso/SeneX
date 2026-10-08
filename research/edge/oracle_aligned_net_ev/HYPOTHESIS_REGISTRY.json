@@ -1,0 +1,44 @@
+{
+  "version": "M17-v1-draft",
+  "registration_state": "DESIGN_ONLY_NOT_FROZEN_FOR_PROSPECTIVE",
+  "H1": {
+    "name": "ORACLE_CLOB",
+    "primary": true,
+    "null": "C cannot establish positive absolute net and positive increment beyond B market prior and no-feature abstainer under admissible cost/fill/label constraints",
+    "market": "Polymarket BTC5m only"
+  },
+  "primary_policies": [
+    "A_NO_TRADE",
+    "B_MARKET_PRIOR",
+    "C_SENEX_CALIBRATED"
+  ],
+  "secondary_control": {
+    "name": "H1b_PAIR_COMPLETE_SET",
+    "status": "EXPLORATORY_FALSIFICATION_ONLY_NOT_PROMOTIONAL"
+  },
+  "preregistration_before_new_T0": [
+    "eligibility",
+    "clock_skew_and_quote_age",
+    "min_depth",
+    "max_latency",
+    "exact market fee per T0",
+    "calibrator training/embargo",
+    "policy threshold",
+    "fixed notional",
+    "prospective sample size/power",
+    "paired dependence-aware CI",
+    "stress costs",
+    "FWER family",
+    "trials ledger",
+    "stopping policy"
+  ],
+  "acceptance": [
+    "independent original T0/T1 bytes",
+    "market-specific oracle rule and signed authoritative verification",
+    "separately evidenced paper fills/latency",
+    "N independent clusters target",
+    "lower adjusted confidence bounds >0 absolute and incremental",
+    "independent AUD signoff"
+  ],
+  "edge": "UNPROVEN"
+}
