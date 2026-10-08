@@ -33,3 +33,17 @@ def test_fails_closed_on_bad_causal_candle(mutation):
 def test_unknown_is_not_pattern_absence_when_missing_history():
     s=sample(); s["ohlcv"]=s["ohlcv"][:12]
     with pytest.raises(EvidenceError, match="history"): parse_snapshot(s)
+
+def test_durable_receipt_is_plain_utf8_json_and_hash_bound():
+    from pathlib import Path
+    import hashlib, json
+    project=Path(__file__).resolve().parents[1]/"research"/"edge"/"candle_economic_challenger"
+    raw=(project/"ORDER197_RECEIPT.json").read_bytes()
+    assert not raw.startswith(b"\\xef\\xbb\\xbf")
+    receipt=json.loads(raw.decode("utf-8"))
+    for field,name in (
+        ("feature_extractor_sha256","candle_features.py"),
+        ("config_sha256","FEATURE_SCHEMA_V1.json"),
+        ("cost_model_sha256","economic_labels.py"),
+    ):
+        assert hashlib.sha256((project/name).read_bytes()).hexdigest()==receipt[field]
