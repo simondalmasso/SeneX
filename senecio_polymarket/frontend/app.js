@@ -48,6 +48,25 @@
     },
   };
 
+  // Presentation-only badges. No local value can confer scientific authority.
+  function setSafetyChip(selector, text, tone, known) {
+    const element = $(selector);
+    element.textContent = text;
+    element.className = 'safety-chip ' + tone;
+    element.dataset.claimClass = known ? 'API_DERIVED' : 'UNKNOWN/STALE';
+  }
+
+  function syncDataBadge() {
+    const domain = state.domains.context;
+    if (domain.status === 'OK') {
+      setSafetyChip('#safety-data', 'DATA OK · POLL 2s', 'ok', true);
+    } else if (domain.status === 'ERROR' && domain.stale) {
+      setSafetyChip('#safety-data', 'DATA STALE', 'unknown', false);
+    } else {
+      setSafetyChip('#safety-data', 'DATA UNKNOWN', 'unknown', false);
+    }
+  }
+
   async function getJSON(url) {
     const response = await fetch(url, {cache: 'no-store'});
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -84,6 +103,7 @@
   function domainSuccess(name) {
     state.domains[name] = truth.domainSuccess(state.domains[name]);
     renderDomainHealth();
+    syncDataBadge();
   }
 
   function domainFailure(name, error) {
@@ -99,18 +119,22 @@
       footerFreshness.textContent = '[UNKNOWN/STALE] retained source freshness · context ERROR';
       footerFreshness.dataset.claimClass = 'UNKNOWN/STALE';
       markContextTopbarStale(error);
+      setSafetyChip('#safety-paper', 'PAPER STALE', 'unknown', false);
+      setSafetyChip('#safety-orders', 'ORDERS STALE', 'unknown', false);
     }
     renderDomainHealth();
+    syncDataBadge();
   }
 
   function setConn(polymarket) {
     const element = $('#conn-status');
     const status = polymarket && polymarket.status;
-    const live = status === 'LIVE_WS' || status === 'LIVE_REST';
-    element.className = `pill ${live ? 'pill-green' : 'pill-red'}`;
-    element.textContent = status
-      ? `${live ? 'POLYMARKET' : 'MARKET'} ${status}`
-      : 'MARKET UNKNOWN';
+    const wsLive = status === 'LIVE_WS' && polymarket.ws_connected === true;
+    const restSnapshot = status === 'LIVE_REST';
+    element.className = `pill ${wsLive ? 'pill-green' : restSnapshot ? 'pill-amber' : 'pill-red'}`;
+    element.textContent = wsLive ? 'CLOB WS LIVE'
+      : restSnapshot ? 'POLYMARKET REST SNAPSHOT'
+      : status ? `MARKET ${status}` : 'MARKET UNKNOWN';
     element.dataset.claimClass = status ? 'RUNTIME_OBSERVED' : 'UNKNOWN/STALE';
   }
 
@@ -144,6 +168,15 @@
     const boros = ctx.boros && typeof ctx.boros === 'object' ? ctx.boros : {};
     const oracle = ctx.oracle && typeof ctx.oracle === 'object' ? ctx.oracle : {};
     const safety = truth.safetyView(ctx);
+    const modeKnown = safety.tradeMode !== 'UNKNOWN' && safety.liveCapital !== 'UNKNOWN';
+    const paperLocked = safety.tradeMode === 'PAPER' && safety.liveCapital === 'LOCKED';
+    setSafetyChip('#safety-paper',
+      !modeKnown ? 'PAPER UNKNOWN' : paperLocked ? 'PAPER LOCKED' : 'PAPER NOT LOCKED',
+      !modeKnown ? 'unknown' : paperLocked ? 'ok' : 'blocked', modeKnown);
+    const ordersKnown = safety.orders === 'DISABLED' || safety.orders === 'ENABLED';
+    setSafetyChip('#safety-orders',
+      !ordersKnown ? 'ORDERS UNKNOWN' : safety.orders === 'DISABLED' ? 'ORDERS OFF' : 'ORDERS ON',
+      !ordersKnown ? 'unknown' : safety.orders === 'DISABLED' ? 'ok' : 'blocked', ordersKnown);
 
     setConn(poly);
     $('#stat-mode').textContent = safety.marketMode;
@@ -338,6 +371,7 @@
       const polyText = poly.eligible
         ? `${pct(poly.up_probability)} · applied=${num(poly.pressure_component, 3)} · SNAPSHOT`
         : '—';
+      const rawConviction = pct(row.confidence);
       const replay = learning.proof_qualified_n == null
         ? (learning.status || '—')
         : `${learning.status || '—'} replay_n=${learning.proof_qualified_n}`;
@@ -345,7 +379,7 @@
         <td>${clock(row.ts || row.created_at)}</td>
         <td class="sym">${esc(row.symbol)}</td>
         <td style="font-weight:700">${esc(row.prediction)}</td>
-        <td class="num">${pct(row.confidence)}</td>
+        <td class="num">${rawConviction === '—' ? '—' : rawConviction + ' RAW'}</td>
         <td>${esc(replay)}</td>
         <td>${esc(polyText)}</td>
         <td>${esc(row.outcome || 'PENDING')}</td>
@@ -353,8 +387,16 @@
     }).join('') || '<tr><td colspan="7" class="placeholder">No predictions in current API payload</td></tr>';
 
     const btc = rows.find((row) => symbolKey(row.symbol) === 'BTCUSDT');
-    if (btc) renderDecisionContext(btc);
-    else clearDecisionContext('No BTC decision in the current cross-symbol predictions window');
+    if (btc) {
+      renderDecisionContext(btc);
+      $('#ui-last-decision').textContent = String(btc.prediction || 'UNKNOWN');
+      const raw = pct(btc.confidence);
+      $('#ui-raw-conviction').textContent = raw === '—' ? 'UNKNOWN' : `${raw} RAW`;
+    } else {
+      clearDecisionContext('No BTC decision in the current cross-symbol predictions window');
+      $('#ui-last-decision').textContent = 'UNKNOWN';
+      $('#ui-raw-conviction').textContent = 'UNKNOWN';
+    }
   }
 
   function renderDecisionContext(row) {
@@ -400,6 +442,7 @@
     $('#score-authority-wr').textContent = view.authorityWr;
     $('#score-authoritative').textContent = view.authoritativeScore;
     $('#score-status').textContent = view.status;
+    $('#ui-evidence-status').textContent = view.status;
     $('#score-raw-diagnostic').textContent = view.rawObservedWr;
     $('#oracle-score-meta').textContent = `[API_DERIVED] ${view.status} · scope ${view.scope} · cohort ${view.cohort}`;
   }
@@ -429,6 +472,7 @@
     } catch (error) {
       domainFailure('score', error);
       $('#oracle-score-meta').textContent = `[UNKNOWN/STALE] SCORE ERROR · ${error.message || error}`;
+      $('#ui-evidence-status').textContent = 'STALE';
     }
   }
 
@@ -440,6 +484,8 @@
     } catch (error) {
       domainFailure('predictions', error);
       $('#oracle-pred-meta').textContent = `[UNKNOWN/STALE] PREDICTIONS ERROR · ${error.message || error}`;
+      $('#ui-last-decision').textContent = 'STALE · LAST SNAPSHOT';
+      $('#ui-raw-conviction').textContent = 'STALE';
     }
   }
 
@@ -473,6 +519,14 @@
     $('#edge-p-senex').textContent = view.pSenex;
     $('#edge-incremental').textContent = view.incremental;
     $('#edge-status').textContent = view.edgeStatus;
+    const sourceEdge = payload && payload.edge && typeof payload.edge === 'object'
+      ? payload.edge.status : null;
+    const scientificEdge = typeof sourceEdge === 'string' && sourceEdge.trim()
+      ? sourceEdge : 'UNKNOWN';
+    $('#ui-edge-status').textContent = scientificEdge;
+    setSafetyChip('#safety-edge', `EDGE ${scientificEdge}`,
+      scientificEdge === 'UNKNOWN' ? 'unknown' : 'blocked',
+      scientificEdge !== 'UNKNOWN');
     $('#model-quality-meta').textContent = `[API_DERIVED] ${view.pMarketSource} · smoke sample · never EDGE proof`;
     $('#model-quality-detail').textContent = `p_market ${view.pMarket} (${view.pMarketSource}) vs p_senex ${view.pSenex} · incremental ${view.incremental} · ${view.note || 'EDGE=UNPROVEN'}`;
   }
@@ -488,6 +542,9 @@
        '#edge-p-market', '#edge-p-senex', '#edge-incremental'].forEach((sel) => { $(sel).textContent = 'UNKNOWN'; });
       $('#paper-exec-meta').textContent = `[UNKNOWN/STALE] PAPER STATE ERROR · ${error.message || error}`;
       $('#model-quality-meta').textContent = `[UNKNOWN/STALE] MODEL QUALITY ERROR · ${error.message || error}`;
+      $('#ui-edge-status').textContent = 'STALE';
+      $('#edge-status').textContent = 'STALE';
+      setSafetyChip('#safety-edge', 'EDGE STALE', 'unknown', false);
     }
   }
 
