@@ -2,9 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#07090d" />
-<title>SENEX ORACLE — REAL Market Cockpit</title>
+<title>senex · PAPER observability</title>
 <meta name="oracle-version" content="AUD060-DASHBOARD-TRUTH-V1" />
 <link rel="stylesheet" href="/static/styles.css" />
 </head>
@@ -14,8 +14,8 @@
     <div class="brand">
       <div class="logo">⬡</div>
       <div>
-        <div class="title">SENEX ORACLE</div>
-        <div class="subtitle">[STATIC_POLICY] read-only observability • PAPER-only target</div>
+        <div class="title">senex</div>
+        <div class="subtitle">Read-only observability · PAPER-only</div>
       </div>
     </div>
     <div id="conn-status" class="pill pill-amber" data-claim-class="UNKNOWN/STALE">loading real market…</div>
@@ -24,6 +24,12 @@
       <span class="stat">CLOB: <b id="stat-clob" data-claim-class="UNKNOWN/STALE">—</b></span>
       <span class="stat">oracle: <b id="stat-oracle" data-claim-class="UNKNOWN/STALE">—</b></span>
       <span class="stat">live: <b id="stat-live" data-claim-class="UNKNOWN/STALE">UNKNOWN</b></span>
+    </div>
+    <div id="safety-strip" aria-label="Safety, freshness and evidence status">
+      <span id="safety-paper" class="safety-chip unknown" data-claim-class="UNKNOWN/STALE">PAPER UNKNOWN</span>
+      <span id="safety-orders" class="safety-chip unknown" data-claim-class="UNKNOWN/STALE">ORDERS UNKNOWN</span>
+      <span id="safety-data" class="safety-chip unknown" data-claim-class="UNKNOWN/STALE">DATA UNKNOWN</span>
+      <span id="safety-edge" class="safety-chip unknown" data-claim-class="UNKNOWN/STALE">EDGE UNKNOWN</span>
     </div>
   </header>
 
@@ -37,8 +43,14 @@
     <section class="col col-oracle">
       <div id="score-panel" class="panel" data-domain="score context" data-claim-class="API_DERIVED">
         <div class="panel-head">
-          <h2>Authoritative score · 1h gate</h2>
+          <h2>Current evidence · BTC 1h</h2>
           <span id="oracle-score-meta" class="meta">[UNKNOWN/STALE] awaiting BTC evidence</span>
+        </div>
+        <div class="evidence-compact" aria-label="Decision, raw conviction, evidence and edge">
+          <div class="evidence-item"><span class="evidence-label">Latest BTC decision · snapshot</span><strong id="ui-last-decision">UNKNOWN</strong></div>
+          <div class="evidence-item"><span class="evidence-label">Raw conviction · NOT P(correct)</span><strong id="ui-raw-conviction">UNKNOWN</strong></div>
+          <div class="evidence-item"><span class="evidence-label">Evidence · 1h authority</span><strong id="ui-evidence-status">UNKNOWN</strong></div>
+          <div class="evidence-item"><span class="evidence-label">EDGE · scientific status</span><strong id="ui-edge-status">UNKNOWN</strong></div>
         </div>
         <div class="oracle-score-grid">
           <div class="score-card"><div class="score-label">BTC input rows · API scope</div><div class="score-value" id="score-total">—</div></div>
@@ -56,7 +68,7 @@
         <div class="panel-head"><h2>Oracle predictions · Supabase</h2><span id="oracle-pred-meta" class="meta">[UNKNOWN/STALE] cross-symbol DB scope</span></div>
         <div class="table-wrap">
           <table id="oracle-table" class="table">
-            <thead><tr><th>TS</th><th>SYM</th><th>PRED</th><th>RAW CONV</th><th>LEARN SNAPSHOT</th><th>POLY SNAPSHOT</th><th>OUT</th></tr></thead>
+            <thead><tr><th>TS</th><th>SYM</th><th>PRED</th><th>RAW CONV · NOT CALIBRATED</th><th>LEARN SNAPSHOT</th><th>POLY SNAPSHOT</th><th>OUT</th></tr></thead>
             <tbody><tr><td colspan="7" class="placeholder">loading…</td></tr></tbody>
           </table>
         </div>
@@ -222,7 +234,7 @@
           <div class="risk-cell"><div class="label">Brier score</div><div class="value" id="mq-brier">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">p_market</div><div class="value" id="edge-p-market">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">p_senex</div><div class="value" id="edge-p-senex">UNKNOWN</div></div>
-          <div class="risk-cell"><div class="label">Incremental edge</div><div class="value" id="edge-incremental">UNKNOWN</div></div>
+          <div class="risk-cell"><div class="label">Model-market difference · DIAGNOSTIC</div><div class="value" id="edge-incremental">UNKNOWN</div></div>
           <div class="risk-cell"><div class="label">Edge status</div><div class="value neg" id="edge-status">UNPROVEN</div></div>
         </div>
         <div class="panel-body" style="padding:10px 12px;font-family:var(--mono);font-size:11px">
