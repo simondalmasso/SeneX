@@ -39,7 +39,7 @@ def test_abcd_same_oos_rows_cost_scenarios_and_honest_small_n():
     assert result["n_oos"]>0 and result["verdict"]=="INSUFFICIENT_EVIDENCE"
     assert result["experimental_only"] is True
     for cost,scenario in result["scenarios"].items():
-        assert set(scenario)=={"A","B","C","D","paired_delta_B","paired_delta_C","paired_delta_D"}
+        assert {"A","E","B","C","D","paired_delta_B","paired_delta_C","paired_delta_D","paired_delta_B_vs_E","paired_delta_C_vs_E","paired_delta_D_vs_E","paired_delta_D_vs_B"}.issubset(set(scenario))
         assert all(scenario[k]["n_opportunities"]==result["n_oos"] for k in ("A","B","C","D"))
     assert evaluate_abcd(rows(),min_train=20,n_splits=2,n_bootstrap=100,seed=7)==result
 
