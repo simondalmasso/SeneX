@@ -1,0 +1,30 @@
+{
+  "contract": "senex-candle-economic-result-v1",
+  "status_values": [
+    "BLOCKED_ARTIFACT_BYTES",
+    "INSUFFICIENT_EVIDENCE",
+    "EDGE_NOT_DEMONSTRATED",
+    "HISTORICAL_OOS_CANDIDATE_ONLY"
+  ],
+  "comparisons": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "paired": [
+    "paired_delta_B",
+    "paired_delta_C",
+    "paired_delta_D"
+  ],
+  "primary_metric": "NET_BPS_PER_OPPORTUNITY",
+  "uncertainty": "BLOCK_BOOTSTRAP_24_OBSERVATIONS",
+  "multiple_testing": "BONFERRONI_3",
+  "source_custody_required": true,
+  "minimum_oos_opportunities": 300,
+  "minimum_candidate_trades": 100,
+  "absolute_and_delta_ci95_lower_positive": true,
+  "fees_not_double_counted": true,
+  "simulated_fills_are_real": false,
+  "live": false
+}

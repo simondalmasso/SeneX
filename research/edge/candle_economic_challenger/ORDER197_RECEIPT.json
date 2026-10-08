@@ -1,0 +1,51 @@
+﻿{
+    "contract":  "SENEX_ORDER197_RESEARCH_RECEIPT_V1",
+    "order_id":  "AUD-CANDLE-ECONOMIC-20261007",
+    "base_sha":  "6575eeb8dc3b5e45e7c9fb55e8ce4dd5890c216d",
+    "branch":  "research/order197-candle-economic-v1",
+    "h011_source_commit":  "5171f366641a8ae33f8802c5b92b6e0bb12db3ee",
+    "h011_readiness":  "READY_AS_OBSERVED",
+    "t0_custody_sha256":  null,
+    "dataset_origin":  "NO_ORIGINAL_T0_BYTES_IN_ISOLATED_CHECKOUT",
+    "n_real_eligible_verified":  0,
+    "n_real_pattern_events":  null,
+    "n_real_trades":  null,
+    "rejected_real_rows_by_reason":  {
+                                         "NO_ORIGINAL_SOURCE_BYTES":  "UNQUANTIFIABLE"
+                                     },
+    "train_test_time_bounds":  null,
+    "baseline_net_bps":  null,
+    "candidate_net_bps":  null,
+    "paired_delta_net_bps":  null,
+    "ci95":  null,
+    "fee_slippage_breakdown_real":  null,
+    "cost_stress_real":  null,
+    "h0_verdict":  "BLOCKED_ARTIFACT_BYTES",
+    "feature_extractor_sha256":  "21556ee7837ba732d1e1acdb50db07a87721eacc1a75394614f2d8782c10d41d",
+    "config_sha256":  "8fd127c8ab86f5900f4e76771f86a1f4bbe5a664fcb5d6b3486dec8f8ab189a0",
+    "cost_model_sha256":  "4f56fc24b40e27d616cdeacc494736e18ff3fb869aaabc99b87be48121837601",
+    "contract_sha256":  "319251f551d0f64b7c9b2e0d7c36635bf016ad2c52a9741ac1e1b86d3706fe65",
+    "walkforward_sha256":  "0a75bb5f94e9f792a4eab34cee022ca65840cea8b2897acdfb52f8cd2bcb1328",
+    "red_test_failures_expected":  25,
+    "green_focused_passed":  25,
+    "focused_and_regression_passed":  86,
+    "test_exit":  0,
+    "compile_exit":  0,
+    "order100_diff_exit":  0,
+    "warnings":  [
+                     "pytest-asyncio Python3.14 deprecation"
+                 ],
+    "cost_grid_roundtrip_bps":  [
+                                    10,
+                                    15,
+                                    20,
+                                    30
+                                ],
+    "paper_only":  true,
+    "live":  false,
+    "real_orders":  0,
+    "capital":  0,
+    "zero_spend":  "HARD",
+    "merge":  false,
+    "deploy":  false
+}
