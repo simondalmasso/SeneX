@@ -964,6 +964,8 @@ main {
 main > section.col { display: contents !important; }
 main > section.col::before { display: none !important; }
 main .panel {
+  /* Unranked diagnostics must not precede the primary evidence. */
+  order: 99;
   flex: initial !important;
   min-width: 0; max-width: none !important; min-height: 0;
   border: 1px solid rgba(93,127,145,.22);
@@ -1004,6 +1006,7 @@ main .panel.is-stale { border-color: rgba(250,80,129,.8); }
 #gptrader-trades-panel { order:13; grid-column:1/-1; min-height:240px; }
 #model-quality-panel { order:14; grid-column:1; }
 #source-panel { order:15; grid-column:2; }
+#learning-panel { order:16; grid-column:1/-1; }
 #score-panel .evidence-compact {
   padding: 3px 20px 18px;
   grid-template-columns: repeat(4,minmax(0,1fr));
