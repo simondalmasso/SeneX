@@ -57,11 +57,12 @@
   }
 
   function syncDataBadge() {
-    const domain = state.domains.context;
-    if (domain.status === 'OK') {
-      setSafetyChip('#safety-data', 'DATA OK · POLL 2s', 'ok', true);
-    } else if (domain.status === 'ERROR' && domain.stale) {
-      setSafetyChip('#safety-data', 'DATA STALE', 'unknown', false);
+    const domains = Object.values(state.domains);
+    if (domains.some((domain) => domain.status === 'ERROR')) {
+      const stale = domains.some((domain) => domain.status === 'ERROR' && domain.stale);
+      setSafetyChip('#safety-data', stale ? 'DATA STALE' : 'DATA UNKNOWN', 'unknown', false);
+    } else if (domains.every((domain) => domain.status === 'OK')) {
+      setSafetyChip('#safety-data', 'DATA OK · POLL/REFRESH', 'ok', true);
     } else {
       setSafetyChip('#safety-data', 'DATA UNKNOWN', 'unknown', false);
     }
