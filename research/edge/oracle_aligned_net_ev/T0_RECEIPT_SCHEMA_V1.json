@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "M17 original 5m opportunity receipt (T0)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "experiment_id",
+    "cohort_id",
+    "hypothesis_id",
+    "market_slug",
+    "event_id",
+    "market_id",
+    "condition_id",
+    "token_id_yes",
+    "token_id_no",
+    "rule_version_sha256",
+    "original_market_rules_bytes_sha256",
+    "oracle_source_id",
+    "start_ms",
+    "end_ms",
+    "oracle_boundary_rule",
+    "time_of_observation_ms",
+    "received_at_ms",
+    "clock_skew_bound_ms",
+    "prediction_id",
+    "frozen_senex_score",
+    "score_provenance",
+    "venue",
+    "symbol",
+    "horizon_s",
+    "side_candidate",
+    "best_bid",
+    "best_ask",
+    "bid_qty",
+    "ask_qty",
+    "top_N_depth",
+    "book_seq_or_version",
+    "book_snapshot_sha256",
+    "real_quote_age_ms",
+    "market_fee_parameters",
+    "fee_parameters_sha256",
+    "cost_model_sha256",
+    "validity_flags",
+    "raw_bytes_sha256"
+  ],
+  "properties": {
+    "experiment_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cohort_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypothesis_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "market_slug": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "market_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "condition_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "token_id_yes": {
+      "type": "string",
+      "minLength": 1
+    },
+    "token_id_no": {
+      "type": "string",
+      "minLength": 1
+    },
+    "oracle_source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "oracle_boundary_rule": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prediction_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "venue": {
+      "type": "string",
+      "minLength": 1
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "book_seq_or_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule_version_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "original_market_rules_bytes_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "book_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fee_parameters_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "cost_model_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "raw_bytes_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "start_ms": {
+      "type": "integer"
+    },
+    "end_ms": {
+      "type": "integer"
+    },
+    "time_of_observation_ms": {
+      "type": "integer"
+    },
+    "received_at_ms": {
+      "type": "integer"
+    },
+    "clock_skew_bound_ms": {
+      "type": "integer"
+    },
+    "real_quote_age_ms": {
+      "type": "integer"
+    },
+    "best_bid": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "best_ask": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "bid_qty": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "ask_qty": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "frozen_senex_score": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "score_provenance": {
+      "const": "RAW_CONVICTION"
+    },
+    "horizon_s": {
+      "const": 300
+    },
+    "side_candidate": {
+      "enum": [
+        "UP",
+        "DOWN",
+        "ABSTAIN"
+      ]
+    },
+    "top_N_depth": {
+      "type": "object"
+    },
+    "market_fee_parameters": {
+      "type": "object"
+    },
+    "validity_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
