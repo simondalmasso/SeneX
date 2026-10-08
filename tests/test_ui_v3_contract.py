@@ -99,3 +99,16 @@ for (const statuses of cases) {
         capture_output=True, text=True, check=False, timeout=15,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_versioned_frontend_assets_do_not_mix_old_css_and_js():
+    """A new HTML release must not reuse cached JS/CSS from an older dashboard."""
+    html = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    token = "order199-ui-v3-20261008-r1"
+    for asset, attribute in (
+        ("styles.css", "href"),
+        ("dashboard_truth.js", "src"),
+        ("app.js", "src"),
+    ):
+        assert f'{attribute}="/static/{asset}?v={token}"' in html
+        assert f'{attribute}="/static/{asset}"' not in html
