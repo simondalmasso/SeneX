@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "scope": "Polymarket BTC Up/Down 5 minutes only",
+  "state": "DRAFT_UNVERIFIED_RULE",
+  "market_specific": {
+    "original_event_rule_bytes_sha256": null,
+    "market_id": null,
+    "condition_id": null,
+    "source_claim": "Chainlink BTC/USD TWAP over exact market interval",
+    "source_class": "PROVIDER_DECLARED_CHAINLINK",
+    "boundary_rule_candidate": "UP wins when ending oracle value >= beginning value; verify original exact bytes for each market",
+    "oracle_start_timestamp_ms": null,
+    "oracle_end_timestamp_ms": null,
+    "tie_winner": "UNVERIFIED_PER_MARKET",
+    "yes_token_id": null,
+    "no_token_id": null,
+    "rule_version_sha256": null
+  },
+  "prohibited_substitutes": [
+    "BINANCE_BTCUSDT_OPEN_CLOSE",
+    "MIDPOINT",
+    "UNSIGNED_RELAY_AS_SIGNED_REPORT",
+    "HISTORICAL_BACKFILL"
+  ],
+  "minimum_T1_evidence": [
+    "original T1 bytes",
+    "independent final settlement reference",
+    "same market_id condition_id token_id and boundaries",
+    "rule/version and oracle source match",
+    "verified independent oracle attestation",
+    "T1 only acquired after market end"
+  ],
+  "source_tiers": [
+    "PLATFORM_TERMINAL_RESOLUTION",
+    "PROVIDER_CHAINLINK_RELAY",
+    "CHAINLINK_SIGNED_REPORT"
+  ],
+  "scientific_label_gate": "NO_PROMOTION_WITHOUT_EXTERNAL_VERIFICATION_OF_BYTES_AND_AUTHORITY"
+}
