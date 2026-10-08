@@ -57,3 +57,45 @@ def test_frontend_js_parses_with_node():
             capture_output=True, text=True, check=False, timeout=15,
         )
         assert result.returncode == 0, result.stderr
+
+
+def test_data_badge_requires_all_domain_health():
+    """Execute the actual production badge function against deterministic state."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node not available for data badge behavioral regression")
+    script = r"""
+const fs = require('fs');
+const assert = require('node:assert/strict');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+const start = source.indexOf('  function syncDataBadge() {');
+const end = source.indexOf('  async function getJSON(url)', start);
+assert(start >= 0 && end > start);
+const factory = new Function('state', 'setSafetyChip',
+  source.slice(start, end) + '\nreturn syncDataBadge;');
+const cases = [
+  [['OK', false], ['OK', false], ['OK', false], 'DATA OK · POLL/REFRESH'],
+  [['OK', false], ['ERROR', true], ['OK', false], 'DATA STALE'],
+  [['OK', false], ['OK', false], ['ERROR', false], 'DATA UNKNOWN'],
+  [['OK', false], ['LOADING', false], ['OK', false], 'DATA UNKNOWN'],
+  [['ERROR', false], ['OK', false], ['OK', false], 'DATA UNKNOWN'],
+];
+for (const statuses of cases) {
+  const [context, score, predictions, expected] = statuses;
+  const state = {domains:{
+    context:{status:context[0], stale:context[1]},
+    score:{status:score[0], stale:score[1]},
+    predictions:{status:predictions[0], stale:predictions[1]}
+  }};
+  let badge = null;
+  const fn = factory(state, (...args) => { badge = args; });
+  fn();
+  assert.equal(badge[1], expected);
+  assert.equal(badge[3], expected.startsWith('DATA OK'));
+}
+"""
+    result = subprocess.run(
+        [node, "-e", script, str(FRONTEND / "app.js")],
+        capture_output=True, text=True, check=False, timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
