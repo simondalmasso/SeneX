@@ -1,0 +1,20 @@
+{
+  "experiment": "M17",
+  "status": "NO_PROSPECTIVE_COHORT_STARTED",
+  "n_m17_prospective_T0": 0,
+  "n_admissible_t0": 0,
+  "n_admissible_t1": 0,
+  "n_real_verified": 0,
+  "n_fills_verified": 0,
+  "n_oos_clusters": null,
+  "n_excluded": null,
+  "attrition_denominator": null,
+  "warning": "Counts refer ONLY to this new M17 ledger, not historical or existing ORDER100 data; zero is not a claim about all SENEX observations",
+  "current_blockers": [
+    "MISSING_T0_BYTES",
+    "MISSING_T1_BYTES",
+    "ORACLE_UNATTESTED",
+    "NO_REAL_FILL_EVIDENCE",
+    "NO_FROZEN_PROSPECTIVE_TEST"
+  ]
+}
