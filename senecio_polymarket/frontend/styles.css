@@ -951,7 +951,8 @@ main {
   display: grid !important;
   grid-template-columns: repeat(2,minmax(0,1fr)) !important;
   grid-template-areas: none !important;
-  grid-auto-rows: min-content;
+  /* Reserve the full intrinsic card height: min-content clipped rows at laptop widths. */
+  grid-auto-rows: max-content;
   align-items: start;
   gap: 16px;
   min-width: 0;
@@ -1065,6 +1066,15 @@ main .panel.is-stale { border-color: rgba(250,80,129,.8); }
 #safe-orders,#safe-live,#safe-adapters,#safe-synth { color:var(--accent); }
 #paper-lock { color:var(--accent); }
 .table-wrap {min-width:0;max-height:370px;overflow:auto; }
+/* Keep dynamic Supabase rows inside their own card; the grid sizes the CARD. */
+#predictions-panel { align-self:start; height:auto; }
+#predictions-panel .table-wrap {
+  flex:0 1 auto;
+  min-height:0;
+  max-height:min(370px, 46vh);
+  overflow-y:auto;
+  overflow-x:auto;
+}
 .table {font-size:10px;}
 .table thead th {background:#101c2a; }
 footer {
@@ -1095,6 +1105,14 @@ footer {
   #score-panel .score-content {grid-template-columns:1fr;}
   .raw-history {min-height:260px;}
   #score-panel .evidence-compact {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+/* Sidebar still occupies 175px on narrow laptops: two cards no longer fit. */
+@media (min-width:851px) and (max-width:1180px) {
+  main {
+    grid-template-columns:minmax(0,1fr) !important;
+    grid-auto-rows:max-content;
+  }
+  main .panel { grid-column:1/-1 !important; }
 }
 @media (max-width:850px) {
   body {overflow:auto;}
