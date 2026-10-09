@@ -1,0 +1,2 @@
+# Keep immutable GLM P4 K4 original CSV byte-exact in Git object; do not run textual whitespace validation on binary-archived evidence.
+research/edge/m17_glm_p4/aud_k4/k4_resultados_original.csv -text -diff
