@@ -1,0 +1,76 @@
+{
+  "schema_version": "m17-readiness-tests-v1",
+  "mode": "FIXTURE_OFFLINE",
+  "local_host": "win-desktop-dph3941",
+  "commands": [
+    {
+      "name": "existing_oracle_p1",
+      "command": "PYTHONPATH=<isolated jsonschema dir> python -m unittest discover -s tests -p test_oracle_net_*.py -v",
+      "n_tests": 18,
+      "exit_code": 0,
+      "note": "with actual pinned validator so 0 schema skip"
+    },
+    {
+      "name": "new_readiness",
+      "command": "python -m unittest discover -s tests -p test_m17_prospective_readiness.py -v",
+      "n_tests": 15,
+      "exit_code": 0
+    },
+    {
+      "name": "schema_hard_gate",
+      "command": "PYTHONPATH=<isolated jsonschema dir> python -m research.edge.oracle_aligned_net_ev.strict_schema_gate",
+      "positive_schemas": 2,
+      "negative_mutations_rejected": 8,
+      "exit_code": 0
+    },
+    {
+      "name": "missing_schema",
+      "command": "python -m research.edge.oracle_aligned_net_ev.strict_schema_gate (without test-only dependency)",
+      "exit_code": 2,
+      "expected": "explicit gate BLOCKED, never fallback"
+    }
+  ],
+  "red_green_log": [
+    {
+      "phase": "RED",
+      "count": 13,
+      "exit": 1,
+      "defect": "unimplemented custody and offline capture methods"
+    },
+    {
+      "phase": "RED",
+      "count": 2,
+      "exit": 1,
+      "defect": "signal supplied values not tied to original source bytes; missing preceding book sequence silently accepted"
+    },
+    {
+      "phase": "GREEN",
+      "combined_focused_total": 33,
+      "exit": 0,
+      "when": "after implementation and corrections"
+    }
+  ],
+  "coverage": [
+    "both schemas Draft2020-12",
+    "host raw byte SHA256",
+    "append-only chain and crash-orphans",
+    "duplicate T0/T1 and missed window no-backfill",
+    "no-signal no-book no-fee stale gap abstain",
+    "frame freshness/sequence separation",
+    "partial depth rejection",
+    "Decimal original shares and model-only fees",
+    "T1 authoritative status always UNVERIFIED"
+  ],
+  "not_proven": [
+    "external clock authority",
+    "signed Chainlink original TWAP update",
+    "true CLOB contemporaneous fill",
+    "actual 5m SENEX trained score",
+    "OOS edge",
+    "external immutable anti-rewrite anchor"
+  ],
+  "new_exact_head_canonical_ci": "PENDING",
+  "ci_scope": "canonical full product pipeline check on HEAD after publication",
+  "original_artifacts_sha256": "F0 snapshot hash in TWAP60_F0_ORIGINAL_PROBE_MANIFEST.json; not a prospective T0/T1",
+  "scientific_status": "N_REAL_VERIFIED=0, EDGE=UNPROVEN"
+}
