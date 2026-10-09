@@ -5,6 +5,8 @@ cannot be promoted to genuine receipt timestamps.
 """
 from __future__ import annotations
 import json
+import hashlib
+import re
 from decimal import Decimal, InvalidOperation
 from .custody_store import AppendOnlyEvidence, IntegrityError
 
@@ -57,6 +59,70 @@ def _decimal_str(v):
     return format(num,"f")
 
 
+def _wire_ms(value: object) -> int:
+    """No float/Decimal truncation; only int JSON or canonical integer text."""
+    if type(value) is int and value >= 0:
+        return value
+    if type(value) is str and re.fullmatch(r"(?:0|[1-9][0-9]*)",value):
+        return int(value)
+    raise CaptureError("noncanonical wire timestamp; no float truncation")
+
+
+def _rule_identity_matches(raw_sources: dict[str, bytes], slot: dict) -> bool:
+    """Cross-bind supplied *original fixture bytes*, not external authenticity."""
+    metadata_raw=raw_sources.get("market_metadata")
+    rule_raw=raw_sources.get("market_rule")
+    if not metadata_raw or not rule_raw:
+        return False
+    try:
+        metadata=_parse(metadata_raw)
+        rule=_parse(rule_raw)
+    except CaptureError:
+        return False
+    for field in ("market_id","condition_id","market_slug",
+                  "token_id_yes","token_id_no","start_ms","end_ms"):
+        if type(slot[field]) is not type(metadata.get(field)) or metadata.get(field)!=slot[field]:
+            return False
+        if type(metadata.get(field)) is not type(rule.get(field)) or rule.get(field)!=metadata[field]:
+            return False
+    version=metadata.get("rule_version")
+    if not isinstance(version,str) or not version or rule.get("rule_version")!=version:
+        return False
+    return (rule.get("exact_oracle_source")==slot["oracle_source_id"] and
+            rule.get("source_window_s")==60 and
+            type(rule.get("source_window_s")) is int and
+            rule.get("settlement_basis")=="CHAINLINK_BTC_USD_TWAP60" and
+            rule.get("tie_handling")=="UP_ON_EQUAL")
+
+
+def _usable_book_depth(doc: dict, minimum_ask_shares: Decimal) -> bool:
+    """Require coherent two-sided nonempty finite quote, not list-shaped debris."""
+    if not isinstance(doc.get("bids"),list) or not isinstance(doc.get("asks"),list):
+        return False
+    if not doc["bids"] or not doc["asks"]:
+        return False
+    parsed={}
+    try:
+        for side in ("bids","asks"):
+            levels=[]
+            for level in doc[side]:
+                if not isinstance(level,dict):
+                    return False
+                price=Decimal(_decimal_str(level.get("price")))
+                size=Decimal(_decimal_str(level.get("size")))
+                if not Decimal(0)<price<Decimal(1) or size<=0:
+                    return False
+                levels.append((price,size))
+            parsed[side]=levels
+    except (CaptureError,TypeError,ValueError,InvalidOperation):
+        return False
+    if max(price for price,_ in parsed["bids"])>=min(price for price,_ in parsed["asks"]):
+        return False
+    if sum((size for _,size in parsed["asks"]),Decimal(0))<minimum_ask_shares:
+        return False
+    return True
+
+
 class OfflineCapture:
     def __init__(self, store: AppendOnlyEvidence):
         if not isinstance(store,AppendOnlyEvidence):
@@ -77,7 +143,7 @@ class OfflineCapture:
         if set(raw_sources).difference(AppendOnlyEvidence.ALLOWED_ATTACHMENTS):
             raise CaptureError("unknown original source attachment")
         flags=set()
-        if not raw_sources.get("market_rule") or not raw_sources.get("market_metadata"):
+        if not _rule_identity_matches(raw_sources,slot):
             flags.add("NO_MARKET_RULE")
         for key_name in ("book_yes","book_no"):
             raw=raw_sources.get(key_name)
@@ -86,8 +152,9 @@ class OfflineCapture:
                 continue
             doc=_parse(raw)
             token_id=slot["token_id_yes" if key_name=="book_yes" else "token_id_no"]
-            if str(doc.get("asset_id"))!=token_id or (
-                not isinstance(doc.get("asks"),list) or not isinstance(doc.get("bids"),list)):
+            if str(doc.get("asset_id"))!=token_id or not _usable_book_depth(
+                doc,Decimal("1")
+            ):
                 flags.add("NO_BOOK")
             clock=source_clocks.get(key_name)
             if not isinstance(clock,dict):
@@ -96,8 +163,7 @@ class OfflineCapture:
             recv=_ms(clock.get("received_ms"),"book local received ms")
             if ts>recv or recv>now:raise CaptureError("future book timestamp")
             # Evidence cannot be admitted if the source timestamp and decoded wire timestamp differ.
-            try: book_ts=int(doc.get("timestamp"))
-            except (TypeError,ValueError) as exc: raise CaptureError("missing wire book timestamp") from exc
+            book_ts=_wire_ms(doc.get("timestamp"))
             if book_ts!=ts:raise CaptureError("book timestamp mismatch")
             if now-ts>max_age_ms:flags.add("STALE")
             dropped=clock.get("dropped",0)
@@ -163,6 +229,12 @@ class OfflineCapture:
                "strategy_pnl_decimal":"0",
                "source_admissible":False,
                "source_class":"FIXTURE_PROVENANCE_ONLY",
+               "market_rule_original_sha256": (
+                   hashlib.sha256(raw_sources["market_rule"]).hexdigest()
+                   if raw_sources.get("market_rule") else None),
+               "market_metadata_original_sha256": (
+                   hashlib.sha256(raw_sources["market_metadata"]).hexdigest()
+                   if raw_sources.get("market_metadata") else None),
                "signal_horizon_verified_5m":bool(
                    signal and "NO_SIGNAL" not in flags and raw_sig),
                "precision_contract":"raw bytes; parse_float=Decimal; never authoritative"}
