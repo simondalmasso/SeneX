@@ -35,5 +35,12 @@
     "PROVIDER_CHAINLINK_RELAY",
     "CHAINLINK_SIGNED_REPORT"
   ],
-  "scientific_label_gate": "NO_PROMOTION_WITHOUT_EXTERNAL_VERIFICATION_OF_BYTES_AND_AUTHORITY"
+  "scientific_label_gate": "NO_PROMOTION_WITHOUT_EXTERNAL_VERIFICATION_OF_BYTES_AND_AUTHORITY",
+  "research_f1_binding": {
+    "digest_definition": "rule_version_sha256 = sha256(original market_rule_raw bytes) until a separately custodied versioned rule artifact is defined",
+    "t0_receipt_digest": "SHA256 of externally retained exact T0 receipt UTF-8 bytes, not just its reconstructed dictionary",
+    "linkage": "T1.token_id binds T0.token_id_yes/no; T1.exact_oracle_source binds T0.oracle_source_id; both condition and exact 300000ms window must match",
+    "never_promote": "MATCHED_BYTES_ONLY does not prove original timing, settlement, independent signed oracle, or public source authority",
+    "rule_authenticity": "UNVERIFIED_UNTIL_INDEPENDENTLY_ANCHORED"
+  }
 }
