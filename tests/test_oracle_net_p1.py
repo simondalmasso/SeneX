@@ -21,37 +21,17 @@ LANE = ROOT / "research" / "edge" / "oracle_aligned_net_ev"
 
 
 def validate_with_schema(instance, file):
-    schema = json.loads((LANE / file).read_text(encoding="utf-8"))
+    """Only a real Draft 2020-12 implementation is an authoritative schema test.
+
+    In minimal CI environments the schema-specific fixture assertion is
+    explicitly SKIPPED, never replaced with an incomplete pseudo-validator.
+    The standalone strict_schema_gate must be run before engineering approval.
+    """
     try:
         from jsonschema import Draft202012Validator
-    except ImportError:
-        # Dependency-free strict validation of the JSON Schema keywords used in these two artifacts.
-        for field in schema["required"]:
-            assert field in instance, "missing " + field
-        assert set(instance).issubset(schema["properties"]), "additionalProperties:false"
-        for key, value in instance.items():
-            spec = schema["properties"][key]
-            allowed = spec.get("type")
-            if allowed is not None:
-                choices = allowed if isinstance(allowed, list) else [allowed]
-                def match(typ):
-                    return (typ == "null" and value is None or
-                            typ == "string" and type(value) is str or
-                            typ == "integer" and type(value) is int or
-                            typ == "number" and type(value) in (int, float) and math.isfinite(value) or
-                            typ == "object" and type(value) is dict or
-                            typ == "array" and type(value) is list)
-                assert any(match(t) for t in choices), key + ": invalid type"
-            if "const" in spec:
-                assert value == spec["const"], key + ": const mismatch"
-            if "enum" in spec:
-                assert value in spec["enum"], key + ": enum mismatch"
-            if "minLength" in spec and value is not None:
-                assert len(value) >= spec["minLength"], key + ": empty"
-            if "pattern" in spec and value is not None:
-                import re
-                assert re.fullmatch(spec["pattern"], value), key + ": sha"
-        return
+    except ImportError as exc:
+        raise unittest.SkipTest("Strict Draft202012Validator absent; external hard gate required") from exc
+    schema = json.loads((LANE / file).read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(instance)
 
