@@ -83,7 +83,9 @@ def walk_asks(levels: list, desired_shares: object) -> dict:
             break
     return {
         "filled_shares":float(filled),
+        "filled_shares_decimal":str(filled),
         "gross_cost":float(spent),
+        "gross_cost_exact_decimal":str(spent),
         "gross_cost_decimal":str(spent.quantize(QUOTE_QUANTUM, rounding=ROUND_HALF_UP)),
         "vwap_ask":float(spent/filled) if filled else None,
         "full_depth":filled == needed,
@@ -112,10 +114,9 @@ def hold_quote_net(
     if slip < 0:
         raise CostError("negative slippage")
     quote = walk_asks(levels,shares)
-    if quote["filled_shares"] == 0:
-        return {**quote,"paper_net_usdc":0.0,
-                "paper_net_usdc_decimal":"0.00000","fee_usdc_decimal":"0.00000"}
-    filled = _d(quote["filled_shares"])
+    if not quote["full_depth"]:
+        raise CostError("PARTIAL_DEPTH: quote not fully obtainable")
+    filled = _d(quote["filled_shares_decimal"])
     cost = sum((_d(z["price_decimal"])*_d(z["shares_decimal"])
                 for z in quote["levels_taken"]), Decimal(0))
     fee = _level_fee(quote["levels_taken"],fee_rate,exponent)
