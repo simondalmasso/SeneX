@@ -83,6 +83,10 @@ def classify_ctf_gamma_originals(ctf_raw:bytes,gamma_raw:bytes, *,
                 all(isinstance(t,str) and bool(t) for t in expected_token_ids) and
                 expected_token_ids[0]!=expected_token_ids[1]):
             raise IntegrationError("missing independent fixture identity contract")
+        # CTF ConditionResolution is documentary v1 only. V2 PositionManager
+        # requires independent positionId/contract provenance, never CTF fallthrough.
+        if g.get("version") != "v1":
+            raise IntegrationError("unsupported/unknown Gamma protocol version for CTF")
         if (type(c.get("chainId")) is not int or c["chainId"]!=expected_chain_id or
             type(g.get("chainId")) is not int or g["chainId"]!=expected_chain_id):
             raise IntegrationError("wrong/unverified chain")
