@@ -3,38 +3,21 @@ import hashlib
 import unittest
 
 from research.edge.oracle_aligned_net_ev.oracle_custody import (
-    CustodyError, resolution_side, validate_receipt_linkage,
+    CustodyError, resolution_side, validate_receipt_linkage as _checked_linkage, canonical_receipt_bytes,
 )
 from research.edge.oracle_aligned_net_ev.book_costs import (
     CostError, fee_usdc, walk_asks, hold_quote_net, paired_quote_upper_bound,
 )
 
 
+def validate_receipt_linkage(t0,t1,raw0,raw1,rule):
+    return _checked_linkage(t0,t1,raw0,raw1,rule,t0_receipt_raw=canonical_receipt_bytes(t0))
+
+
 class OracleNetContractTests(unittest.TestCase):
     def fixtures(self):
-        t0_raw = b"test-only-original-t0"
-        t1_raw = b"test-only-original-t1"
-        rule_raw = b"test-only-rule-5m-chainlink-twap"
-        sha = lambda data: hashlib.sha256(data).hexdigest()
-        t0 = dict(
-            market_id="market1", condition_id="cond1", token_id_up="up1",
-            token_id_down="down1", start_ms=300000, end_ms=600000,
-            oracle_source_id="chainlink-btc-usd-twap-60s",
-            original_market_rules_bytes_sha256=sha(rule_raw),
-            raw_bytes_sha256=sha(t0_raw),
-            received_at_ms=350000,
-        )
-        t1 = dict(
-            market_id="market1", condition_id="cond1", token_id="up1",
-            start_ms=300000, end_ms=600000,
-            oracle_source_id="chainlink-btc-usd-twap-60s",
-            original_market_rules_bytes_sha256=sha(rule_raw),
-            raw_label_bytes_sha256=sha(t1_raw),
-            label_observed_at_ms=700000,
-            settlement_finality="final",
-            source_class="PROVIDER_CHAINLINK_RELAY",
-        )
-        return t0, t1, t0_raw, t1_raw, rule_raw
+        from test_oracle_net_p1 import make_receipts
+        return make_receipts()
 
     def test_market_rule_equality_is_up_not_down(self):
         rule = {"tie_winner": "UP", "source": "chainlink-btc-usd-twap-60s"}
@@ -54,7 +37,7 @@ class OracleNetContractTests(unittest.TestCase):
         t0, t1, raw0, raw1, rule = self.fixtures()
         with self.assertRaises(CustodyError):
             validate_receipt_linkage(t0, t1, raw0 + b"x", raw1, rule)
-        t1["oracle_source_id"] = "binance-btcusdt"
+        t1["exact_oracle_source"] = "binance-btcusdt"
         with self.assertRaises(CustodyError):
             validate_receipt_linkage(t0, t1, raw0, raw1, rule)
 
