@@ -105,3 +105,35 @@ def classify_sell(book,*,condition_id,asset_id,candidate_shares,price_floor,
     return {'status':'QUOTE_ONLY_NONMONETIZABLE','fill_proven':False,
         'conditional_sale_proceeds_decimal':str(proceeds),
         'inventory_source':'DECLARED_UNVERIFIED','original_sha256':original_sha256}
+
+def classify_maker_l2_evidence(*,initial_depth,closing_depth,trade_qty,
+                               cancel_qty,candidate_shares):
+    """Fail closed: aggregate L2 volume lacks FIFO queue/cancellation priority.
+
+    Numeric witnesses are conditional illustrations, never a venue fill,
+    order placement, historical queue replay or P(fill) estimator.
+    """
+    base={'status':'FILL_UNIDENTIFIABLE','fill_proven':False,
+          'realized_pnl_status':'NOT_COMPUTABLE',
+          'maker_queue_authority':'UNVERIFIED','source_admissible':False,
+          'conditional_queue_scenarios':[]}
+    try:
+        before,after,traded,canceled,q=map(
+          _d,(initial_depth,closing_depth,trade_qty,cancel_qty,candidate_shares))
+        if (before<=0 or after<0 or traded<0 or canceled<0 or q<=0 or
+            before<q or before-after!=traded+canceled or
+            traded+canceled>before):
+            return {**base,'status':'NO_BOOK'}
+    except QuoteError:
+        return {**base,'status':'NO_BOOK'}
+    # Whether our virtual order sat near the front or back is missing from L2.
+    # Candidate <= traded makes a FIFO fill possible in a front-queue scenario.
+    # Enough remaining depth after cancellations makes nonfill possible at back.
+    cases=[]
+    if traded>=q:
+        cases.append('POSSIBLE_FILL')
+    if before-q-canceled>=traded:
+        cases.append('POSSIBLE_NO_FILL')
+    return {**base,
+            'aggregate_depth_delta_decimal':str(before-after),
+            'conditional_queue_scenarios':cases}
