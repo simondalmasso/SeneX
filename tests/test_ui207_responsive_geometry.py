@@ -4,6 +4,7 @@ Only local HTML/CSS used: no live backend, authentication, JS polling or API.
 Chrome/Chromium must exist. Running browser tests is mandatory, not a skip.
 """
 import hashlib
+import os
 from html.parser import HTMLParser
 import json
 from pathlib import Path
@@ -25,11 +26,12 @@ let a=boxes[names[i]],b=boxes[names[j]];
 if(Math.min(a.right,b.right)-Math.max(a.x,b.x)>1 && Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1)
 overlap.push(names[i]+' / '+names[j]);}
 let main=document.querySelector('main'),table=document.querySelector('#predictions-panel .table-wrap');
-let result={viewport:[innerWidth,innerHeight],overlap,boxes,
+let result={viewport:[innerWidth,innerHeight],dpr:devicePixelRatio,overlap,boxes,
 pageWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,
 mainScrollWidth:main.scrollWidth,mainClientWidth:main.clientWidth,
 sidebarVisible:document.getElementById('sidebar').getBoundingClientRect().width>0,
-gridCols:getComputedStyle(main).gridTemplateColumns,tableHeight:table.clientHeight};
+gridCols:getComputedStyle(main).gridTemplateColumns,tableHeight:table.clientHeight,
+tableScrollHeight:table.scrollHeight,tableOverflowY:getComputedStyle(table).overflowY};
 let pre=document.createElement('pre');pre.id='ui207-geometry';pre.textContent=JSON.stringify(result);
 pre.style.display='none';document.body.append(pre);
 });</script>"""
@@ -64,6 +66,23 @@ def geometry(browser,folder,html,css,size):
  data["png_sha256"]=hashlib.sha256(png.read_bytes()).hexdigest()
  return data
 
+def _persist_visual_evidence(folder, size, red, green, variant="normal"):
+ evidence_dir=os.environ.get("UI207_EVIDENCE_DIR")
+ if not evidence_dir:
+  return
+ out=Path(evidence_dir)
+ out.mkdir(parents=True,exist_ok=True)
+ stem=f"{variant}_{size[0]}x{size[1]}"
+ for name in ("red","green"):
+  src=folder/name/"screenshot.png"
+  dst=out/f"{stem}_{name}.png"
+  shutil.copyfile(src,dst)
+  assert hashlib.sha256(dst.read_bytes()).hexdigest()==(red if name=="red" else green)["png_sha256"]
+ (out/f"{stem}_geometry.json").write_text(
+  json.dumps({"size":list(size),"variant":variant,"baseline":BASE,
+              "red":red,"green":green},sort_keys=True,indent=2)+"\\n",encoding="utf8")
+
+
 @pytest.mark.parametrize("size",SIZES)
 def test_no_overlapping_cards_with_sidebar_and_table_scroll(tmp_path,size):
  browser=next((shutil.which(x) for x in ("google-chrome","chromium","chromium-browser","google-chrome-stable") if shutil.which(x)),None)
@@ -73,6 +92,7 @@ def test_no_overlapping_cards_with_sidebar_and_table_scroll(tmp_path,size):
  current=(FRONT/"styles.css").read_bytes()
  red=geometry(browser,tmp_path/"red",original,red_css,size)
  green=geometry(browser,tmp_path/"green",original,current,size)
+ _persist_visual_evidence(tmp_path,size,red,green)
  print("UI207",size,"RED",red["overlap"],"GREEN",green["overlap"],
        "PNG_SHA_RED",red["png_sha256"],"PNG_SHA_GREEN",green["png_sha256"])
  assert green["sidebarVisible"],green
@@ -84,3 +104,30 @@ def test_no_overlapping_cards_with_sidebar_and_table_scroll(tmp_path,size):
  if size==(852,1009):
   assert red["overlap"],"Baseline did not reproduce screenshot-overlap; investigate zoom/DPR"
   assert len(green["gridCols"].split())==1,green
+
+def test_oracle_table_many_rows_scrolls_with_no_card_collision(tmp_path):
+ browser=next((shutil.which(x) for x in ("google-chrome","chromium","chromium-browser","google-chrome-stable") if shutil.which(x)),None)
+ assert browser,"Browser missing: visual regression is BLOCKED, never silently skipped"
+ original=(FRONT/"index.html").read_text(encoding="utf8")
+ rows="".join(
+  "<tr><td>2026-10-09T00:00:00Z</td><td>BTC</td><td>UP</td>"
+  "<td>0.512</td><td>synthetic</td><td>unknown</td><td>—</td></tr>"
+  for _ in range(72)
+ )
+ placeholder='<tbody><tr><td colspan="7" class="placeholder">loading…</td></tr></tbody>'
+ assert original.count(placeholder)==1, "Supabase tbody fixture selector changed"
+ crowded=original.replace(placeholder,"<tbody>"+rows+"</tbody>")
+ base_css=subprocess.check_output(["git","show",BASE+":senecio_polymarket/frontend/styles.css"],cwd=ROOT)
+ latest=(FRONT/"styles.css").read_bytes()
+ size=(852,1009)
+ red=geometry(browser,tmp_path/"red",crowded,base_css,size)
+ green=geometry(browser,tmp_path/"green",crowded,latest,size)
+ _persist_visual_evidence(tmp_path,size,red,green,"72rows")
+ assert red["overlap"],"Baseline should demonstrate collision even with crowded table"
+ assert not green["overlap"],green
+ assert green["sidebarVisible"],green
+ assert green["tableScrollHeight"]>green["tableHeight"],green
+ assert green["tableOverflowY"] in ("auto","scroll"),green
+ assert green["tableHeight"]<=370,green
+ assert green["pageWidth"]<=green["viewport"][0]+2,green
+ assert green["mainScrollWidth"]<=green["mainClientWidth"]+2,green
