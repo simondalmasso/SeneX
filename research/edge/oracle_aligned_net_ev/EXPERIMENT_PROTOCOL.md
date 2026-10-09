@@ -40,3 +40,16 @@ This lane is research-only and creates no production endpoints, order API calls,
 `python -m unittest discover -s tests -p test_oracle_net_contract.py -v` — 8 synthetic RED→GREEN contracts. The tests do not establish market-specific fees or an observed edge.
 
 Scientific outcome: `BLOCKED_ARTIFACT_BYTES`, `LABEL_UNVERIFIED`, `PAPER_FILL_PROXY`, `EDGE=UNPROVEN`. All prospective economic quantities remain `NOT_COMPUTABLE` until custody and sample gates pass.
+
+## AUD P1 correction protocol — 2026-10-09 (research-only)
+
+AUD [comment #6075341020](https://github.com/simondalmasso/SeneX/pull/204#issuecomment-6075341020), owner [fix request #6075438614](https://github.com/simondalmasso/SeneX/pull/204#issuecomment-6075438614).
+
+- T0 canonical names: `token_id_yes/no`; T1: `exact_oracle_source`. Both schema fixture definitions are exercised in `tests/test_oracle_net_p1.py`. The receipt byte input `t0_receipt_raw` is **required** and is not silently reconstructed by the production linker. `T0_receipt_sha256` commits to those bytes. The receipt must parse to the passed T0 object; original T0/T1 source, original rule and rule-version hashes must match.
+- The local rule-version policy for F1 is the exact SHA256 of `market_rule_raw` on both ledgers. This **does not** authenticate the actual market/oracle rule without an external independently verified original source. Tie handling must be `UP_ON_EQUAL` for the fixture; no universal source assumption.
+- Missing model signal is `prediction_id=null, frozen_senex_score=null, score_provenance=NO_T0_SENEX_SIGNAL, side_candidate=ABSTAIN`; missing book and fee inputs similarly null/empty and flagged. `classify_opportunity` accounts for an exclusion as ONE original opportunity with 0 strategy PnL; there is still no actual M17 writer or cohort.
+- Fee arithmetic uses `Decimal` and a 5-place minimum quantum. Official source documents five-place rounding but does **not** independently establish the tie-breaking rule in our captured evidence; ROUND_HALF_UP is an explicit synthetic convention, **not** settled executable fee custody.
+- The market sampled in F0 was marked `btc-5m-twap-60` and **cannot** use generic `crypto_prices_chainlink` as exact 60s TWAP. Modern Secure Realtime authenticated `prices.crypto.twap` produces decimal strings (`windowSeconds=60`, `btcusd`); not authorized for uncredentialed ZERO_SPEND use. Legacy uncredentialed RTDS `crypto_prices_twap_sixty` returned **only a subscribe snapshot** with `window_s`, not an actual forward update; E18 update parsing is a **synthetic contract only**. Distinguish both from signed Chainlink reports. See `TWAP_SOURCE_PROTOCOL_DECISION.json`.
+- The separate AUD patch branch `research/aud-m17-contract-fix-20261009` was examined **without** cherry-pick, merge or simultaneous mutation. All repairs are authored in ARQ branch only.
+- Continue with F3/F4/F5 **only** after original prospective T0/T1 source custody, exact market oracle/feed authority, frozen protocol, separately evidenced fills and independent AUD review. Current `EDGE=UNPROVEN`.
+
