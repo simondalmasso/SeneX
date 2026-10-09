@@ -32,6 +32,8 @@ def test_git_diff_check_still_detects_other_trailing_whitespace(tmp_path):
     assert _git(project,"init","-q").returncode==0
     assert _git(project,"config","user.email","local.invalid@example.test").returncode==0
     assert _git(project,"config","user.name","Offline Regression").returncode==0
+    # Pin cross-platform Git behavior: Windows core.autocrlf must not normalize immutable CRLF.
+    assert _git(project,"config","core.autocrlf","false").returncode==0
     (project/"README.md").write_text("initial\n")
     assert _git(project,"add",".").returncode==0
     assert _git(project,"commit","-qm","baseline").returncode==0
