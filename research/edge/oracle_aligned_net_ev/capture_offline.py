@@ -88,6 +88,11 @@ def _rule_identity_matches(raw_sources: dict[str, bytes], slot: dict) -> bool:
     version=metadata.get("rule_version")
     if not isinstance(version,str) or not version or rule.get("rule_version")!=version:
         return False
+    rule_sha=hashlib.sha256(rule_raw).hexdigest()
+    for key in ("original_market_rules_bytes_sha256", "rule_version_sha256"):
+        for evidence in (metadata, slot):
+            if key in evidence and evidence[key] != rule_sha:
+                return False
     return (rule.get("exact_oracle_source")==slot["oracle_source_id"] and
             rule.get("source_window_s")==60 and
             type(rule.get("source_window_s")) is int and
@@ -131,13 +136,16 @@ class OfflineCapture:
 
     def record_t0(self, slot: dict, *, received_at_ms: int,
                   raw_sources: dict[str,bytes],source_clocks: dict,signal: dict | None,
-                  max_age_ms: int=1500) -> dict:
+                  max_age_ms: int=1500,candidate_shares: object="1") -> dict:
         key=_slot(slot)
         now=_ms(received_at_ms,"received_at_ms")
         if now < slot["start_ms"] or now >= slot["end_ms"]:
             raise CaptureError("retrospective or out-of-window T0 forbidden")
         if type(max_age_ms) is not int or max_age_ms<=0:
             raise CaptureError("unfrozen freshness tolerance")
+        desired_shares=Decimal(_decimal_str(candidate_shares))
+        if desired_shares<=0:
+            raise CaptureError("nonpositive hypothetical shares")
         if not isinstance(raw_sources,dict) or not isinstance(source_clocks,dict):
             raise CaptureError("missing original source lists")
         if set(raw_sources).difference(AppendOnlyEvidence.ALLOWED_ATTACHMENTS):
@@ -152,8 +160,8 @@ class OfflineCapture:
                 continue
             doc=_parse(raw)
             token_id=slot["token_id_yes" if key_name=="book_yes" else "token_id_no"]
-            if str(doc.get("asset_id"))!=token_id or not _usable_book_depth(
-                doc,Decimal("1")
+            if type(doc.get("asset_id")) is not str or doc["asset_id"]!=token_id or not _usable_book_depth(
+                doc,desired_shares
             ):
                 flags.add("NO_BOOK")
             clock=source_clocks.get(key_name)
@@ -225,6 +233,7 @@ class OfflineCapture:
         attrs={"slot":dict(slot),"received_at_ms":now,
                "source_clocks":source_clocks,"flags":sorted(flags),
                "eligible":False,"fixture_inputs_complete":not flags,
+               "candidate_shares_decimal":str(desired_shares),
                "window_denominator":1,
                "strategy_pnl_decimal":"0",
                "source_admissible":False,
