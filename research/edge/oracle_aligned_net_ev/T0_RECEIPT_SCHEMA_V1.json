@@ -89,7 +89,10 @@
       "minLength": 1
     },
     "prediction_id": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1
     },
     "venue": {
@@ -101,7 +104,10 @@
       "minLength": 1
     },
     "book_seq_or_version": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1
     },
     "rule_version_sha256": {
@@ -113,11 +119,17 @@
       "pattern": "^[a-f0-9]{64}$"
     },
     "book_snapshot_sha256": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^[a-f0-9]{64}$"
     },
     "fee_parameters_sha256": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^[a-f0-9]{64}$"
     },
     "cost_model_sha256": {
@@ -141,10 +153,15 @@
       "type": "integer"
     },
     "clock_skew_bound_ms": {
-      "type": "integer"
+      "type": "integer",
+      "minimum": 0
     },
     "real_quote_age_ms": {
-      "type": "integer"
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
     },
     "best_bid": {
       "type": [
@@ -177,7 +194,10 @@
       ]
     },
     "score_provenance": {
-      "const": "RAW_CONVICTION"
+      "enum": [
+        "RAW_CONVICTION",
+        "NO_T0_SENEX_SIGNAL"
+      ]
     },
     "horizon_s": {
       "const": 300
