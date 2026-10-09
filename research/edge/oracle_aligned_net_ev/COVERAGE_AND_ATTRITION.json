@@ -1,0 +1,49 @@
+{
+  "experiment": "M17",
+  "status": "NO_PROSPECTIVE_COHORT_STARTED__FIXTURE_OFFLINE_TESTED",
+  "n_m17_prospective_T0": 0,
+  "n_admissible_t0": 0,
+  "n_admissible_t1": 0,
+  "n_real_verified": 0,
+  "n_fills_verified": 0,
+  "n_oos_clusters": null,
+  "n_excluded": null,
+  "attrition_denominator": null,
+  "warning": "Counts refer ONLY to this new M17 ledger, not historical or existing ORDER100 data; zero is not a claim about all SENEX observations",
+  "current_blockers": [
+    "MISSING_T0_BYTES",
+    "MISSING_T1_BYTES",
+    "ORACLE_UNATTESTED",
+    "NO_REAL_FILL_EVIDENCE",
+    "NO_FROZEN_PROSPECTIVE_TEST"
+  ],
+  "eligibility_contract": {
+    "denominator": "Each predeclared BTC 5m original opportunity/window is counted exactly once including missing signal, missing book, stale/gapped quote, and zero-fill",
+    "missing_signal": {
+      "prediction_id": null,
+      "frozen_senex_score": null,
+      "score_provenance": "NO_T0_SENEX_SIGNAL",
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "NO_T0_SENEX_SIGNAL"
+    },
+    "missing_book": {
+      "best_bid": null,
+      "best_ask": null,
+      "book_seq_or_version": null,
+      "book_snapshot_sha256": null,
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "NO_BOOK"
+    },
+    "missing_fee": {
+      "fee_parameters_sha256": null,
+      "market_fee_parameters": {},
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "UNVERIFIED_FEE"
+    },
+    "action": "Never backfill absent T0 data, never remove excluded opportunities from denominator; abstention pnl=0",
+    "this_registry_status": "DESIGN_ONLY_NO_PROSPECTIVE_CAPTURE"
+  },
+  "source_status": "SOURCE_BLOCKED",
+  "native_senex_5m_score_status": "UNVERIFIED_1H_CANONICAL",
+  "fixture_original_window_denominator_note": "Tests use synthetic slots only; excluded from all real T0 and economic denominators"
+}

@@ -1,0 +1,31 @@
+{
+  "version": "1",
+  "scope": "RESEARCH_ONLY_PAPER_QUOTE",
+  "unit": "USDC per original opportunity",
+  "market_fee_parameters": "REQUIRED at T0 with original raw bytes, by token/market/version. sample rate 0.07 and exponent 1 are NOT defaults",
+  "supported_market_fee_formula": {
+    "feeType": "crypto_fees_v2",
+    "exponent": 1,
+    "formula": "fee_USDC=filled_shares * market_specific_rate * p * (1-p)",
+    "example_only": "100 shares * 0.07 * 0.5 * 0.5 = 1.75 USDC"
+  },
+  "market_specific_taker_fee_schedule_status": "F0 metadata observed, but no custodied original T0 fee bytes",
+  "no_maker_rebate_assumption": true,
+  "hold_formula": "sum(filled_shares * (settlement_payout - executable_entry_ask_price)) - market_specific_taker_fees - slippage - other_costs",
+  "exit_formula": "sum(filled_shares * (executable_exit_bid - executable_entry_ask)) - entry_fee - exit_fee - slippage - impact - other_costs",
+  "expected_hold_formula": "E_filled_shares * (frozen_calibrated_q - ask) - expected_market_fee - slippage - other_costs; disallow RAW_CONVICTION as q",
+  "early_exit": "MUST use actual bid and independent exit depth",
+  "missing_fee_or_depth": "ABSTAIN_UNVERIFIED_FEE_OR_DEPTH",
+  "pair_upper_bound": "shares*(1-vwap_ask_up-vwap_ask_down)-fees_up-fees_down-other_costs; BOTH tokens same condition_id; upper quote only",
+  "pair_lower_bound": "null until independent two-leg fill and risk custody",
+  "scientific_eligibility": "PAPER_QUOTE_ONLY is not EXECUTABLE_ALPHA",
+  "f1_precision_contract": {
+    "source": "https://help.polymarket.com/en/articles/13364478-trading-fees",
+    "statement": "Taker fees rounded to 5 decimal places; sub-minimum 0.00001 USDC rounds to zero",
+    "arithmetic": "Decimal (no binary float while computing); 0.00001 quantum applied per individual quote level",
+    "assumption": "ROUND_HALF_UP is an explicit research convention; original venue tie-breaking and market/version rounding remain UNVERIFIED",
+    "science_gate": "NO ECONOMIC ADMISSION without original T0 market-specific fee schedule, rounding and fill evidence",
+    "text_output": "audit decimal USDC strings; float values for legacy display only"
+  },
+  "market_specific_fee_source_status": "EXAMPLE_OBSERVED_AT_F0_BUT_ORIGINAL_T0_BYTES_MISSING"
+}

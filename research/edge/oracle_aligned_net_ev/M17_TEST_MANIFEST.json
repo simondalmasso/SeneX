@@ -1,0 +1,121 @@
+{
+  "schema_version": "m17-aud-fix3-p1-v2",
+  "mode": "FIXTURE_OFFLINE",
+  "local_host": "win-desktop-dph3941",
+  "commands": [
+    {
+      "name": "existing_oracle_p1",
+      "command": "PYTHONPATH=<isolated jsonschema dir> python -m unittest discover -s tests -p test_oracle_net_*.py -v",
+      "n_tests": 18,
+      "exit_code": 0,
+      "note": "with actual pinned validator so 0 schema skip"
+    },
+    {
+      "name": "new_readiness",
+      "command": "python -m unittest discover -s tests -p test_m17_prospective_readiness.py -v",
+      "n_tests": 24,
+      "exit_code": 0
+    },
+    {
+      "name": "schema_hard_gate",
+      "command": "PYTHONPATH=<isolated jsonschema dir> python -m research.edge.oracle_aligned_net_ev.strict_schema_gate",
+      "positive_schemas": 2,
+      "negative_mutations_rejected": 8,
+      "exit_code": 0
+    },
+    {
+      "name": "missing_schema",
+      "command": "python -m research.edge.oracle_aligned_net_ev.strict_schema_gate (without test-only dependency)",
+      "exit_code": 2,
+      "expected": "explicit gate BLOCKED, never fallback"
+    }
+  ],
+  "red_green_log": [
+    {
+      "phase": "RED",
+      "count": 13,
+      "exit": 1,
+      "defect": "unimplemented custody and offline capture methods"
+    },
+    {
+      "phase": "RED",
+      "count": 2,
+      "exit": 1,
+      "defect": "signal supplied values not tied to original source bytes; missing preceding book sequence silently accepted"
+    },
+    {
+      "phase": "GREEN",
+      "combined_focused_total": 33,
+      "exit": 0,
+      "when": "after implementation and corrections"
+    },
+    {
+      "phase": "RED",
+      "count": 5,
+      "exit": 1,
+      "defect": "AUD three negative classification defects plus invalid book quotes and partial asks: original record_t0 expected flags/rejections not present",
+      "test_environment": "SentinelX win-desktop-dph3941, actual AppendOnlyEvidence + temporary directories"
+    },
+    {
+      "phase": "RED",
+      "count": 2,
+      "exit": 1,
+      "defect": "hash lineage mismatch not rejected and caller-specific desired book depth kwarg not implemented",
+      "test_environment": "same actual custody/restart stack"
+    },
+    {
+      "phase": "GREEN",
+      "combined_focused_total": 42,
+      "exit": 0,
+      "when": "after bounded P1 repairs: 18 oracle tests + 24 fixture/offline custody tests, real Draft202012Validator included, 0 local skips"
+    }
+  ],
+  "coverage": [
+    "both schemas Draft2020-12",
+    "host raw byte SHA256",
+    "append-only chain and crash-orphans",
+    "duplicate T0/T1 and missed window no-backfill",
+    "no-signal no-book no-fee stale gap abstain",
+    "frame freshness/sequence separation",
+    "partial depth rejection",
+    "Decimal original shares and model-only fees",
+    "T1 authoritative status always UNVERIFIED"
+  ],
+  "not_proven": [
+    "external clock authority",
+    "signed Chainlink original TWAP update",
+    "true CLOB contemporaneous fill",
+    "actual 5m SENEX trained score",
+    "OOS edge",
+    "external immutable anti-rewrite anchor"
+  ],
+  "new_exact_head_canonical_ci": "PENDING_AFTER_THIS_MANIFEST_COMMIT; final authoritative result in append-only PR comment",
+  "ci_scope": "canonical full product pipeline check on HEAD after publication",
+  "original_artifacts_sha256": "F0 snapshot hash in TWAP60_F0_ORIGINAL_PROBE_MANIFEST.json; not a prospective T0/T1",
+  "scientific_status": "N_REAL_VERIFIED=0, EDGE=UNPROVEN",
+  "previous_manifest_snapshot": {
+    "recorded_focused_tests": 33,
+    "recorded_research_tests": 15,
+    "prior_ci_pending_as_of_original_authoring": true
+  },
+  "aud_finding_url": "https://github.com/simondalmasso/SeneX/pull/204#issuecomment-6077235696",
+  "canonical_ci_gate": {
+    "workflow": ".github/workflows/senex-current-ci.yml",
+    "implementation": "explicit mandatory step between full regression and PAPER/network safety",
+    "dependency": "jsonschema==4.26.0 installed to $RUNNER_TEMP/m17-schema-deps only",
+    "invocations": [
+      "python -m research.edge.oracle_aligned_net_ev.strict_schema_gate",
+      "python -m unittest discover -s tests -p 'test_oracle_net_*.py' -v",
+      "python -m unittest discover -s tests -p 'test_m17_prospective_readiness.py' -v"
+    ],
+    "missing_dependency": "nonzero exit, not skip",
+    "product_locked_deps_unchanged": true
+  },
+  "ci_snapshot_time_semantics": "This manifest is a pre-CI research snapshot; do not mistake pending state for current after a later exact-HEAD run",
+  "explicit_assumptions": {
+    "market_rule_fixture_contract": "internal synthetic strict rule/metadata, not verified provider JSON schema",
+    "min_depth_candidate": "per-call candidate_shares parameter default one synthetic share; independent fill not inferred",
+    "rule_version_hash": "if slot or market metadata declares sha256 of original rule bytes/version, require match to exact provided raw bytes",
+    "timestamp": "integer milliseconds JSON int or canonical unsigned integer text only; fractions and boolean refused"
+  }
+}

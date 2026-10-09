@@ -1,0 +1,105 @@
+{
+  "version": "M17_F3_DRAFT_V1",
+  "status": "NOT_FROZEN_NOT_AUTHORIZED",
+  "experiment": "BTC_UP_DOWN_5M_TWAP60_NET_EDGE",
+  "edge": "UNPROVEN",
+  "universe": {
+    "venue": "Polymarket",
+    "market_type": "BTC Up/Down five-minute",
+    "source_universe": "all 5m market windows with original independently verified rules and token IDs",
+    "utc_start": null,
+    "utc_end": null,
+    "windows": "complete predeclared contiguous 300s UTC boundaries",
+    "full_denominator": "including NO_SIGNAL NO_BOOK NO_FEE STALE GAP MISSED_WINDOW ABSTAIN and ZERO_FILL",
+    "uniqueness": "market_id:condition_id:start_ms",
+    "retrospective_T0_forbidden": true
+  },
+  "decision_time": {
+    "required": "T0 original raw bytes, local receive time strictly before outcome; immutable rule, both CLOB books + fee per token, native 300s SENEX score or explicit NO_SIGNAL",
+    "max_quote_age_ms": null,
+    "maximum_clock_skew_ms": null,
+    "source_requirement": "independently attested exact BTC/USD TWAP60 AND finalized market-specific settlement",
+    "no_cross_horizon_model": true
+  },
+  "hypotheses": [
+    {
+      "id": "H0_NET_INCREMENTAL",
+      "null": "E[C net - B net] <= 0 per complete preregistered opportunity",
+      "alternative": "E[C net - B net] > 0 after observed costs and uncertainty"
+    },
+    {
+      "id": "H0_ABSOLUTE_NET",
+      "null": "E[C net - A net] <= 0",
+      "alternative": "E[C net - A net] > 0"
+    }
+  ],
+  "comparators": {
+    "A_NO_TRADE": {
+      "policy": "always abstain",
+      "net_usdc": "0"
+    },
+    "B_MARKET_PRIOR": {
+      "policy": "T0 executable two-token market quotes only, fixed training-estimated rules; no future quotes"
+    },
+    "C_SENEX_CALIBRATED": {
+      "policy": "genuine causal native 5m score; fit only train/calibration; otherwise ABSTAIN"
+    },
+    "same_original_opportunity_indices": true
+  },
+  "costs": {
+    "fee": "exact market-specific T0 per-token frozen fee schedule with explicitly tested precision",
+    "slippage": "pre-committed pessimistic levels; not calibrated on OOS",
+    "book": "ask-side depth and max market impact, no midpoint",
+    "paired": "not assumed atomic",
+    "fill": "paper quote is not real fill",
+    "abstain": "PnL zero, denominator retained",
+    "normalization": "net USDC per opportunity fixed hypothetical stake, independent capital authority not conferred"
+  },
+  "splits": {
+    "train": "first chronological 60% of candidate days (design only)",
+    "calibration": "next 20% chronological days",
+    "OOS": "final 20% untouched days",
+    "embargo": "at least 1h around calibration/model updates",
+    "train_calibration_only": true,
+    "reuse_of_15m_1h_score_for_5m": false
+  },
+  "inference": {
+    "unit": "matched 5m slot",
+    "cluster": "UTC-day block",
+    "secondary_cluster": "hour blocks for sensitivity",
+    "confidence": "95% cluster bootstrap with deterministic preregistered seed",
+    "multiplicity": "Holm over absolute and incremental primary hypotheses",
+    "predefined_min_independent_days": null,
+    "effective_n_floor": null,
+    "stop_n": null,
+    "calibration_metrics": "train-only Brier/ECE, never for OOS tuning",
+    "decision": "both multiplicity-adjusted lower confidence limits > 0 and robust to slippage/fee stress"
+  },
+  "stop": [
+    "SOURCE_BLOCKED",
+    "ORIGINAL_T0_T1_NOT_AVAILABLE",
+    "NATIVE_5M_SIGNAL_UNVERIFIED",
+    "FEE_SCHEDULE_UNVERIFIED",
+    "CLOCK_OR_RECONNECT_GAPS",
+    "EXTERNAL_ANCHOR_ABSENT",
+    "NO_FILL_EVIDENCE",
+    "AUD_NOT_SIGNED",
+    "SCIENTIFIC_MIN_N_UNSET",
+    "TEST_FAILURE",
+    "NO_REAL_ORDERS",
+    "NO_MERGE_NO_DEPLOY"
+  ],
+  "pending_owner_freeze": [
+    "UTC start/end",
+    "full universe and stop N",
+    "min clusters",
+    "clock and quote-age max",
+    "stake and slippage stress",
+    "fee rounding authority",
+    "bootstrap seed and repetitions",
+    "trading liquidity assumptions",
+    "independent AUD signoff"
+  ],
+  "cohort_authorized": false,
+  "reference": "https://github.com/simondalmasso/SeneX/issues/201"
+}
