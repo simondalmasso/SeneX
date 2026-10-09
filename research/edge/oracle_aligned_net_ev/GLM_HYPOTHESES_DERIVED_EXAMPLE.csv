@@ -1,4 +1,3 @@
-<PARSED TEXT FOR SHEET: 1 / 1 TABS
-TAB NAME: SENEX__TEMP_M17_P2_BRIDGE_00__GLM_HYPOTHESES_DERIVED_EXAMPLE.csv>index,family,id,mechanism,source,paper,regime,variable,falsification,leakage,priority,state,trial_id
-0,PDF,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
-1,R9,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
+family,id,mechanism,source,paper,regime,variable,falsification,leakage,priority,state,trial_id
+PDF,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
+R9,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
