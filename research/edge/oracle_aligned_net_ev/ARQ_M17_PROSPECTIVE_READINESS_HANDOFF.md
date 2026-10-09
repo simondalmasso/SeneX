@@ -29,3 +29,11 @@
 6. Establish real executable fill evidence if economic edge is to be claimed. Synthetic quotes/fees never prove fills.
 
 `ZERO_SPEND=HARD | PAPER_ONLY=true | LIVE=false | REAL_ORDERS=0 | CAPITAL=0 | NO_MERGE | NO_DEPLOY | EDGE=UNPROVEN`.
+
+## Append-only ARQ1 P1 correction appendix — 2026-10-09
+
+Independent AUD verdict [#6077235696](https://github.com/simondalmasso/SeneX/pull/204#issuecomment-6077235696) found three adversarial fixture-only classification errors despite the earlier full CI success. ARQ1 implemented the fixes without touching production: semantic cross-binding of original market rule/metadata bytes and any declared original rule SHA256; finite, nonempty, noncrossed Decimal bid/ask levels with explicit hypothetical candidate-share depth; exact wire millisecond parser with rejection of fractional float/truncation and booleans. False/missing associations add `NO_MARKET_RULE` or `NO_BOOK` plus `ABSTAIN`; timestamps that silently lose precision are rejected. Source admissibility and eligibility stay false.
+
+TDD RED: 5 actual custody-backed assertions fail against the AUD-reviewed version (exit 1), followed by 2 additional failures for rule hash lineage and explicit desired shares (exit 1). TDD GREEN on repaired sources: 24 new test cases + 18 previous oracle tests, exit 0, none skipped when pinned real schema dependency is loaded. An explicit canonical CI step now installs `jsonschema==4.26.0` only into temporary test scope and runs the hard Draft202012Validator plus both focused suites with `set -euo pipefail`; original workflow steps and product lock unchanged. The per-commit canonical CI outcome is tracked separately in the final PR conversation receipt; this appendix is a historical design summary, not a self-issued AUD approval.
+
+Internal fixture JSON keys, candidate shares and rule semantics are NOT verified external provider contracts. No proprietary original source update, real 5m score, external anchor, T1 authority, market fill, OOS edge, science cohort, or merge authorization has been added.
