@@ -29,3 +29,58 @@ class CostTests(unittest.TestCase):
     def test_nonfinite_quantity_and_outcome(self):
         with self.assertRaises(CostError):self.cost(shares='NaN')
         with self.assertRaises(CostError):paper_buy(shares='5',price='0.5',rate='0.07',outcome=2)
+
+    def test_m17_market_fee_vintage_fail_closed(self):
+        """A fixture fee curve is not the historic match-time market fee."""
+        import hashlib
+        import json
+        from research.edge.oracle_aligned_net_ev import cost_identity
+        gate=getattr(cost_identity,'paper_buy_with_market_vintage',None)
+        self.assertTrue(callable(gate),'missing market-specific fee vintage boundary')
+        market={'id':'synthetic-btc5m','version':'v1','oracleWindowSeconds':60,
+                'feeSchedule':{'rate':'0.07','exponent':1,'takerOnly':True,
+                               'feesEnabled':True,'effectiveFromMs':1000,'effectiveToMs':2000}}
+        def assess(doc=market,**kw):
+            raw=None if doc is None else json.dumps(doc,sort_keys=True,separators=(',',':')).encode('utf8')
+            args={'original_market_bytes':raw,
+                  'expected_market_sha256':hashlib.sha256(raw).hexdigest() if raw else None,
+                  'market_id':'synthetic-btc5m','source_received_at_ms':1490,
+                  't0_ms':1500,'assumed_match_at_ms':1501,
+                  'expected_oracle_window_seconds':60,
+                  'shares':'100','price':'0.5','rebate':None,'trade_id':None}
+            args.update(kw)
+            return gate(**args)
+        good=assess()
+        self.assertEqual(good['fee_vintage_status'],'CONDITIONAL_DOCUMENTARY_FIXTURE_ONLY')
+        self.assertEqual(good['net_edge_status'],'NET_EDGE_NOT_COMPUTABLE')
+        self.assertEqual(good['conditional_fee_usdc_decimal'],'1.75000')
+        self.assertEqual(good['conditional_fee_per_share_decimal'],'0.01750')
+        self.assertEqual(good['conditional_entry_cost_per_share_decimal'],'0.51750')
+        self.assertEqual(good['conditional_break_even_probability_decimal'],'0.51750')
+        self.assertFalse(good['source_admissible'])
+        self.assertFalse(good['fill_proven'])
+        self.assertEqual(good['rebate_credit_decimal'],'0')
+        self.assertEqual(good['realized_pnl_status'],'NOT_COMPUTABLE')
+        cases=[
+            {'doc':None},
+            {'doc':dict(market,feeSchedule=None)},
+            {'doc':dict(market,feeSchedule=dict(market['feeSchedule'],exponent=2))},
+            {'doc':dict(market,feeSchedule=dict(market['feeSchedule'],feesEnabled=None))},
+            {'doc':dict(market,feeSchedule=dict(market['feeSchedule'],takerOnly=False))},
+            {'kw':{'expected_market_sha256':'f'*64}},
+            {'kw':{'source_received_at_ms':1502}},
+            {'kw':{'assumed_match_at_ms':2000}},
+            {'kw':{'rebate':'0.20'}},
+            {'kw':{'trade_id':'unverified-matched-trade'}},
+            {'doc':dict(market,oracleWindowSeconds=30)},
+            {'doc':dict(market,id='wrong-market')},
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                result=assess(case.get('doc',market),**case.get('kw',{}))
+                self.assertEqual(result['net_edge_status'],'NET_EDGE_NOT_COMPUTABLE')
+                self.assertNotEqual(result['fee_vintage_status'],'CONDITIONAL_DOCUMENTARY_FIXTURE_ONLY')
+                self.assertEqual(result['rebate_credit_decimal'],'0')
+                self.assertFalse(result['source_admissible'])
+                self.assertFalse(result['fill_proven'])
+                self.assertEqual(result['realized_pnl_status'],'NOT_COMPUTABLE')
