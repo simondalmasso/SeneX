@@ -34,7 +34,11 @@
     "glm_p4_original_hash_manifest": "PASS_FIXTURE_ONLY",
     "glm_synthetic_k4_empirical_edge": "NOT_IDENTIFIABLE",
     "prereg_oos_trial_economics": "REQUIRES_SEPARATE_OWNER_AUTH",
-    "independent_aud_acceptance": "HOLD"
+    "independent_aud_acceptance": "HOLD",
+    "ui390_effective_css_viewport": "PASS_FIXTURE_ONLY",
+    "pr215_canonical_ci_exact_head": "HOLD",
+    "pr214_canonical_ci_exact_head": "HOLD",
+    "polymarket_v2_position_manager_original_authority": "HOLD"
   },
   "no_global_pass": true,
   "blockers": [
@@ -44,6 +48,23 @@
     "no independent external custody anchor",
     "no native verifiable 300s prediction",
     "no real fills/empirical fee and OOS outcome",
-    "UI effective 390px CSS viewport not independently measured before future browser patch"
-  ]
+    "PR215/PR214 canonical workflow_dispatch blocked (gh CLI exit 4: no authenticated host session); mirror is not canonical",
+    "V2 PositionManager original contract not implemented/admissible; CTF v1 fixture only"
+  ],
+  "ctf_gamma_version_scope": "GAMMA_V1_CTF_ONLY; V2_AND_UNKNOWN_FAIL_CLOSED",
+  "ui390_evidence": {
+    "pr": 209,
+    "head": "ee9658bff739380a9a1992efb882a54284c27fa6",
+    "canonical_run": 37954599043,
+    "artifact": 11627412962,
+    "verified_css_viewport": [
+      390,
+      844
+    ],
+    "dpr": 1,
+    "overlap_count": 0,
+    "no_horizontal_scroll": true,
+    "authority": "OFFLINE_FIXTURE_ONLY"
+  },
+  "canonical_ci_dispatch_status": "BLOCKED_GH_CLI_AUTH_REQUIRED_RC4_BOTH_STACKED_BRANCHES"
 }
