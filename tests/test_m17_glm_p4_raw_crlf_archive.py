@@ -47,7 +47,8 @@ def test_git_diff_check_still_detects_other_trailing_whitespace(tmp_path):
     assert red.returncode!=0
     assert REL in red.stdout and "trailing whitespace" in red.stdout
 
-    (project/".gitattributes").write_text(ATTR+"\n")
+    # Write LF only; Windows text-mode CRLF would create a new attribute-file defect.
+    (project/".gitattributes").write_bytes((ATTR+"\n").encode("utf8"))
     assert _git(project,"add",".").returncode==0
     assert _git(project,"commit","-qm","scoped binary archive classification").returncode==0
     green=_git(project,"diff","--check",base,"HEAD")
