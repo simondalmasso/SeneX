@@ -38,7 +38,11 @@
     "ui390_effective_css_viewport": "PASS_FIXTURE_ONLY",
     "pr215_canonical_ci_exact_head": "HOLD",
     "pr214_canonical_ci_exact_head": "HOLD",
-    "polymarket_v2_position_manager_original_authority": "HOLD"
+    "polymarket_v2_position_manager_original_authority": "HOLD",
+    "market_fee_vintage_synthetic_falsification": "PASS_FIXTURE_ONLY",
+    "maker_fill_l2_ambiguity_falsification": "PASS_FIXTURE_ONLY",
+    "original_fee_schedule_at_verified_match_time": "HOLD",
+    "actual_maker_queue_priority_and_match": "HOLD"
   },
   "no_global_pass": true,
   "blockers": [
@@ -49,7 +53,9 @@
     "no native verifiable 300s prediction",
     "no real fills/empirical fee and OOS outcome",
     "PR215/PR214 canonical workflow_dispatch blocked (gh CLI exit 4: no authenticated host session); mirror is not canonical",
-    "V2 PositionManager original contract not implemented/admissible; CTF v1 fixture only"
+    "V2 PositionManager original contract not implemented/admissible; CTF v1 fixture only",
+    "No independently authentic historical market fee schedule covering an actual SENEX matched trade",
+    "No authenticated maker order queue position/cancellation ahead or actual fill report"
   ],
   "ctf_gamma_version_scope": "GAMMA_V1_CTF_ONLY; V2_AND_UNKNOWN_FAIL_CLOSED",
   "ui390_evidence": {
@@ -66,5 +72,13 @@
     "no_horizontal_scroll": true,
     "authority": "OFFLINE_FIXTURE_ONLY"
   },
-  "canonical_ci_dispatch_status": "BLOCKED_GH_CLI_AUTH_REQUIRED_RC4_BOTH_STACKED_BRANCHES"
+  "canonical_ci_dispatch_status": "BLOCKED_GH_CLI_AUTH_REQUIRED_RC4_BOTH_STACKED_BRANCHES",
+  "economic_falsification_boundaries": {
+    "market_fee_vintage": "ONE_LOCAL_SYNTHETIC_ORIGINAL_BYTE_FIXTURE_ONLY_NO_ORIGINAL_MARKET_FEE_AUTHORITY",
+    "maker_queue": "SAME_AGGREGATE_L2_OPPOSITE_SYNTHETIC_FIFO_WITNESSES_NO_P_FILL",
+    "hypothetical_100_shares_price_0_5_rate_0_07_exponent1_fee_usdc": "1.75000",
+    "hypothetical_per_share_entry_cost": "0.51750",
+    "break_even_probability_requires_more_than": "0.51750",
+    "cost_model_provenance": "OFFLINE_DOCUMENTATION_FIXTURE_NOT_ACTUAL_EXECUTION"
+  }
 }
