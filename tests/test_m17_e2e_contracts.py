@@ -39,7 +39,8 @@ class OnchainDocumentaryTests(unittest.TestCase):
         c=copy.deepcopy(self.ctf);g=copy.deepcopy(self.gamma)
         c.update(updates.get("ctf",{}));g.update(updates.get("gamma",{}))
         return classify_ctf_gamma_originals(wire(c),wire(g),
-            market_id="fixture-market-1",expected_oracle=ORACLE)
+            market_id="fixture-market-1",expected_oracle=ORACLE,
+            expected_token_ids=("yes-token","no-token"))
     def assert_blocked(self,**updates):
         r=self.classify(**updates)
         self.assertEqual(r["status"],"LABEL_UNVERIFIED")
