@@ -61,3 +61,37 @@ class SellAndBoundaries(unittest.TestCase):
         self.assertEqual(classify_buy(book,**args)['status'],'NO_BOOK')
         book=dict(self.book,asks=[{'price':'0.51','size':'Infinity'}])
         self.assertEqual(classify_buy(book,**args)['status'],'NO_BOOK')
+
+    def test_m17_l2_cannot_identify_maker_fill(self):
+        """Same public L2 transition; opposite private FIFO queue outcomes."""
+        from decimal import Decimal as D
+        from research.edge.oracle_aligned_net_ev import quote_readiness
+        gate=getattr(quote_readiness,'classify_maker_l2_evidence',None)
+        self.assertTrue(callable(gate),'missing maker L2 execution non-identification boundary')
+        # Public top-of-book: 21 before; canceled 5, traded 6, 10 after.
+        # Tagged maker 1 share is behind 10 existing shares, followed by 10.
+        public={'initial_depth':'21','closing_depth':'10','trade_qty':'6',
+                'cancel_qty':'5','candidate_shares':'1'}
+        before=D(public['initial_depth'])
+        canceled=D(public['cancel_qty'])
+        traded=D(public['trade_qty'])
+        self.assertEqual(before-canceled-traded,D(public['closing_depth']))
+        ahead=D('10');candidate=D('1');behind=D('10')
+        self.assertEqual(ahead+candidate+behind,before)
+        # Admissible cancellation-ahead: 5 shares ahead disappear; 6 trades
+        # then take the remaining 5 ahead + 1 tagged maker share.
+        filled_front=(traded>=ahead-canceled+candidate)
+        # Admissible cancellation-behind: 5 shares behind disappear;
+        # 6 trades do not reach the tagged maker's unchanged 10 ahead.
+        filled_back=(traded>=ahead+candidate)
+        self.assertTrue(filled_front)
+        self.assertFalse(filled_back)
+        result=gate(**public)
+        self.assertEqual(result['status'],'FILL_UNIDENTIFIABLE')
+        self.assertFalse(result['fill_proven'])
+        self.assertEqual(result['realized_pnl_status'],'NOT_COMPUTABLE')
+        self.assertEqual(result['maker_queue_authority'],'UNVERIFIED')
+        self.assertNotIn('fill_probability',result)
+        self.assertNotIn('realized_pnl',result)
+        self.assertEqual(result['conditional_queue_scenarios'],['POSSIBLE_FILL','POSSIBLE_NO_FILL'])
+        self.assertEqual(result['aggregate_depth_delta_decimal'],'11')
