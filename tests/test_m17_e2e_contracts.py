@@ -32,7 +32,7 @@ class OnchainDocumentaryTests(unittest.TestCase):
           "outcomeSlotCount":2,"payoutNumerators":[1,0],
           "blockNumber":95000000,"blockHash":BLOCK,"transactionHash":TX,
           "logIndex":0,"removed":False,"finalityConfirmations":128}
-        self.gamma={"id":"fixture-market-1","chainId":137,"conditionId":COND,
+        self.gamma={"id":"fixture-market-1","chainId":137,"version":"v1","conditionId":COND,
           "outcomes":["Up","Down"],"clobTokenIds":["yes-token","no-token"],
           "winningOutcome":"Up"}
     def classify(self,**updates):
@@ -56,6 +56,19 @@ class OnchainDocumentaryTests(unittest.TestCase):
         self.assertFalse(r["fill_proven"])
         self.assertEqual(r["ctf_original_sha256"],hashlib.sha256(wire(self.ctf)).hexdigest())
         self.assertEqual(r["gamma_original_sha256"],hashlib.sha256(wire(self.gamma)).hexdigest())
+    def test_missing_gamma_protocol_version_fails_closed(self):
+        g=copy.deepcopy(self.gamma);g.pop("version")
+        r=classify_ctf_gamma_originals(wire(self.ctf),wire(g),
+            market_id="fixture-market-1",expected_oracle=ORACLE,
+            expected_token_ids=("yes-token","no-token"))
+        self.assertEqual(r["status"],"LABEL_UNVERIFIED")
+        self.assertFalse(r["source_admissible"])
+    def test_unknown_gamma_protocol_version_fails_closed(self):
+        self.assert_blocked(gamma={"version":"v3"})
+    def test_v2_position_manager_not_ctf_fails_closed(self):
+        self.assert_blocked(gamma={"version":"v2","positionIds":["positionA","positionB"]})
+    def test_migration_marked_v2_not_ctf_fails_closed(self):
+        self.assert_blocked(gamma={"version":"v2","clobTokenIds":["yes-token","no-token"]})
     def test_wrong_chain(self):self.assert_blocked(ctf={"chainId":1})
     def test_wrong_ctf(self):self.assert_blocked(ctf={"contract":"0x"+"aa"*20})
     def test_wrong_condition(self):self.assert_blocked(gamma={"conditionId":"0x"+"99"*32})
