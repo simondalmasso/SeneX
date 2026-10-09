@@ -73,7 +73,8 @@ class OracleNetContractTests(unittest.TestCase):
         paper = hold_quote_net(levels, 100, outcome=1, fee_rate=.07, exponent=1, slippage_usdc=2)
         self.assertAlmostEqual(paper["paper_net_usdc"], 100*(1-.5)-1.75-2)
         self.assertEqual(paper["evidence"], "PAPER_QUOTE_ONLY")
-        self.assertEqual(hold_quote_net([], 100, outcome=1, fee_rate=.07, exponent=1)["paper_net_usdc"], 0)
+        with self.assertRaises(CostError):
+            hold_quote_net([], 100, outcome=1, fee_rate=.07, exponent=1)
 
     def test_pair_gross_discount_can_be_net_negative_without_atomic_fills(self):
         up = [{"price": .498, "size": 100}]
