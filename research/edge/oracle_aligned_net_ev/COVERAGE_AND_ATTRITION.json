@@ -1,6 +1,6 @@
 {
   "experiment": "M17",
-  "status": "NO_PROSPECTIVE_COHORT_STARTED",
+  "status": "NO_PROSPECTIVE_COHORT_STARTED__FIXTURE_OFFLINE_TESTED",
   "n_m17_prospective_T0": 0,
   "n_admissible_t0": 0,
   "n_admissible_t1": 0,
@@ -42,5 +42,8 @@
     },
     "action": "Never backfill absent T0 data, never remove excluded opportunities from denominator; abstention pnl=0",
     "this_registry_status": "DESIGN_ONLY_NO_PROSPECTIVE_CAPTURE"
-  }
+  },
+  "source_status": "SOURCE_BLOCKED",
+  "native_senex_5m_score_status": "UNVERIFIED_1H_CANONICAL",
+  "fixture_original_window_denominator_note": "Tests use synthetic slots only; excluded from all real T0 and economic denominators"
 }
