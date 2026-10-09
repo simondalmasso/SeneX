@@ -16,5 +16,31 @@
     "ORACLE_UNATTESTED",
     "NO_REAL_FILL_EVIDENCE",
     "NO_FROZEN_PROSPECTIVE_TEST"
-  ]
+  ],
+  "eligibility_contract": {
+    "denominator": "Each predeclared BTC 5m original opportunity/window is counted exactly once including missing signal, missing book, stale/gapped quote, and zero-fill",
+    "missing_signal": {
+      "prediction_id": null,
+      "frozen_senex_score": null,
+      "score_provenance": "NO_T0_SENEX_SIGNAL",
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "NO_T0_SENEX_SIGNAL"
+    },
+    "missing_book": {
+      "best_bid": null,
+      "best_ask": null,
+      "book_seq_or_version": null,
+      "book_snapshot_sha256": null,
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "NO_BOOK"
+    },
+    "missing_fee": {
+      "fee_parameters_sha256": null,
+      "market_fee_parameters": {},
+      "side_candidate": "ABSTAIN",
+      "validity_flag": "UNVERIFIED_FEE"
+    },
+    "action": "Never backfill absent T0 data, never remove excluded opportunities from denominator; abstention pnl=0",
+    "this_registry_status": "DESIGN_ONLY_NO_PROSPECTIVE_CAPTURE"
+  }
 }
