@@ -18,5 +18,14 @@
   "missing_fee_or_depth": "ABSTAIN_UNVERIFIED_FEE_OR_DEPTH",
   "pair_upper_bound": "shares*(1-vwap_ask_up-vwap_ask_down)-fees_up-fees_down-other_costs; BOTH tokens same condition_id; upper quote only",
   "pair_lower_bound": "null until independent two-leg fill and risk custody",
-  "scientific_eligibility": "PAPER_QUOTE_ONLY is not EXECUTABLE_ALPHA"
+  "scientific_eligibility": "PAPER_QUOTE_ONLY is not EXECUTABLE_ALPHA",
+  "f1_precision_contract": {
+    "source": "https://help.polymarket.com/en/articles/13364478-trading-fees",
+    "statement": "Taker fees rounded to 5 decimal places; sub-minimum 0.00001 USDC rounds to zero",
+    "arithmetic": "Decimal (no binary float while computing); 0.00001 quantum applied per individual quote level",
+    "assumption": "ROUND_HALF_UP is an explicit research convention; original venue tie-breaking and market/version rounding remain UNVERIFIED",
+    "science_gate": "NO ECONOMIC ADMISSION without original T0 market-specific fee schedule, rounding and fill evidence",
+    "text_output": "audit decimal USDC strings; float values for legacy display only"
+  },
+  "market_specific_fee_source_status": "EXAMPLE_OBSERVED_AT_F0_BUT_ORIGINAL_T0_BYTES_MISSING"
 }
