@@ -1,0 +1,3 @@
+family,id,mechanism,source,paper,regime,variable,falsification,leakage,priority,state,trial_id
+PDF,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
+R9,M1,book,UNVERIFIED_SOURCE,paper-a,twap60,delta,test,no,high,EXPLORATORY_ONLY,trial-1
