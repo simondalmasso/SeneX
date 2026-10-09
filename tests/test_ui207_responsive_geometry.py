@@ -80,7 +80,7 @@ def _persist_visual_evidence(folder, size, red, green, variant="normal"):
   assert hashlib.sha256(dst.read_bytes()).hexdigest()==(red if name=="red" else green)["png_sha256"]
  (out/f"{stem}_geometry.json").write_text(
   json.dumps({"size":list(size),"variant":variant,"baseline":BASE,
-              "red":red,"green":green},sort_keys=True,indent=2)+"\\n",encoding="utf8")
+              "red":red,"green":green},sort_keys=True,indent=2)+"\n",encoding="utf8")
 
 
 @pytest.mark.parametrize("size",SIZES)
@@ -131,3 +131,163 @@ def test_oracle_table_many_rows_scrolls_with_no_card_collision(tmp_path):
  assert green["tableHeight"]<=370,green
  assert green["pageWidth"]<=green["viewport"][0]+2,green
  assert green["mainScrollWidth"]<=green["mainClientWidth"]+2,green
+
+
+# Real 390 CSS px browser viewport: Chrome --window-size clamps narrow widths,
+# so this test MUST use CDP Emulation.setDeviceMetricsOverride instead.
+import base64 as _base64
+import os as _os
+import socket as _socket
+import struct as _struct
+import tempfile as _tempfile
+import time as _time
+import urllib.request as _urlrequest
+
+
+class _CDPWire:
+    def __init__(self, endpoint):
+        from urllib.parse import urlparse
+        u=urlparse(endpoint)
+        self.conn=_socket.create_connection((u.hostname,u.port),timeout=10)
+        self.conn.settimeout(12)
+        self.buf=b""
+        self.counter=0
+        seed=_base64.b64encode(_os.urandom(16)).decode("ascii")
+        target=u.path+("?" + u.query if u.query else "")
+        wire=(f"GET {target} HTTP/1.1\r\nHost: {u.hostname}:{u.port}\r\n"
+              f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+              f"Sec-WebSocket-Key: {seed}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode()
+        self.conn.sendall(wire)
+        response=b""
+        while b"\r\n\r\n" not in response:
+            chunk=self.conn.recv(4096)
+            assert chunk, "CDP handshake terminated"
+            response+=chunk
+        head,self.buf=response.split(b"\r\n\r\n",1)
+        assert b" 101 " in head,head[:150]
+    def _take(self,n):
+        while len(self.buf)<n:
+            chunk=self.conn.recv(max(n-len(self.buf),4096))
+            assert chunk, "CDP socket disconnected"
+            self.buf+=chunk
+        ret,self.buf=self.buf[:n],self.buf[n:]
+        return ret
+    def _send(self,contents,opcode=1):
+        secret=_os.urandom(4)
+        n=len(contents)
+        hdr=bytes([0x80 | opcode])
+        if n<126: hdr+=bytes([0x80 | n])
+        elif n<65536: hdr+=bytes([0xfe])+_struct.pack("!H",n)
+        else: hdr+=bytes([0xff])+_struct.pack("!Q",n)
+        self.conn.sendall(hdr+secret+bytes(x ^ secret[i%4] for i,x in enumerate(contents)))
+    def _recv(self):
+        while True:
+            hdr=self._take(2)
+            op=hdr[0]&15
+            n=hdr[1]&127
+            if n==126:n=_struct.unpack("!H",self._take(2))[0]
+            elif n==127:n=_struct.unpack("!Q",self._take(8))[0]
+            mask=self._take(4) if hdr[1]&128 else b""
+            blob=self._take(n)
+            if mask:blob=bytes(x^mask[i%4] for i,x in enumerate(blob))
+            if op==9:self._send(blob,10);continue
+            if op==8:raise AssertionError("CDP websocket closed")
+            if op==1:return json.loads(blob)
+    def command(self,method,params=None):
+        self.counter+=1
+        target=self.counter
+        self._send(json.dumps({"id":target,"method":method,"params":params or {}}).encode())
+        for unused in range(200):
+            msg=self._recv()
+            if msg.get("id")==target:
+                assert "error" not in msg,(method,msg.get("error"))
+                return msg.get("result",{})
+        raise AssertionError(f"no response to {method}")
+
+
+def test_exact_css_390_mobile_geometry_and_archived_screenshot(tmp_path):
+    browser=next((shutil.which(x) for x in
+       ("google-chrome","chromium","chromium-browser","google-chrome-stable")
+       if shutil.which(x)),None)
+    assert browser, "UI390_UNVERIFIED: Chromium not available"
+    page=tmp_path/"mobile390"
+    page.mkdir()
+    (page/"styles.css").write_bytes((FRONT/"styles.css").read_bytes())
+    html=(FRONT/"index.html").read_text(encoding="utf8")
+    html=re.sub(r'<link[^>]+href="/static/styles.css[^>]*>',
+                '<link rel="stylesheet" href="styles.css">',html)
+    html=re.sub(r'<script[^>]+src="/static/[^>]+></script>','',html)
+    (page/"index.html").write_text(html.replace("</body>",JS+"</body>"),encoding="utf8")
+    with _tempfile.TemporaryDirectory() as tmp:
+        profile=Path(tmp)/"profile"
+        profile.mkdir()
+        process=subprocess.Popen(
+           [browser,"--headless=new","--no-sandbox","--disable-gpu",
+            "--disable-background-networking","--disable-dev-shm-usage",
+            "--no-first-run","--no-default-browser-check",
+            "--remote-allow-origins=*","--remote-debugging-port=0",
+            "--user-data-dir="+str(profile),"about:blank"],
+            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        wire=None
+        try:
+            active=profile/"DevToolsActivePort"
+            for unused in range(100):
+                if active.exists():break
+                assert process.poll() is None,"Chromium exited before CDP could start"
+                _time.sleep(0.15)
+            assert active.exists(),"Chromium remote port unavailable"
+            port=int(active.read_text().splitlines()[0])
+            pages=json.load(_urlrequest.urlopen(f"http://127.0.0.1:{port}/json/list",timeout=6))
+            url=next(x["webSocketDebuggerUrl"] for x in pages if x["type"]=="page")
+            wire=_CDPWire(url)
+            wire.command("Page.enable")
+            wire.command("Runtime.enable")
+            wire.command("Emulation.setDeviceMetricsOverride",
+              {"width":390,"height":844,"deviceScaleFactor":1,"mobile":True})
+            wire.command("Page.navigate",{"url":(page/"index.html").resolve().as_uri()})
+            actual=None
+            for unused in range(75):
+                ev=wire.command("Runtime.evaluate",{
+                    "expression":'''(() => {
+                      const p=document.getElementById("ui207-geometry");
+                      return p ? JSON.parse(p.textContent) : null;
+                    })()''',"returnByValue":True})
+                actual=ev.get("result",{}).get("value")
+                if actual is not None:break
+                _time.sleep(0.12)
+            assert actual is not None,"390px geometry JS did not execute"
+            # Headless --window-size clamps to 500px; this check prevents false green.
+            assert actual["viewport"]==[390,844],actual
+            assert actual["dpr"]==1,actual
+            assert not actual["overlap"],actual
+            assert actual["pageWidth"]<=390+2,actual
+            assert actual["bodyWidth"]<=390+2,actual
+            assert actual["mainScrollWidth"]<=actual["mainClientWidth"]+2,actual
+            assert actual["tableHeight"]<=370,actual
+            shot=wire.command("Page.captureScreenshot",{
+                  "format":"png","captureBeyondViewport":False})
+            png=_base64.b64decode(shot["data"])
+            assert png.startswith(b"\x89PNG\r\n\x1a\n")
+            pixels=_struct.unpack("!II",png[16:24])
+            assert pixels==(390,844),pixels
+            checksum=hashlib.sha256(png).hexdigest()
+            folder=_os.environ.get("UI207_EVIDENCE_DIR")
+            if folder:
+                out=Path(folder)
+                out.mkdir(parents=True,exist_ok=True)
+                filename=out/"cdp_effective_390x844_green.png"
+                filename.write_bytes(png)
+                (out/"cdp_effective_390x844_geometry.json").write_text(
+                  json.dumps({"head":_os.environ.get("EXPECTED_SHA","UNKNOWN"),
+                              "device_metrics":{"width":390,"height":844,"dpr":1},
+                              "actual":actual,"screenshot_sha256":checksum,
+                              "png_pixels":pixels,"source":"OFFLINE_STATIC_CHROMIUM_CDP"},
+                             indent=2,sort_keys=True)+"\n",encoding="utf8")
+            print("UI390_CDP=PASS", "effective_css_viewport="+str(actual["viewport"]),
+                  "dpr="+str(actual["dpr"]),"png_sha256="+checksum)
+        finally:
+            if wire:
+                wire.conn.close()
+            process.terminate()
+            try:process.wait(timeout=6)
+            except subprocess.TimeoutExpired:process.kill()
