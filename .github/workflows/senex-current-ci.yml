@@ -99,7 +99,17 @@ jobs:
         run: |
           set -euo pipefail
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          export UI207_EVIDENCE_DIR="$RUNNER_TEMP/ui207-geometry"
           python -m pytest -q tests
+
+      - name: Upload UI207 offline browser screenshots and geometry
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui207-red-green-geometry-${{ github.sha }}
+          path: ${{ runner.temp }}/ui207-geometry/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Focused PAPER and network safety
         shell: bash
