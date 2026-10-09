@@ -951,6 +951,8 @@ main {
   display: grid !important;
   grid-template-columns: repeat(2,minmax(0,1fr)) !important;
   grid-template-areas: none !important;
+  /* Clear legacy 1024/1280px explicit rows; intrinsic rows must own panel heights. */
+  grid-template-rows: none !important;
   /* Reserve the full intrinsic card height: min-content clipped rows at laptop widths. */
   grid-auto-rows: max-content;
   align-items: start;
