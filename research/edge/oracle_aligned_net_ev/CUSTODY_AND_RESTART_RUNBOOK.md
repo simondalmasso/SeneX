@@ -20,4 +20,12 @@ Stop writing. Preserve every original byte, including orphans and damaged journa
 
 ## Tests
 
-`python -m unittest discover -s tests -p test_m17_prospective_readiness.py -v`: 15 synthetic test cases, including tamper, duplicate, orphan, torn tail, lost window, restart, wrong source score, discontinuous book sequence, precision and no-forward-fill.
+`python -m unittest discover -s tests -p test_m17_prospective_readiness.py -v`: 24 synthetic test cases, including tamper, duplicate, orphan, torn tail, lost window, restart, wrong source score, discontinuous book sequence, precision and no-forward-fill.
+
+## AUD M17-AUD-FIX3-P1 bounded clarification (2026-10-09)
+
+The original fixture-only market metadata and rule bytes are now parsed and cross-bound to the same `market_id`, `condition_id`, `market_slug`, distinct `token_id_yes/no`, exact 300s `start_ms/end_ms`, candidate TWAP60 source, 60-second source window, tie rule, settlement-basis identifier and version. If an original rule-byte hash or rule-version SHA256 is supplied on the slot or metadata, it MUST match the exact originally received `market_rule` byte digest, otherwise `NO_MARKET_RULE/ABSTAIN`. Synthetic fixture field names are an **internal proposed input contract**, NOT independently verified representations of Polymarket or Chainlink provider payloads. Unknown provider formats or absent required fields cannot gain eligibility.
+
+For each token, the book quote requires finite positive Decimal sizes, strictly positive prices strictly below 1, noncrossed nonempty bids/asks and sufficient total ask-side liquidity for the caller-supplied `candidate_shares` (default **one hypothetical share**, NOT a market minimum or fill proof). Quote age, supplied wire timestamp and contiguous event sequence remain independently checked; failure is `NO_BOOK`, `STALE`, `GAP` or hard timestamp rejection. Wire milliseconds accept JSON integer or canonical unsigned base-10 integer text; floats, fractions, booleans and ambiguous strings are refused. All original source bytes are kept even on abstentions, counted in the full fixture opportunity denominator.
+
+The 24 synthetic tests include five explicit AUD defect negatives (wrong market/rule, empty books, fractional timestamp, bad price/size, insufficient depth), original raw rule/version SHA mismatch and candidate share depth, and actual temporary `AppendOnlyEvidence` storage/reopen/tamper verification. This proves only local offline fixture behavior; external oracle/time/fee authority is still blocked.
