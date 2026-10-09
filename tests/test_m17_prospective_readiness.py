@@ -40,8 +40,12 @@ class ReadinessTests(unittest.TestCase):
         fee = lambda token: json.dumps(
             {"token_id":token,"feeSchedule":{"rate":"0.07","exponent":1}},
             separators=(",",":")).encode()
-        data={"market_metadata":b'{"market_id":"m1","condition_id":"c1"}',
-              "market_rule":b'{"exact_oracle_source":"btc-5m-twap-60"}',
+        shared=dict(self.slot(),rule_version="synthetic-r1")
+        rule=dict(shared,exact_oracle_source="btc-5m-twap-60",
+                  source_window_s=60,settlement_basis="CHAINLINK_BTC_USD_TWAP60",
+                  tie_handling="UP_ON_EQUAL")
+        data={"market_metadata":json.dumps(shared,separators=(",",":")).encode(),
+              "market_rule":json.dumps(rule,separators=(",",":")).encode(),
               "book_yes":book("y1"),"book_no":book("n1"),
               "fee_yes":fee("y1"),"fee_no":fee("n1"),
               "senex_signal":b'{"prediction_id":"s1","horizon_s":300,"market_id":"m1","produced_at_ms":309950,"score_decimal":"0.53"}'}
@@ -126,6 +130,60 @@ class ReadinessTests(unittest.TestCase):
                     raw_sources=data,source_clocks=clocks,signal=signal)
         self.assertIn("GAP",rec["flags"])
         self.assertIn("ABSTAIN",rec["flags"])
+
+    def test_aud_inconsistent_market_rule_metadata_forces_abstain(self):
+        data, clocks, signal = self.samples()
+        data["market_metadata"] = b'{"market_id":"OTHER","condition_id":"c1","token_id_yes":"bad"}'
+        data["market_rule"] = b'{"exact_oracle_source":"binance-spot"}'
+        try:
+            rec = self.capture.record_t0(self.slot(),received_at_ms=310000,
+                   raw_sources=data,source_clocks=clocks,signal=signal)
+        except CaptureError:
+            return
+        self.assertIn("NO_MARKET_RULE", rec["flags"])
+        self.assertIn("ABSTAIN", rec["flags"])
+        self.assertFalse(rec["fixture_inputs_complete"])
+
+    def test_aud_empty_levels_not_valid_books(self):
+        data, clocks, signal = self.samples()
+        for name in ("book_yes", "book_no"):
+            body = json.loads(data[name])
+            body["asks"] = []
+            body["bids"] = []
+            data[name] = json.dumps(body).encode()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                 raw_sources=data,source_clocks=clocks,signal=signal)
+        self.assertIn("NO_BOOK",rec["flags"])
+        self.assertIn("ABSTAIN",rec["flags"])
+        self.assertFalse(rec["fixture_inputs_complete"])
+
+    def test_aud_fractional_timestamp_must_not_truncate(self):
+        data,clocks,signal=self.samples()
+        for name in ("book_yes","book_no"):
+            book=json.loads(data[name])
+            book["timestamp"]=309975.9
+            data[name]=json.dumps(book).encode()
+        with self.assertRaises(CaptureError):
+            self.capture.record_t0(self.slot(),received_at_ms=310000,
+                 raw_sources=data,source_clocks=clocks,signal=signal)
+
+    def test_invalid_book_price_and_size_force_no_book(self):
+        data,clocks,signal=self.samples()
+        book=json.loads(data["book_yes"])
+        book["asks"]=[{"price":"NaN","size":"-10"}]
+        data["book_yes"]=json.dumps(book).encode()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                 raw_sources=data,source_clocks=clocks,signal=signal)
+        self.assertIn("NO_BOOK",rec["flags"])
+
+    def test_insufficient_best_ask_depth_fails_closed(self):
+        data,clocks,signal=self.samples()
+        book=json.loads(data["book_no"])
+        book["asks"]=[{"price":"0.51","size":"0.00001"}]
+        data["book_no"]=json.dumps(book).encode()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                 raw_sources=data,source_clocks=clocks,signal=signal)
+        self.assertIn("NO_BOOK",rec["flags"])
 
     def test_t0_requires_two_token_identity(self):
         data,clocks,signal=self.samples()
