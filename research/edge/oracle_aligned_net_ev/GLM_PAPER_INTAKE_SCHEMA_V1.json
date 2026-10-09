@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SENEX M17 independent paper intake, cannot mutate frozen cohort",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "paper_id",
+    "citation",
+    "hypothesis",
+    "economic_mechanism",
+    "measurable_variable",
+    "proposed_protocol_change",
+    "leakage_risk",
+    "falsification_test",
+    "review_status",
+    "cohort_mutation_allowed"
+  ],
+  "properties": {
+    "paper_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "citation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "economic_mechanism": {
+      "type": "string",
+      "minLength": 1
+    },
+    "measurable_variable": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proposed_protocol_change": {
+      "type": "string",
+      "minLength": 1
+    },
+    "leakage_risk": {
+      "type": "string",
+      "minLength": 1
+    },
+    "falsification_test": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_status": {
+      "enum": [
+        "PENDING_INDEPENDENT_REVIEW",
+        "REJECTED",
+        "RESEARCH_IDEA_ONLY_ACCEPTED"
+      ]
+    },
+    "cohort_mutation_allowed": {
+      "const": false
+    },
+    "candidate_protocol_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "aud_reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "release_context": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
