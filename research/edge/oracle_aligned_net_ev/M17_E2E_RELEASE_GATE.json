@@ -1,0 +1,49 @@
+{
+  "schema": "SENEX_M17_E2E_RELEASE_GATE_V1",
+  "order": "M17-ARQ-E2E-AUD-READINESS",
+  "as_of_utc": "2026-10-09",
+  "zero_spend": "HARD",
+  "paper_only": true,
+  "live": false,
+  "real_orders": 0,
+  "capital": 0,
+  "no_merge": true,
+  "no_deploy": true,
+  "source_admissible": false,
+  "cohort_authorized": false,
+  "economic_edge_proven": false,
+  "edge": "UNPROVEN",
+  "n_real_verified_m17": 0,
+  "frozen_sources": {
+    "P1": "ffd87cb20e4e83564a15d57b7c18b9cceab1ae3a",
+    "P2": "6e5d480983b1236882567f11ae6892f3c865c2c0",
+    "main": "583e11588cea8594db8625a01dc0305ec826f008"
+  },
+  "gates": {
+    "ui_browser_geometry": "PASS_FIXTURE_ONLY",
+    "ui_independent_visual_review": "HOLD",
+    "p1_p2_raw_compatibility": "PASS_FIXTURE_ONLY",
+    "local_custody_external_anchor": "HOLD",
+    "ctf_gamma_documentary_identity": "PASS_FIXTURE_ONLY",
+    "original_chain_tx_and_gamma_receipt": "HOLD",
+    "signed_chainlink_twap_authority": "NOT_IDENTIFIABLE",
+    "causal_native_300s_signal": "HOLD",
+    "prospectively_authorized_t0": "REQUIRES_SEPARATE_OWNER_AUTH",
+    "quote_vs_real_fill": "HOLD",
+    "original_market_fee_version": "HOLD",
+    "glm_p4_original_hash_manifest": "PASS_FIXTURE_ONLY",
+    "glm_synthetic_k4_empirical_edge": "NOT_IDENTIFIABLE",
+    "prereg_oos_trial_economics": "REQUIRES_SEPARATE_OWNER_AUTH",
+    "independent_aud_acceptance": "HOLD"
+  },
+  "no_global_pass": true,
+  "blockers": [
+    "ARENA original Polygon/Gamma JSON and SHA manifest absent",
+    "no signed Chainlink TWAP60 originals",
+    "no original prospective T0/cohort",
+    "no independent external custody anchor",
+    "no native verifiable 300s prediction",
+    "no real fills/empirical fee and OOS outcome",
+    "UI effective 390px CSS viewport not independently measured before future browser patch"
+  ]
+}
