@@ -185,6 +185,49 @@ class ReadinessTests(unittest.TestCase):
                  raw_sources=data,source_clocks=clocks,signal=signal)
         self.assertIn("NO_BOOK",rec["flags"])
 
+    def test_aud_rule_original_hash_lineage_mismatch_forces_abstain(self):
+        data,clocks,signal=self.samples()
+        metadata=json.loads(data["market_metadata"])
+        metadata["original_market_rules_bytes_sha256"]="0"*64
+        data["market_metadata"]=json.dumps(metadata).encode()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                raw_sources=data,source_clocks=clocks,signal=signal)
+        self.assertIn("NO_MARKET_RULE",rec["flags"])
+        self.assertIn("ABSTAIN",rec["flags"])
+        self.assertFalse(rec["fixture_inputs_complete"])
+
+    def test_aud_rule_original_hash_lineage_valid_in_fixture(self):
+        data,clocks,signal=self.samples()
+        metadata=json.loads(data["market_metadata"])
+        metadata["original_market_rules_bytes_sha256"]=__import__("hashlib").sha256(
+            data["market_rule"]).hexdigest()
+        data["market_metadata"]=json.dumps(metadata).encode()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                raw_sources=data,source_clocks=clocks,signal=signal)
+        self.assertNotIn("NO_MARKET_RULE",rec["flags"])
+        self.assertEqual(rec["market_rule_original_sha256"],
+                  metadata["original_market_rules_bytes_sha256"])
+        self.assertFalse(rec["eligible"])
+        self.assertFalse(rec["source_admissible"])
+
+    def test_aud_quote_candidate_depth_not_implicit_one_share(self):
+        data,clocks,signal=self.samples()
+        rec=self.capture.record_t0(self.slot(),received_at_ms=310000,
+                raw_sources=data,source_clocks=clocks,signal=signal,
+                candidate_shares="3")
+        self.assertIn("NO_BOOK",rec["flags"])
+        self.assertEqual(rec["candidate_shares_decimal"],"3")
+        self.assertIn("ABSTAIN",rec["flags"])
+        self.assertFalse(rec["eligible"])
+
+    def test_aud_boolean_wire_timestamp_rejected(self):
+        data,clocks,signal=self.samples()
+        body=json.loads(data["book_yes"]);body["timestamp"]=True
+        data["book_yes"]=json.dumps(body).encode()
+        with self.assertRaises(CaptureError):
+            self.capture.record_t0(self.slot(),received_at_ms=310000,
+                raw_sources=data,source_clocks=clocks,signal=signal)
+
     def test_t0_requires_two_token_identity(self):
         data,clocks,signal=self.samples()
         bad=self.slot();bad["token_id_no"]="y1"
