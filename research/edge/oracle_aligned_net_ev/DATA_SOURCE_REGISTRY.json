@@ -165,5 +165,13 @@
     "MERGE",
     "ORDER100_MUTATION",
     "ORDER197_MUTATION"
-  ]
+  ],
+  "source_admissible": false,
+  "source_status": "SOURCE_BLOCKED_NO_FORWARD_TWAP60_UPDATE",
+  "f0_current_probe_ref": "TWAP60_F0_ORIGINAL_PROBE_MANIFEST.json",
+  "f0_original_snapshot_bytes_on_owner_host": true,
+  "f0_original_snapshot_source_authoritative": false,
+  "f0_prospective_T0_or_T1_count": 0,
+  "direct_chainlink_signed_attestation": false,
+  "stop_on_missing_source": true
 }
