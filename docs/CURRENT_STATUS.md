@@ -51,7 +51,7 @@ provenance_exact=true
 readiness=READY
 ```
 
-The public API currently exposes 17 GET operations and no POST/PUT/PATCH/DELETE operations.
+The last verified deployed H011 runtime (source commit `b8a999eae7d7d958a2658cf37531f40d394f8f5a`, before the GPTrader retirement deploy) exposes 19 GET operations, including three legacy GPTrader routes, and no POST/PUT/PATCH/DELETE operations. The merged retirement commit removes those three routes; expected post-deploy count is 16 GET operations. This expectation must be verified against the actual runtime after deployment.
 
 ## BINANCE_SIM isolated PAPER lane
 
