@@ -1,6 +1,6 @@
 # REA Engine Lab — Progress / Evidence Ledger
 
-- **Status:** Implementation and verification complete in an isolated feature branch; merge and deployment remain pending review.
+- **Status (current as of 2026-10-15):** REA is merged into `main` and canonical CI passed on the merge SHA. H11 does **not** yet serve the REA UI/assets/endpoints. Publication is authorized by the owner but currently blocked because the available Northflank API contexts return HTTP 401 and the Opera browser connector is disconnected; see the live audit addendum at the end.
 - **Branch:** `feat/rea-engine-lab-20261014`
 - **Base commit:** `583e11588cea8594db8625a01dc0305ec826f008`
 - **Plan:** `docs/specs/2026-10-14-rea-engine-lab-implementation-plan.md`
@@ -81,3 +81,42 @@ DCA cost stress: +1.8645% at baseline, +1.6870% at 2x costs, +1.4193% at 3x cost
 ### Clean Git worktree dashboard check
 
 A clean detached Git worktree without the excluded local reports/data ran tests/test_rea_dashboard_snapshot.py: 2 passed, 8 skipped, 1 warning. The two always-on tests validated frontend safe rendering and the embedded static snapshot contract; the skipped cases are tied to workstation-only report/data/inventory inputs. The worktree was removed after verification.
+
+## Live runtime reconciliation and publication gate — 2026-10-15
+
+### Repository / CI evidence
+
+- Current `main` at audit time: `aeee7f3e7af2869a960412a65e9e714fa2c125d4`, merge commit for PR #221.
+- PR #221 is `closed / merged`; it is not pending merge.
+- SENEX Canonical CI run #521: `completed / success` for that exact SHA: https://github.com/simondalmasso/SeneX/actions/runs/38683367839. The checked job steps include exact checkout/lineage, locked dependencies, focused authority/readiness, full product regression, PAPER/network safety, frontend truth, runtime/OpenAPI boundary, compile/static checks, canonical Docker build and fail-closed container smoke.
+- `senecio_polymarket/frontend/index.html` in `main` contains REA Research, Binance Public Data, Paper Diagnostics and the expected REA JavaScript assets. `senecio_polymarket/backend/main_real.py` mounts the public Binance/REA router.
+- These are source and CI claims, not proof of production deployment.
+
+### Direct H11 HTTP readback
+
+Read-only GET probes from the connected Windows host to https://h011-web--senecio-h011--wbjggn89fnf8.code.run/ established:
+
+- `/` = HTTP 200, but the served HTML still has the earlier 2026-10-08 cache tag `order199-modern-dashboard-20261008-r3` and only the legacy dashboard scripts; REA navigation/panels are absent.
+- `/healthz` = HTTP 200; `/readyz` = HTTP 200 with `status=ready`; `/api/runtime/provenance` = HTTP 200.
+- H11's internally exact deployed artifact identifies `source_commit=9799c90c673ae5334dff6cb65772f9ab19fbb373`, tree `1bcfb151dde8cd66c687da30b2deffd8c7fe95e4`. This means the running artifact is internally consistent with its own manifest, not that it matches current `main`.
+- `/static/rea_research_snapshot.js`, `/static/rea_research_panel.js`, `/static/binance_public_panel.js`, `/static/binance_rea_diagnostic.js` = HTTP 404.
+- `/api/binance/public_klines` and `/api/binance/rea_paper_diagnostic` = HTTP 404 and are absent from the served OpenAPI schema.
+- Safety remains `trade_mode=PAPER`, `orders_enabled=false`, `live_capital_locked=true`, `hard_paper_lock=true`. The REA deployment is therefore missing; H11 itself is not down.
+
+### Source relationship / release implications
+
+- The H11 commit and current `main` have diverged. Relative to the shared base `5171f366641a8ae33f8802c5b92b6e0bb12db3ee`, H11 has 9 unique UI commits while `main` is 144 commits ahead; the compare reports 106 changed paths.
+- Do not run `git pull`, merge, reset, checkout, rebase or clean in the shared worktree. Do not infer that a successful CI build automatically deploys.
+- The current main candidate is CI-verified. Deploying it would publish the exact current main tree, not just four frontend assets: confirm the Northflank service's current build source/configuration and the intended release commit before triggering it. Preserve existing runtime data/persistent volume and the HARD PAPER safety invariants.
+
+### Authorized historical publication procedure and current blocker
+
+- The PR #203 deployment receipt dated 2026-10-08 documents the accepted process: use the authenticated Northflank service UI; build/deploy an exact commit SHA; verify H11 HTTP provenance, health/readiness and PAPER invariants; then restore build source to `main` and explicitly leave `CI=false`, `CD=false`. The receipt records a previous successful manual build/deploy and is historical evidence, not proof of today's service configuration.
+- Owner authorization to deploy this REA integration was provided in chat on 2026-10-15.
+- Current access check: all three local Northflank CLI contexts (`senecio`, `senex-arq1-d1`, `senex-current`) returned HTTP 401 for read-only `GET /v1/projects`. The Opera Browser Connector reports `Browser not connected`. Current Northflank project/service settings, build source, deployment history and rollback selection could not be re-read through an authenticated surface. No deployment or Northflank mutation was attempted; no credential values were emitted.
+- **Deployment status: BLOCKED ON REAUTHENTICATED NORTHFLANK CONTROL SURFACE.** This is an access/capability blocker, not a lack of owner authorization. Once access is restored, re-read service/build settings first, confirm the exact target SHA and rollback artifact, execute the documented manual build/deploy, and verify `/`, `/healthz`, `/readyz`, `/api/runtime/provenance`, OpenAPI, all REA assets and both public REA endpoints. Afterward restore `BUILD_SOURCE=main`, `CI=false`, `CD=false` and verify those settings persist.
+- Never enable live orders or capital to test this release. Scientific state remains `PAPER_ONLY=true`, `EDGE=UNPROVEN`, `production_order_integration=NOT_APPROVED`, `LIVE=false`, `real_orders=DISABLED`, `live_capital=LOCKED`.
+
+### Shared worktree
+
+- The local workspace `C:\\ProgramData\\SentinelX\\workspace\\SENEX-REA-ENGINE-DESIGN-20261014` remains on `feat/rea-engine-lab-20261014`, HEAD `a4a7826ff6b1`, ahead 9, with no staged/unstaged changes. The only untracked paths are three PNG screenshots: `.rea-h011-live.png`, `.rea-navigation-desktop.png`, `.rea-navigation-mobile.png`. They were preserved. `git diff --check` returned exit 0.
