@@ -446,11 +446,6 @@ main {
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
-#gptrader-trades-panel { min-height: 220px; }
-#gptrader-trades-table { min-width: 720px; }
-#gptrader-trades-table .pnl-pos { color: var(--accent); font-weight: 700; }
-#gptrader-trades-table .pnl-neg { color: var(--danger); font-weight: 700; }
-#gptrader-trades-table .pnl-flat { color: var(--text-dim); }
 
 /* ============= CHARTS ============= */
 .chart-wrap {
@@ -1002,8 +997,6 @@ main .panel.is-stale { border-color: rgba(250,80,129,.8); }
 #poly-feed-panel { order:9; grid-column:1; min-height:270px; }
 #decision-panel { order:10; grid-column:2; }
 #binance-sim-panel { order:11; grid-column:1; }
-#gptrader-panel { order:12; grid-column:2; }
-#gptrader-trades-panel { order:13; grid-column:1/-1; min-height:240px; }
 #model-quality-panel { order:14; grid-column:1; }
 #source-panel { order:15; grid-column:2; }
 #learning-panel { order:16; grid-column:1/-1; }

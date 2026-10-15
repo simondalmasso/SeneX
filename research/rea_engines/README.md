@@ -1,6 +1,6 @@
 # SENEX REA Engine Lab
 
-This package is an **offline, historical-paper research lab**. It does not connect to an exchange and must not be imported into SENEX runtime code. Grid, DCA, and Combo are clean-room approximations of public strategy concepts; they are not recovered or exact implementations of commercial products.
+This package is primarily an **offline, historical-paper research lab**. H011 includes only the deterministic evaluator subset (`contracts.py`, `accounting.py`, `replay.py`, `strategies.py`, `evaluation.py`) behind the explicit Binance public-data REA diagnostic route. The runtime adapter reads public closed candles and returns PAPER metrics only; it never connects to an account, submits or routes orders, or touches the production execution engine. Grid, DCA, and Combo are clean-room approximations of public strategy concepts; they are not recovered or exact implementations of commercial products.
 
 ## Safety and execution model
 

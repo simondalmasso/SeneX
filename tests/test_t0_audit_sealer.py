@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from senecio_polymarket.backend.gptrader.cursor import PacketCursor
-from senecio_polymarket.backend.gptrader.sealer import (
+from senecio_polymarket.backend.t0_audit.cursor import PacketCursor
+from senecio_polymarket.backend.t0_audit.sealer import (
     OutcomeContaminationError,
     PacketSealer,
     build_sealed_packet,
@@ -168,7 +168,7 @@ def test_torn_final_tail_is_recovered_append_only_and_observable(tmp_path):
 
 
 def test_unmarked_middle_corruption_still_fails_closed(tmp_path):
-    from senecio_polymarket.backend.gptrader.sealer import PacketSequenceError
+    from senecio_polymarket.backend.t0_audit.sealer import PacketSequenceError
 
     sealer = PacketSealer(root=tmp_path)
     sealer.seal(_source())
@@ -207,7 +207,7 @@ def test_oversized_real_shaped_packet_is_compacted_under_target_and_hard_limit()
 
 
 def test_uncompactable_required_payload_fails_closed_at_hard_limit():
-    from senecio_polymarket.backend.gptrader.sealer import PacketSizeError
+    from senecio_polymarket.backend.t0_audit.sealer import PacketSizeError
 
     oversized = _source()
     oversized["_audit"]["confidence_semantics_v1"]["notes"] = "z" * 9000

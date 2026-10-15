@@ -12,8 +12,10 @@ from urllib.parse import urlparse
 from .cursor import PacketCursor
 from .sealer import PacketSealer, canonical_json
 
-INGEST_URL_ENV = "SENEX_GPTRADER_INGEST_URL"
-INGEST_TOKEN_ENV = "SENEX_GPTRADER_INGEST_TOKEN"
+INGEST_URL_ENV = "SENEX_T0_REPLICATION_URL"
+INGEST_TOKEN_ENV = "SENEX_T0_REPLICATION_TOKEN"
+LEGACY_INGEST_URL_ENV = "SENEX_GPTRADER_INGEST_URL"
+LEGACY_INGEST_TOKEN_ENV = "SENEX_GPTRADER_INGEST_TOKEN"
 MAX_REPLICATION_BATCH = 16
 
 
@@ -98,8 +100,8 @@ def replicate_pending_t0(
     token: str | None = None,
     post_json: Callable[[str, str, dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    resolved_endpoint = endpoint or os.environ.get(INGEST_URL_ENV)
-    resolved_token = token or os.environ.get(INGEST_TOKEN_ENV)
+    resolved_endpoint = endpoint or os.environ.get(INGEST_URL_ENV) or os.environ.get(LEGACY_INGEST_URL_ENV)
+    resolved_token = token or os.environ.get(INGEST_TOKEN_ENV) or os.environ.get(LEGACY_INGEST_TOKEN_ENV)
     if not resolved_endpoint and not resolved_token:
         return {"enabled": False, "replicated": 0}
     if not resolved_endpoint or not resolved_token:

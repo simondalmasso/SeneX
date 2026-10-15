@@ -8,19 +8,19 @@ SENEX is not a live trading product. The current production runtime is intention
 
 | Surface | Verified state |
 | --- | --- |
-| GitHub authority | `main`; ORDER097/098/099/100, BINANCE_SIM PAPER, and ORDER126 offline-only provider prep are canonical |
-| H011 deployed runtime | `96c41f123175f597788911ab7f52a18ed77c7cdb` |
+| GitHub authority | `main`; ORDER097/098/099/100 research, BINANCE_SIM PAPER, REA diagnostics, T0 audit receipts and OpenSRE observer candidate |
+| H011 last verified runtime before this retirement candidate | `b8a999eae7d7d958a2658cf37531f40d394f8f5a` |
 | Runtime provenance | exact internal artifact identity |
-| Public API | 17 GET endpoints, no POST/PUT/PATCH/DELETE |
+| Public API | baseline: 17 GET endpoints; retirement candidate: 14 GET endpoints; no mutation methods |
 | Trade mode | PAPER |
 | Real orders | disabled |
 | Live capital | locked |
 | BINANCE_SIM | isolated PAPER wallet; start `18.63631644 USDT`; not a Binance balance; no live orders |
 | Predictive edge | UNPROVEN |
 | BTC independent 1h authority | 688 observations, 50.29% global win rate |
-| GPTrader treatment | PAPER/HYPOTHETICAL, 0 TAKE decisions, INSUFFICIENT_DATA |
+| Decision-model sidecar | retired in this candidate; T0 audit receipts preserved separately |
 
-H011 is deployed at exact source commit `96c41f123175f597788911ab7f52a18ed77c7cdb`. `main` may contain later documentation/governance changes and dormant research-only code that is not deployed to H011 (for example ORDER126 offline provider preparation). Such repository drift does **not** imply a runtime change or authorize LIVE, real orders, capital, paid provider calls, or an automatic redeploy.
+H011 was last independently verified at `b8a999eae7d7d958a2658cf37531f40d394f8f5a` before this retirement candidate. Changes on this branch are not runtime changes until CI passes, the reviewed candidate is merged/deployed, and post-deploy readback confirms exact provenance. Nothing here authorizes LIVE, real orders, capital, paid provider calls, or automatic remediation.
 
 See [Current Status](docs/CURRENT_STATUS.md) for the dated evidence snapshot.
 
@@ -34,7 +34,7 @@ SENEX combines:
 - an independent non-overlapping 1h authority cohort;
 - PAPER portfolio/risk/execution simulation;
 - execution realism, shadow-live diagnostics, and trade journaling;
-- GPTrader as a separate PAPER treatment arm;
+- a bounded REA PAPER diagnostic over closed Binance public candles;
 - BINANCE_SIM as a separate isolated PAPER wallet/ledger that follows SENEX BTC signals without Binance credentials or real-order capability;
 - runtime provenance, readiness, and fail-closed safety controls;
 - research tooling for calibration, walk-forward validation, purged CV, stress testing, and falsification.
@@ -56,9 +56,8 @@ flowchart LR
     E --> H[ShadowLive]
     J --> L[LiveGate diagnostics]
 
-    O --> G0[GPTrader T0 sealer]
-    G0 --> G1[GPTrader PAPER treatment]
-    G1 --> P
+    O --> G0[Durable T0 audit receipt]
+    G0 --> A0[Audit history / optional replication]
 
     X[Binance testnet adapter] -. explicit testnet-only path .-> T[Testnet execution experiments]
 ```
@@ -66,6 +65,14 @@ flowchart LR
 The deployed public process is `backend.main_real:app`. Mutating admin/control routes are not mounted into that public application. The exchange connector contains an explicitly guarded Binance **testnet** order capability; mainnet order routing is not part of the H011 public runtime.
 
 See [Architecture](docs/ARCHITECTURE.md).
+
+## REA PAPER integration
+
+The runtime exposes two explicit, read-only Binance Spot research routes: `/api/binance/public_klines` and `/api/binance/rea_paper_diagnostic`. Only closed candles reach the deterministic Grid/DCA/Combo evaluators and buy-and-hold benchmarks. This is an integrated **PAPER research surface**, not the production order executor; assumed fees/spread/slippage are not exchange-calibrated and `EDGE=UNPROVEN`.
+
+## OpenSRE read-only observer
+
+`ops/opensre/h011_readonly_probe.py` provides a bounded GET-only evidence snapshot for feeding into OpenSRE. It is an external observer, not a dependency of H011. No account endpoints, keys, order endpoints or automatic remediation are provided. See [the OpenSRE runbook](ops/opensre/README.md).
 
 ## Safety model
 
@@ -107,7 +114,7 @@ senecio_polymarket/
     authoritative_score.py
     settlement_*.py
     portfolio/            # portfolio, risk, execution, journal, LiveGate
-    gptrader/             # PAPER treatment, sealed decisions, direct/MCP API
+    t0_audit/             # decision-time sealed receipts and optional replication; no model/decision service
     research/             # calibration/statistical research helpers
   oracle/                 # public market connectors + testnet-only experiment path
   oracle_runtime/         # oracle runtime variants
@@ -115,7 +122,7 @@ senecio_polymarket/
   start_single_authority.sh
   requirements.lock
 
-tests/                     # safety, accounting, runtime, GPTrader, frontend regressions
+tests/                     # safety, accounting, runtime, T0 audit, REA and frontend regressions
 research/                  # bounded research protocols/evidence
 .github/workflows/         # canonical CI and mirror workflow
 ```
@@ -163,7 +170,7 @@ Until explicitly superseded:
 
 - no merge solely to reduce SHA drift;
 - no H011/Northflank deploy or restart without an owner gate;
-- no paid/cost-incurring external-provider network calls without explicit owner authorization; ORDER126's NVIDIA profile is offline-only by code;
+- no paid/cost-incurring external-provider calls without explicit owner authorization; the retired NVIDIA/DeepSeek decision profile is not shipped in this candidate;
 - no LIVE enablement;
 - no real orders or capital;
 - no treating raw `up_prob` as a calibrated probability;

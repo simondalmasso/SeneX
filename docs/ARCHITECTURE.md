@@ -14,7 +14,7 @@ Properties:
 - middleware allows only GET, HEAD and OPTIONS;
 - public OpenAPI currently contains GET operations only;
 - uses one cached authority snapshot per symbol;
-- publishes health, readiness, provenance, oracle, PAPER and GPTrader observation surfaces;
+- publishes health, readiness, provenance, oracle, PAPER and REA/Binance public-research observation surfaces;
 - does not mount the private admin application.
 
 ### Private admin application
@@ -23,11 +23,11 @@ Module: `backend/admin.py`.
 
 It is a separate bearer-authenticated control application with OpenAPI disabled. It is not mounted by the production public launcher.
 
-### GPTrader decision sidecar
+### T0 audit receipts
 
-Module: `backend/gptrader/mcp_http.py`.
+Module: `backend/t0_audit/`.
 
-It exposes authenticated MCP/direct HTTP decision operations for a PAPER/HYPOTHETICAL treatment lane. It accepts bounded TAKE/ABSTAIN decisions and optional T0 ingest when configured. It is not the public H011 web API and it does not authorize live capital.
+The oracle seals an immutable decision-time packet before recording its dedupe marker and routing any PAPER simulation. Optional replication is HTTPS-only and can be disabled by leaving its dedicated URL/token unset. This package contains no decision model, paper book, external LLM adapter or order API. Historic packet IDs/schema version and the data directory remain stable solely for audit continuity.
 
 ## 2. Scientific data flow
 
@@ -77,26 +77,21 @@ Defense in depth includes:
 
 This is a testnet capability in the repository, not evidence of a production live-order path.
 
-## 5. GPTrader experiment
+## 5. REA PAPER research path
 
-```mermaid
-flowchart LR
-    T0[Sealed T0 packets] --> D[Decision service]
-    D --> A[TAKE / ABSTAIN]
-    A --> B[PAPER book]
-    B --> V[Preregistered verdict]
-    V --> PUB[Read-only public state]
-```
+The public dashboard offers explicit user-triggered calls to the Binance public-candle and REA PAPER diagnostic routes. Closed candles are validated, then passed to deterministic Grid/DCA/Combo evaluators with separate buy-and-hold benchmarks and explicit assumed costs. No output is routed to the production `ExecutionEngine`, an account endpoint or an order API. The short recent sample is diagnostic only; `EDGE=UNPROVEN`.
 
-The treatment lane remains separate from the native SENEX PAPER control. Current live readback has no TAKE sample.
+## 6. OpenSRE operations observer
 
-## 6. Research layer
+`ops/opensre/h011_readonly_probe.py` collects a bounded health/readiness/provenance/score/LiveGate snapshot using GET requests against the allowlisted H011 host. The result can be reviewed through OpenSRE outside the application process. OpenSRE is optional, external and public-alpha; no automatic remediation or runtime credentials are configured by this integration.
+
+## 7. Research layer
 
 `backend/research/` contains reusable research utilities including calibration, purged CV, statistical validation, stress testing, Monte Carlo, drift detection and walk-forward analysis.
 
 ORDER097/098/099 are deliberately outside the production predictor path and are now merged research tooling. ORDER098 exports/verifies frozen decision-time T0 evidence and exact public Polymarket 5m resolutions; ORDER097 compares equivalently train-fitted market-only versus market+SENEX models on the exact same BTC Up/Down 5m target and causal holdout rows; ORDER099 adds preregistered tabular falsification, one-market-one-row weighting, multiple-testing controls and unique-market cluster-bootstrap uncertainty. None of these modules is imported by H011 runtime execution.
 
-## 7. CI/release boundary
+## 8. CI/release boundary
 
 Canonical CI checks:
 
@@ -114,7 +109,7 @@ Canonical CI checks:
 
 A green CI run certifies the tested candidate against those gates. It does not authorize merge, deployment, LIVE or capital.
 
-## 8. Repository presentation policy
+## 9. Repository presentation policy
 
 For clarity, documentation should distinguish four statuses:
 
