@@ -1,0 +1,53 @@
+{
+  "contract": "senex-candle-economic-result-v2-aud-p1",
+  "status_values": [
+    "BLOCKED_ARTIFACT_BYTES",
+    "INSUFFICIENT_EVIDENCE",
+    "EDGE_NOT_DEMONSTRATED",
+    "HISTORICAL_OOS_CANDIDATE_ONLY"
+  ],
+  "comparison_policies": [
+    "A_unfiltered_SENEX",
+    "E_intercept_only_no_candle",
+    "B_geometry_abstain",
+    "C_patterns_abstain",
+    "D_combined_abstain"
+  ],
+  "training_cost_bps": 15,
+  "repricing_cost_bps": [
+    10,
+    15,
+    20,
+    30
+  ],
+  "actions_identical_across_stress": true,
+  "contrasts": [
+    "B-A",
+    "C-A",
+    "D-A",
+    "B-E",
+    "C-E",
+    "D-E",
+    "D-B"
+  ],
+  "absolute_nets": [
+    "A",
+    "E",
+    "B",
+    "C",
+    "D"
+  ],
+  "family_endpoints": 12,
+  "uncertainty": "moving-block percentile Bonferroni familywise adjusted intervals, block 24, sensitivity 4 8 24 48",
+  "unsupported_p_values": false,
+  "nominal_min_oos": 300,
+  "minimum_effective_n_nonoverlap": 300,
+  "minimum_candidate_trades": 100,
+  "absolute_and_delta_ci95_lower_positive": true,
+  "scientific_promotability_requires_attestation": true,
+  "caller_custody_boolean_rejected": true,
+  "original_trust_anchor_registry_unapproved": true,
+  "real_data_status": "BLOCKED_ARTIFACT_BYTES",
+  "merging_allowed": false,
+  "deploy_allowed": false
+}

@@ -1,0 +1,7 @@
+{
+  "version": "candle-custody-trust-anchors-v1",
+  "status": "UNAVAILABLE_NO_ORIGINAL_T0_BYTES",
+  "authority": "AUD_FROZEN_PRE_OUTCOME_ANCHORS_ONLY",
+  "entries": {},
+  "note": "No trusted pre-outcome original-T0 / independent 1h-label SHA256 anchor is available. Updating this registry requires independent scientific review; source bytes must be preserved and hashed before outcome disclosure."
+}
