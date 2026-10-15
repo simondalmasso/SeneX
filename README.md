@@ -11,7 +11,7 @@ SENEX is not a live trading product. The current production runtime is intention
 | GitHub authority | `main`; ORDER097/098/099/100 research, BINANCE_SIM PAPER, REA diagnostics, T0 audit receipts and OpenSRE observer candidate |
 | H011 last verified runtime before this retirement candidate | `b8a999eae7d7d958a2658cf37531f40d394f8f5a` |
 | Runtime provenance | exact internal artifact identity |
-| Public API | baseline: 17 GET endpoints; retirement candidate: 14 GET endpoints; no mutation methods |
+| Public API | Last verified pre-retirement H011: 19 GET endpoints; merged retirement version: expected 16 GET endpoints, all read-only |
 | Trade mode | PAPER |
 | Real orders | disabled |
 | Live capital | locked |
