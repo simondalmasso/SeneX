@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import main as legacy
+from .binance_public_router import router as binance_public_router
 from . import oracle_runner
 from .authority_snapshot import STORE as authority_store, normalize_symbol
 from .authoritative_score import build_authoritative_score
@@ -125,6 +126,10 @@ def _build_public_app() -> FastAPI:
 
 
 app = _build_public_app()
+
+# Narrow, GET-only public Binance market data + clean-room REA diagnostics.
+# The existing public_method_guard rejects every non-safe HTTP method.
+app.include_router(binance_public_router)
 
 
 @app.get("/", include_in_schema=False)
