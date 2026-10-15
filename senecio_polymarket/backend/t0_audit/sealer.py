@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .cursor import PacketCursor
-from .paths import GPTraderPaths
+from .paths import T0AuditPaths
 from .schemas import (
     AUDIT_ALLOWLIST,
     OUTCOME_FUTURE_KEYS,
@@ -259,10 +259,10 @@ def _marker_matches(packet: Any, raw_tail: bytes, line_no: int) -> bool:
 class PacketSealer:
     """Append-only T0 packet store with restart-safe monotonic sequence IDs."""
 
-    def __init__(self, root: str | Path | None = None, paths: GPTraderPaths | None = None):
+    def __init__(self, root: str | Path | None = None, paths: T0AuditPaths | None = None):
         if root is not None and paths is not None:
             raise ValueError("provide root or paths, not both")
-        self.paths = paths or GPTraderPaths.from_root(root)
+        self.paths = paths or T0AuditPaths.from_root(root)
         self.paths.ensure_root()
         self._lock = threading.Lock()
         self._last_health = {

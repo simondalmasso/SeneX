@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from senecio_polymarket.backend.gptrader.sealer import PacketSealer
+from senecio_polymarket.backend.t0_audit.sealer import PacketSealer
 from senecio_polymarket.backend.portfolio.trade_journal import TradeJournal
 
 
@@ -21,7 +21,7 @@ def _source() -> dict:
 
 
 def test_sealer_fsyncs_parent_for_new_log_and_atomic_checkpoint(tmp_path: Path, monkeypatch) -> None:
-    import senecio_polymarket.backend.gptrader.sealer as module
+    import senecio_polymarket.backend.t0_audit.sealer as module
 
     calls: list[str] = []
     monkeypatch.setattr(

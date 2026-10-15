@@ -226,7 +226,7 @@ async def _retry_pending_authority_persistence(
 ) -> dict[str, int]:
     """Boundedly retry original T0 persistence without retroactive PAPER routing."""
     from . import supabase_client
-    from .gptrader.sealer import seal_prediction_t0
+    from .t0_audit.sealer import seal_prediction_t0
     from .prediction_persistence import PredictionPersistenceStore
 
     receipt_store = store or PredictionPersistenceStore()
@@ -365,7 +365,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         sealed_packet = None
         receipt_store = None
         try:
-            from .gptrader.sealer import build_sealed_packet, seal_prediction_t0
+            from .t0_audit.sealer import build_sealed_packet, seal_prediction_t0
             from .prediction_persistence import PredictionPersistenceStore
 
             preview_packet = await asyncio.to_thread(
@@ -383,7 +383,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             ):
                 raise RuntimeError("sealed packet identity diverged from receipt outbox")
         except Exception as seal_err:
-            log.error("gptrader T0 receipt/seal failed closed: %s", seal_err)
+            log.error("T0 audit receipt/seal failed closed: %s", seal_err)
             sealed_packet = None
 
         authority_persisted = False
@@ -394,11 +394,11 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             _state["predictions_count"] += 1
 
             try:
-                from .gptrader.transport import replicate_pending_t0
+                from .t0_audit.transport import replicate_pending_t0
                 await asyncio.to_thread(replicate_pending_t0)
             except Exception as replication_err:
                 log.warning(
-                    "gptrader T0 replication failed (continuing): %s",
+                    "T0 audit replication failed (continuing): %s",
                     replication_err,
                 )
 

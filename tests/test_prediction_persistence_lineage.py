@@ -6,7 +6,7 @@ import copy
 import pytest
 
 from senecio_polymarket.backend import oracle_runner
-from senecio_polymarket.backend.gptrader.sealer import build_sealed_packet
+from senecio_polymarket.backend.t0_audit.sealer import build_sealed_packet
 from senecio_polymarket.backend.prediction_persistence import (
     PredictionPersistenceError,
     PredictionPersistenceStore,
@@ -292,7 +292,7 @@ def test_restart_retry_never_persists_when_reseal_fails(tmp_path, monkeypatch):
         return {"id": 99}
 
     monkeypatch.setattr(
-        "senecio_polymarket.backend.gptrader.sealer.seal_prediction_t0",
+        "senecio_polymarket.backend.t0_audit.sealer.seal_prediction_t0",
         fail_reseal,
     )
     monkeypatch.setattr(

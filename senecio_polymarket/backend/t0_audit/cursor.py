@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 
+# Legacy durable cursor wire format; preserve persisted T0 cursors.
 _CURSOR_PREFIX = "gptrader.v1:"
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+# Legacy receipt schema ID retained for persisted T0 evidence; not a model API.
 SCHEMA_VERSION = "gptrader.t0.v1"
 PACKET_ID_PREFIX = "gpt0-"
 
