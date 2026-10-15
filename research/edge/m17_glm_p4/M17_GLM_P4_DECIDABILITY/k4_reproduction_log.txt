@@ -1,0 +1,80 @@
+REGISTRO DE REPRODUCCION K4 — ORDER M17-GLM-P4-SOURCE-DECIDABILITY (#208, Q3)
+Fecha: 2026-10-09 · Ejecutor: GLM (auto-verificacion; NO sustituye la reproduction independiente de AUD)
+
+1) ORIGEN DEL GENERADOR
+- El paquete sellado P3 (download/M17_GLM_HOSTILE_P3) contiene k4_edge_costes.py.
+- sha256 del script en P3: 3d906ded7674026e7e5f42708bdc916685df7d73a35ae73884a4a679e739e933
+- Verificacion de integridad del paquete P3: `sha256sum -c SHA256SUMS` -> TODOS OK (incluido k4_edge_costes.py y k4_resultados.csv).
+- AUD no recibio el script en su intake (#206, 11:43Z: K4=GENERATOR_NOT_PROVIDED). Este paquete aporta la copia
+  SIN MODIFICACION ALGUNA (byte-exacta, mismo sha256) para su verificacion independiente.
+- Nota: P3 no archivo stdout de su ejecucion original; este registro es la re-ejecucion P4 del script original.
+
+2) ENTORNO (identico al declarado en DEPENDENCIAS.txt de P3)
+- python 3.12.14
+- numpy 2.1.3
+- plataforma Linux-5.10.134-013.15.kangaroo.al8.x86_64-x86_64-with-glibc2.41
+- interprete /home/z/.venv/bin/python3
+
+3) PROCEDIMIENTO (sin tocar logica)
+- Backup previo del CSV sellado: cp k4_resultados.csv -> netprobe_p4/k4_resultados.SEALED.backup.csv
+- Ejecucion: cd /home/z/my-project/download/M17_GLM_HOSTILE_P3 && python3 k4_edge_costes.py
+  (script NO modificado; escribe en su OUT_DIR absoluto preexistente)
+- exit=0
+- Comparacion: cmp k4_resultados.csv regenerado vs backup -> BYTE_EXACT_MATCH
+- Restauracion del artefacto sellado y re-verificacion: sha256 k4_resultados.csv = c00fce39abef9600efeb4a38742e2a9fd5998a559a6203f45c2d173fdf5687a2 (integro; `sha256sum -c SHA256SUMS` OK)
+
+4) HASHES
+- k4_edge_costes.py            3d906ded7674026e7e5f42708bdc916685df7d73a35ae73884a4a679e739e933
+- k4_resultados.csv (sellado)  c00fce39abef9600efeb4a38742e2a9fd5998a559a6203f45c2d173fdf5687a2
+- k4_resultados.csv (regen.)   c00fce39abef9600efeb4a38742e2a9fd5998a559a6203f45c2d173fdf5687a2  (identico)
+- Semilla del script: 2026100903
+
+5) STDOUT INTEGRO DE LA RE-EJECUCION (verbatim)
+== E1: incorporacion de mercado ==
+  beta=0.00  EV bruto=+0.0400  fee=0.0175  EV neto=+0.0225
+  beta=0.25  EV bruto=+0.0275  fee=0.0175  EV neto=+0.0100
+  beta=0.50  EV bruto=+0.0150  fee=0.0174  EV neto=-0.0024
+  beta=0.75  EV bruto=+0.0025  fee=0.0173  EV neto=-0.0148
+  beta=1.00  EV bruto=-0.0100  fee=0.0172  EV neto=-0.0272
+  half_spread=0.005 -> alpha* = 0.0225
+  half_spread=0.010 -> alpha* = 0.0275
+  half_spread=0.020 -> alpha* = 0.0375
+== E2: longshot barato ==
+  ask=0.055 fee=0.00364 EV/share=-0.01364 (hurdle ask+fee=0.0586 = 117% del precio)
+  stopping +50.0/-150.0: P(reportar ganancia)=0.000; E[terminal]=-150.03
+  sesgo favorable q=0.052: EV=-0.00664 (todavia negativo)
+== E3: rebate maker ==
+  rho=0.01  rebate/share=0.000035
+  rho=0.05  rebate/share=0.000175
+  rho=0.20  rebate/share=0.000700
+  rho=0.50  rebate/share=0.001750
+== E4: latencia ==
+  L= 0.5s libro 50c con fee crypto         resid=0.0282 EV neto=+0.0007
+  L= 1.0s libro 50c con fee crypto         resid=0.0265 EV neto=-0.0010
+  L= 2.0s libro 50c con fee crypto         resid=0.0234 EV neto=-0.0041
+  L= 4.0s libro 50c con fee crypto         resid=0.0182 EV neto=-0.0093
+  L= 8.0s libro 50c con fee crypto         resid=0.0110 EV neto=-0.0165
+  L=16.0s libro 50c con fee crypto         resid=0.0041 EV neto=-0.0234
+  L= 0.5s libro 50c spread tenue con fee   resid=0.0282 EV neto=+0.0057
+  L= 1.0s libro 50c spread tenue con fee   resid=0.0265 EV neto=+0.0040
+  L= 2.0s libro 50c spread tenue con fee   resid=0.0234 EV neto=+0.0009
+  L= 4.0s libro 50c spread tenue con fee   resid=0.0182 EV neto=-0.0043
+  L= 8.0s libro 50c spread tenue con fee   resid=0.0110 EV neto=-0.0115
+  L=16.0s libro 50c spread tenue con fee   resid=0.0041 EV neto=-0.0184
+  L= 0.5s libro 50c sin fee (no-BTC5m)     resid=0.0282 EV neto=+0.0232
+  L= 1.0s libro 50c sin fee (no-BTC5m)     resid=0.0265 EV neto=+0.0215
+  L= 2.0s libro 50c sin fee (no-BTC5m)     resid=0.0234 EV neto=+0.0184
+  L= 4.0s libro 50c sin fee (no-BTC5m)     resid=0.0182 EV neto=+0.0132
+  L= 8.0s libro 50c sin fee (no-BTC5m)     resid=0.0110 EV neto=+0.0060
+  L=16.0s libro 50c sin fee (no-BTC5m)     resid=0.0041 EV neto=-0.0009
+== E5: falacia del punto medio ==
+  EV vs mid=+0.010  EV ejecutable=-0.0368
+
+CSV escrito: /home/z/my-project/download/M17_GLM_HOSTILE_P3/k4_resultados.csv (35 filas)
+
+6) ESTATUS
+K4 = GENERATOR_EXISTS_GLM_SELF_REPRO_BYTE_EXACT
+- Las cifras de K4 siguen siendo SUPUESTOS DE ESCENARIO SINTETICOS/ANALITICOS (hurdle 2.75c a 50c,
+  117% del precio en longshots, latencia 1s vs vida 8s), no costes universales de BTC5m ni EV observado.
+- La reproduction independiente de AUD sigue pendiente hasta que el owner reenvie el script (este paquete
+  lo incluye para ese proposito).
