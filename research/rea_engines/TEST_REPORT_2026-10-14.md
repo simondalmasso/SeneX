@@ -235,3 +235,15 @@ Scope caveat: this validates the collected tests under the temporary import shim
 ## Publication boundary
 
 The Git-tracked package includes source, tests, architecture/methodology documentation, and summarized verification. Locally generated backtest JSON/CSV outputs, Python bytecode, backup files, and raw ETHUSDT candles/source archives are intentionally excluded from the public repository update. Their local hashes/evidence remain in the workstation artifact record. ETH reuse remains subject to data/binance/DATA_USE_NOTICE.md; no commercial or production rights are implied.
+## Clean-checkout dashboard test behavior
+
+The static dashboard snapshot is committed, but the source replay report (including an approximately 11 MB reproduction), raw BTC/ETH candles, generated cost/annual tables, and workstation-local source inventory are intentionally not committed. tests/test_rea_dashboard_snapshot.py therefore performs detailed artifact/hash and historical-metric checks when those local inputs are present, and explicitly skips those local-only assertions in a clean checkout. The static frontend and embedded snapshot safety contract are always tested in CI. This does not claim that CI regenerated the historical report or verified the excluded datasets.
+## Final verification after clean-checkout test adjustment — 14 October 2026
+
+- Full local repository suite: python -m pytest -q --disable-warnings passed **697 tests, 93 warnings, exit 0 in 57.33 seconds**. The local-only shim was placed in a temporary directory outside the repository and mapped only the missing sse_starlette.sse.EventSourceResponse import to Starlette StreamingResponse to permit collection; it did not validate real SSE semantics and was removed.
+- Focused dashboard module with all local research inputs present: **10 passed, 1 warning in 18.22 seconds**. The workstation source inventory was refreshed and independently audited at 121 rows, 0 missing files, 0 size/hash mismatches.
+- Clean-checkout simulation using a detached Git worktree without generated reports, raw market data, or workstation inventory: **2 passed, 8 skipped, 1 warning**. The two non-skipped tests always inspect the checked-in frontend and embedded snapshot safety contract. The eight skips are explicitly input-dependent history/integrity checks, not a blanket suppression of CI failures.
+- The preceding CI failure was caused by the dashboard test class attempting to load research/rea_engines/runs/audit-reproduction-final-20261014.json from a clean checkout although it is intentionally excluded. Tests now detect whether the local-only input bundle exists before building the artifact-level snapshot, while always running the static asset contract checks.
+- This local run does not supersede the need for GitHub Actions to re-run against the updated branch. Container build/startup, real SSE transport, deployed browser rendering, exchange execution, and production integration remain unverified.
+
+State remains PARTIAL_RESEARCH_COMPLETE, PAPER_ONLY, EDGE=UNPROVEN; production order integration is NOT_APPROVED.

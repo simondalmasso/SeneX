@@ -74,7 +74,10 @@ DCA cost stress: +1.8645% at baseline, +1.6870% at 2x costs, +1.4193% at 3x cost
 ## Final repository continuation — 14 October 2026
 
 - Repository: simondalmasso/SeneX; feature branch: feat/rea-engine-lab-20261014; base HEAD at implementation start matched main (583e11588cea8594db8625a01dc0305ec826f008).
-- The latest full-suite run used a temporary external import shim for the workstation's missing sse_starlette module. python -m pytest -q --disable-warnings: **696 passed, 93 warnings, exit 0**. The shim was removed; it does not verify real SSE transport.
+- The latest full-suite run used a temporary external import shim for the workstation's missing sse_starlette module. python -m pytest -q --disable-warnings: **697 passed, 93 warnings, exit 0 in 57.33 seconds**. The shim was removed; it does not verify real SSE transport.
 - Additional focused evidence already recorded: dashboard snapshot 9/9; public Binance/data/router plus paper execution contract bundle 51/51; independent Node paper bot 32/32; clean-room engine families 31/31; regime classifier 4/4.
 - git diff --check passed before publication preparation. The source package remains paper-only and public-data-read-only; EDGE=UNPROVEN; production order integration is not approved.
 - Raw ETH candle data/source archives, large generated JSON/CSV run outputs, bytecode and backup files are not part of the public source change. No deployment, account credential use, testnet/live orders or runtime order wiring was performed.
+### Clean Git worktree dashboard check
+
+A clean detached Git worktree without the excluded local reports/data ran tests/test_rea_dashboard_snapshot.py: 2 passed, 8 skipped, 1 warning. The two always-on tests validated frontend safe rendering and the embedded static snapshot contract; the skipped cases are tied to workstation-only report/data/inventory inputs. The worktree was removed after verification.

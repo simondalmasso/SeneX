@@ -20,7 +20,7 @@ Commercial engines remain public-surface/documentation observations only. No ven
 
 | Area | Latest recorded result |
 |---|---:|
-| Full repository pytest under temporary test-only import shim | 696 passed, 93 warnings |
+| Full repository pytest under temporary test-only import shim | 697 passed, 93 warnings (57.33 s) |
 | Dashboard snapshot tests | 9 passed |
 | Public Binance/data/router/intake + durable paper contract bundle | 51 passed |
 | Independent Node paper bot | 32 passed |
@@ -28,7 +28,7 @@ Commercial engines remain public-surface/documentation observations only. No ven
 | Market regime classifier | 4 passed |
 | git diff --check | exit 0 |
 
-The full pytest command was python -m pytest -q --disable-warnings, using the existing local Python 3.14 interpreter and a temporary sitecustomize.py outside the repository. It supplied only the missing sse_starlette.sse.EventSourceResponse import by aliasing it to Starlette StreamingResponse, solely to permit collection and test execution. The shim was removed and is not committed. This does not verify actual SSE streaming behavior. The unshimmed environment needs the dependency already pinned in the runtime lock to run the health/readiness suite normally.
+The full pytest command was python -m pytest -q --disable-warnings, using the existing local Python 3.14 interpreter and a temporary sitecustomize.py outside the repository. It supplied only the missing sse_starlette.sse.EventSourceResponse import by aliasing it to Starlette StreamingResponse, solely to permit collection and test execution. The shim was removed and is not committed. This does not verify actual SSE streaming behavior. A clean Git worktree without local research inputs ran the dashboard test module with 2 passed, 8 skipped, and 1 warning; the skipped tests require generated reports, raw market datasets, or the workstation inventory and the always-on frontend/static-snapshot safety tests still ran. The unshimmed environment needs the dependency already pinned in the runtime lock to run the health/readiness suite normally.
 
 ## Explicit exclusions
 
