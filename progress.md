@@ -119,4 +119,4 @@ Read-only GET probes from the connected Windows host to https://h011-web--seneci
 
 ### Shared worktree
 
-- The local workspace `C:\\ProgramData\\SentinelX\\workspace\\SENEX-REA-ENGINE-DESIGN-20261014` remains on `feat/rea-engine-lab-20261014`, HEAD `a4a7826ff6b1`, ahead 9, with no staged/unstaged changes. The only untracked paths are three PNG screenshots: `.rea-h011-live.png`, `.rea-navigation-desktop.png`, `.rea-navigation-mobile.png`. They were preserved. `git diff --check` returned exit 0.
+- The local workspace `C:\ProgramData\SentinelX\workspace\SENEX-REA-ENGINE-DESIGN-20261014` remains on `feat/rea-engine-lab-20261014`, HEAD `a4a7826ff6b1`, ahead 9, with no staged/unstaged changes. The only untracked paths are three PNG screenshots: `.rea-h011-live.png`, `.rea-navigation-desktop.png`, `.rea-navigation-mobile.png`. They were preserved. `git diff --check` returned exit 0.
