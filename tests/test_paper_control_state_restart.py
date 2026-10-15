@@ -560,3 +560,57 @@ def test_bootstrap_rejects_conflicting_duplicate_trade_id(tmp_path: Path) -> Non
     with pytest.raises(RuntimeError, match="PAPER_CONTROL_JOURNAL_DUPLICATE"):
         PortfolioCoordinator(config=cfg).start()
     assert not Path(cfg["paper_control_state_path"]).exists()
+
+
+def test_successful_coordinator_start_reads_paper_persistence_from_get_state(monkeypatch) -> None:
+    from senecio_polymarket.backend import oracle_runner
+    from senecio_polymarket.backend import portfolio as portfolio_module
+
+    expected_migration = {
+        "meta_labeler": "RESTORED",
+        "microstructure": "RESTORED",
+    }
+
+    class HealthyCoordinator:
+        def __init__(self) -> None:
+            self.started = False
+
+        def start(self) -> None:
+            self.started = True
+
+        def get_state(self) -> dict:
+            return {
+                "paper_control_persistence": {
+                    "restored": True,
+                    "migration": "RESTORED",
+                    "decision_state_migration": expected_migration,
+                }
+            }
+
+    monkeypatch.setattr(portfolio_module, "PortfolioCoordinator", HealthyCoordinator)
+    monkeypatch.setattr(oracle_runner, "_portfolio_coordinator", None)
+    monkeypatch.setattr(
+        oracle_runner,
+        "_portfolio_control_status",
+        {
+            "attempted": False,
+            "ready": False,
+            "reason": "NOT_INITIALIZED",
+            "error_class": None,
+        },
+    )
+
+    coordinator = oracle_runner._get_portfolio_coordinator()
+
+    assert isinstance(coordinator, HealthyCoordinator)
+    assert coordinator.started is True
+    assert oracle_runner._portfolio_coordinator is coordinator
+
+    status = oracle_runner.get_portfolio_control_status()
+    assert status["attempted"] is True
+    assert status["ready"] is True
+    assert status["reason"] is None
+    assert status["error_class"] is None
+    assert status["restored"] is True
+    assert status["migration"] == "RESTORED"
+    assert status["decision_state_migration"] == expected_migration
