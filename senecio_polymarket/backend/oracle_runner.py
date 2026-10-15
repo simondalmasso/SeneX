@@ -997,7 +997,7 @@ def _get_portfolio_coordinator():
             candidate = PortfolioCoordinator()
             candidate.start()
             _portfolio_coordinator = candidate
-            persistence = candidate.get_full_state().get("paper_control_persistence") or {}
+            persistence = candidate.get_state().get("paper_control_persistence") or {}
             _portfolio_control_status = {
                 "attempted": True,
                 "ready": True,
