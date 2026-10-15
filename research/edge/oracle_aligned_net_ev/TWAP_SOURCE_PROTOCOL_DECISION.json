@@ -1,0 +1,78 @@
+{
+  "version": "M17_TWAP_SOURCE_DECISION_P1",
+  "market_config_observed": {
+    "market_slug": "btc-updown-5m-1791495900",
+    "cryptoMarketConfigId": "btc-5m-twap-60",
+    "twapLookbackSeconds": 60
+  },
+  "generic_chainlink": {
+    "topic": "crypto_prices_chainlink",
+    "ws": "wss://ws-live-data.polymarket.com",
+    "public_smoke": "ONE_GENERIC_MESSAGE_OBSERVED_2026_10_08",
+    "is_market_specific_60s_twap": false,
+    "eligible_for_labels": false
+  },
+  "legacy_twap_sixty": {
+    "ws": "wss://ws-live-data.polymarket.com",
+    "topic": "crypto_prices_twap_sixty",
+    "filter_symbol": "btc/usd",
+    "bounded_smoke": "CONNECTED_RECEIVED_SUBSCRIBE_SNAPSHOT_ONLY",
+    "payload_snapshot_keys": [
+      "symbol",
+      "data",
+      "window_s"
+    ],
+    "window_s_observed": true,
+    "forward_update_schema_proven": false,
+    "original_raw_frame_custodied": false,
+    "synthetic_decoder": "full_accuracy_value E18 string only, subject to future real update verification",
+    "source_event_timestamp_required": true,
+    "local_received_timestamp_required": true,
+    "seq_or_gap_evidence_required": true,
+    "proof_of_60s_window_required": true,
+    "scientific_feed_status": "BLOCKED_UNVERIFIED_FORWARD_UPDATE"
+  },
+  "secure_realtime": {
+    "docs": "https://docs.polymarket.com/market-data/realtime-data",
+    "subscription_channel": "price.crypto.twap",
+    "message_topic": "prices.crypto.twap",
+    "symbol": "btcusd",
+    "windowSeconds": 60,
+    "value_encoding": "exact Decimal string (no E18 scaling)",
+    "authenticated_secure_client_required": true,
+    "attempted_with_credentials": false,
+    "zero_spend_authorization": "DENIED_PENDING_SEPARATE_AUTHORIZATION",
+    "scientific_feed_status": "NOT_ELIGIBLE"
+  },
+  "signed_chainlink_report": {
+    "direct_report_evidence": "NOT_AVAILABLE",
+    "independently_validated": false,
+    "scientific_label_status": "UNVERIFIED"
+  },
+  "fail_closed_protocol": {
+    "max_frame_bytes": 65536,
+    "allowed_operations": [
+      "read-only public WS subscribe bounded F0",
+      "offline fixture verification"
+    ],
+    "disallowed": [
+      "historical backfill",
+      "auth bypass",
+      "new key/signup",
+      "paid service",
+      "trading",
+      "new production endpoints"
+    ],
+    "original_receive_and_event_clock_required": true,
+    "raw_bytes_sha256_before_transform": true,
+    "gap_or_stale": "EXCLUDE_NOT_BACKFILL",
+    "no_forward_update": "SOURCE_UNAVAILABLE_FOR_COHORT",
+    "cryptographic_attestation": "NEVER_INFER_FROM_PROVIDER_RELAY"
+  },
+  "sources": [
+    "https://docs.polymarket.com/market-data/realtime-data",
+    "https://github.com/Polymarket/real-time-data-client/blob/main/README.md",
+    "https://github.com/simondalmasso/SeneX/pull/204#issuecomment-6075341020"
+  ],
+  "status": "RESEARCH_ONLY_DESIGN_NO_PROSPECTIVE_COHORT"
+}

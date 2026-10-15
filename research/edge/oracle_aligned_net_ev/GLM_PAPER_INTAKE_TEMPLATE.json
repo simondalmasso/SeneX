@@ -1,0 +1,15 @@
+{
+  "paper_id": "PENDING_PAPER",
+  "citation": "NO_PAPER_SUBMITTED",
+  "hypothesis": "PENDING_EVIDENCE",
+  "economic_mechanism": "PENDING_EVIDENCE",
+  "measurable_variable": "PENDING_EVIDENCE",
+  "proposed_protocol_change": "PENDING_EVIDENCE",
+  "leakage_risk": "NOT_REVIEWED",
+  "falsification_test": "NOT_DEFINED",
+  "review_status": "PENDING_INDEPENDENT_REVIEW",
+  "cohort_mutation_allowed": false,
+  "candidate_protocol_version": null,
+  "aud_reference": null,
+  "release_context": null
+}
