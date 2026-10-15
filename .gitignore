@@ -23,3 +23,12 @@ build/
 dist/
 *.egg-info/
 .DS_Store
+
+# REA local recovery copies and generated research artifacts (not source of truth)
+**/*.bak.*
+research/rea_engines/data/binance/source_archives/
+research/rea_engines/data/binance/ETHUSDT-4h-2020-01_to_2026-09.csv
+research/rea_engines/runs/*.json
+research/rea_engines/runs/*.csv
+research/rea_engines/SOURCE_FILE_INVENTORY.csv
+research/rea_engines/runs/

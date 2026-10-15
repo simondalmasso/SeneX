@@ -37,6 +37,7 @@ from .oracle_engine import OracleEngine
 from .execution_simulator import ExecutionSimulator
 from .scheduler import Scheduler
 from .ws_server import make_router as make_ws_router
+from .binance_public_router import router as binance_public_router
 from . import oracle_runner
 from .authoritative_score import build_authoritative_score
 from .settlement_proof import filter_proof_qualified, is_proof_qualified
@@ -131,6 +132,7 @@ app = FastAPI(title="SENECIO ORACLE", version="ACT-XXIX-systemic-antifragility",
 
 # WebSocket / SSE router
 app.include_router(make_ws_router(_bus))
+app.include_router(binance_public_router)
 
 
 # ---- REST endpoints ----

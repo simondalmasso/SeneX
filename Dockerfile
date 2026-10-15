@@ -22,6 +22,13 @@ COPY senecio_polymarket/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY senecio_polymarket/backend ./backend
+COPY research/__init__.py ./research/__init__.py
+COPY research/rea_engines/__init__.py ./research/rea_engines/__init__.py
+COPY research/rea_engines/contracts.py ./research/rea_engines/contracts.py
+COPY research/rea_engines/accounting.py ./research/rea_engines/accounting.py
+COPY research/rea_engines/replay.py ./research/rea_engines/replay.py
+COPY research/rea_engines/strategies.py ./research/rea_engines/strategies.py
+COPY research/rea_engines/evaluation.py ./research/rea_engines/evaluation.py
 COPY senecio_polymarket/frontend ./frontend
 COPY senecio_polymarket/oracle ./oracle
 COPY senecio_polymarket/oracle_runtime ./oracle_runtime

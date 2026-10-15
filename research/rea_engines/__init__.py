@@ -1,0 +1,1 @@
+"""Clean-room REA engines. Only deterministic paper-evaluation modules are packaged for the read-only diagnostic route; paper_execution_contract remains isolated and is not imported by the runtime."""

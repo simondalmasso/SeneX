@@ -758,3 +758,407 @@ footer {
     max-height: none;
   }
 }
+
+
+/* ============= REA HISTORICAL RESEARCH PANEL (LOCAL, STATIC, READ-ONLY) ============= */
+.rea-full-span {
+  grid-column: 1 / -1;
+  min-width: 0;
+  width: 100%;
+}
+.rea-panel {
+  overflow: visible;
+  border-color: rgba(255, 176, 0, .36);
+}
+.rea-panel > .panel-head {
+  background: linear-gradient(180deg, rgba(255,176,0,.08), rgba(255,176,0,.015));
+  border-bottom-color: rgba(255,176,0,.24);
+}
+.rea-panel > .panel-head h2 {
+  color: var(--warn);
+  letter-spacing: .04em;
+}
+.rea-panel-body {
+  padding: 12px;
+  min-width: 0;
+}
+.rea-safety-banner,
+.rea-license-banner,
+.rea-warning,
+.rea-unavailable {
+  border: 1px solid rgba(255,61,110,.48);
+  border-left: 4px solid var(--danger);
+  border-radius: 6px;
+  background: rgba(255,61,110,.075);
+  color: var(--text);
+  padding: 12px 14px;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.rea-safety-banner strong,
+.rea-license-banner strong,
+.rea-warning strong {
+  display: block;
+  color: var(--danger);
+  font: 800 12px/1.5 var(--mono);
+  letter-spacing: .055em;
+}
+.rea-safety-banner p,
+.rea-license-banner p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.rea-license-banner {
+  margin: 14px 0 0;
+  border-color: rgba(255,61,110,.62);
+  background: rgba(255,61,110,.11);
+}
+.rea-license-banner a {
+  display: inline-block;
+  margin-top: 9px;
+  color: var(--accent-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.rea-intro,
+.rea-note,
+.rea-block-description {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 8px 0 12px;
+}
+#rea-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.rea-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 2px;
+  min-width: 0;
+}
+.rea-kpi {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rea-kpi-label,
+.rea-kv dt {
+  color: var(--text-faint);
+  font: 600 9px/1.4 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.rea-kpi-value {
+  color: var(--text);
+  font: 800 16px/1.25 var(--mono);
+  overflow-wrap: anywhere;
+}
+.rea-kpi-detail {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.rea-block {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255,255,255,.012);
+  padding: 12px;
+}
+.rea-block-title {
+  color: var(--text);
+  font: 800 12px/1.45 var(--mono);
+  letter-spacing: .07em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.rea-block-description {
+  margin: 6px 0 10px;
+}
+.rea-subtitle {
+  color: var(--accent-2);
+  font: 700 10px/1.5 var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 14px 0 7px;
+}
+.rea-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+.rea-kv {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  padding: 8px 9px;
+}
+.rea-kv dt { margin: 0 0 5px; }
+.rea-kv dd {
+  margin: 0;
+  color: var(--text);
+  font: 600 11px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.rea-kv dd.rea-mono {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.rea-kv dd.rea-break {
+  word-break: break-all;
+}
+.rea-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin: 7px 0 10px;
+  overscroll-behavior-x: contain;
+}
+.rea-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  color: var(--text);
+  font: 10px/1.45 var(--mono);
+}
+.rea-table th,
+.rea-table td {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.rea-table thead th {
+  color: var(--text-faint);
+  background: rgba(255,255,255,.035);
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: .045em;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.rea-table tbody tr:last-child td { border-bottom: 0; }
+.rea-table tbody tr:hover { background: rgba(255,255,255,.025); }
+.rea-table td.rea-number { text-align: right; white-space: nowrap; }
+.rea-table td.rea-status { color: var(--accent); font-weight: 800; white-space: nowrap; }
+.rea-table td.rea-empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 16px;
+}
+.rea-simple-list {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.55;
+  padding-left: 20px;
+  margin: 8px 0 0;
+}
+.rea-simple-list li { margin: 4px 0; overflow-wrap: anywhere; }
+.rea-note { font-size: 11px; margin-bottom: 0; }
+.rea-warning {
+  margin-top: 10px;
+  border-color: rgba(255,176,0,.5);
+  border-left-color: var(--warn);
+  background: rgba(255,176,0,.06);
+}
+.rea-warning strong { color: var(--warn); }
+.rea-disclosure {
+  margin-top: 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  padding: 9px 11px;
+  min-width: 0;
+}
+.rea-disclosure summary {
+  cursor: pointer;
+  color: var(--text);
+  font: 700 10px/1.5 var(--mono);
+  letter-spacing: .03em;
+}
+.rea-disclosure[open] summary { margin-bottom: 8px; }
+.rea-disclosure .rea-kv-grid { margin-top: 8px; }
+.rea-unavailable {
+  border-color: rgba(255,61,110,.7);
+  color: var(--danger);
+  font: 700 12px/1.6 var(--mono);
+  margin: 0;
+}
+.rea-panel-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding: 10px 2px 0;
+  color: var(--text-faint);
+  font: 9px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1200px) {
+  .rea-kv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+  .rea-full-span { grid-column: 1 / -1; }
+  .rea-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rea-panel-body { padding: 10px; }
+  .rea-block { padding: 10px; }
+}
+@media (max-width: 600px) {
+  .rea-kpi-grid,
+  .rea-kv-grid { grid-template-columns: 1fr; }
+  .rea-kpi-value { font-size: 14px; }
+  .rea-table { min-width: 920px; }
+  .rea-block-title { font-size: 11px; }
+  .rea-safety-banner,
+  .rea-license-banner,
+  .rea-warning { padding: 10px; }
+}
+
+
+/* Binance public market-data panel — manually triggered, read-only and independent of order execution. */
+.binance-public-safety {
+  border: 1px solid rgba(62, 196, 149, .34);
+  background: rgba(62, 196, 149, .045);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  color: var(--text-dim);
+  font: 10px/1.55 var(--mono);
+}
+.binance-public-safety strong { color: var(--text); display: block; }
+.binance-public-safety p { margin: 5px 0 0; }
+.binance-public-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin: 12px 0;
+}
+.binance-public-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-dim);
+  font: 10px/1.4 var(--mono);
+  min-width: 115px;
+}
+.binance-public-controls select,
+.binance-public-controls input {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 9px;
+  min-height: 36px;
+  font: 11px var(--mono);
+}
+.binance-public-controls button {
+  background: var(--accent, #275f55);
+  border: 1px solid rgba(62,196,149,.6);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 10px 14px;
+  min-height: 36px;
+  cursor: pointer;
+  font: 700 10px var(--mono);
+}
+.binance-public-controls button:disabled { opacity: .55; cursor: wait; }
+.binance-public-ok { color: var(--positive, #56d6a3); }
+.binance-public-error { color: var(--danger); }
+.binance-public-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+}
+.binance-public-metric {
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.binance-public-label { color: var(--text-faint); font: 9px/1.45 var(--mono); text-transform: uppercase; }
+.binance-public-value { color: var(--text); font: 700 13px/1.4 var(--mono); overflow-wrap: anywhere; }
+.binance-public-note,
+.binance-public-note-line { color: var(--text-faint); font: 9px/1.5 var(--mono); overflow-wrap: anywhere; }
+.binance-public-details {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  padding: 10px;
+}
+.binance-public-details summary { cursor: pointer; font: 700 10px var(--mono); color: var(--text); }
+.binance-public-hashes {
+  display: grid;
+  grid-template-columns: minmax(130px,.5fr) minmax(0,1.5fr);
+  gap: 6px 10px;
+  margin: 10px 0 0;
+  font: 9px/1.5 var(--mono);
+}
+.binance-public-hashes dt { color: var(--text-faint); }
+.binance-public-hashes dd { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+.binance-public-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.binance-public-table-wrap { margin-top: 8px; }
+.binance-public-table { min-width: 760px; }
+.binance-public-table td,
+.binance-public-table th { font-size: 9px; }
+.binance-public-warning,
+.binance-public-error-box {
+  border: 1px solid rgba(255, 180, 75, .6);
+  padding: 10px;
+  margin-top: 10px;
+  color: var(--text);
+  font: 10px/1.6 var(--mono);
+  overflow-wrap: anywhere;
+}
+.binance-public-error-box { border-color: rgba(255,61,110,.65); color: var(--danger); }
+.binance-public-warning p { margin: 5px 0; }
+.binance-public-footer { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; color: var(--text-faint); font: 9px/1.5 var(--mono); }
+@media (max-width: 800px) {
+  .binance-public-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .binance-public-hashes { grid-template-columns: 1fr; gap: 3px; }
+  .binance-public-controls { align-items: stretch; }
+  .binance-public-controls label { flex: 1 1 120px; }
+}
+@media (max-width: 480px) {
+  .binance-public-grid { grid-template-columns: 1fr; }
+  .binance-public-controls button { width: 100%; }
+}
+
+
+.binance-paper-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 12px; }
+.binance-paper-heading { font: 700 11px/1.5 var(--mono); color: var(--text); margin: 12px 0 8px; }
+.binance-paper-subsection { margin-top: 12px; }
+.binance-paper-strategy { border: 1px solid var(--border); background: var(--bg-panel); padding: 10px; min-width: 0; }
+.binance-paper-strategy h5 { margin: 0 0 8px; color: var(--text); font: 700 10px/1.5 var(--mono); }
+.binance-paper-return { display: block; font: 700 17px/1.3 var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.binance-paper-kv { display: grid; grid-template-columns: minmax(100px,.7fr) minmax(0,1.3fr); gap: 5px 8px; margin: 10px 0 0; font: 9px/1.5 var(--mono); }
+.binance-paper-kv dt { color: var(--text-faint); }
+.binance-paper-kv dd { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+.binance-paper-strategy .binance-public-note-line { margin-bottom: 0; }
+.binance-paper-strategy .binance-public-mono { font-size: 9px; }
+@media (max-width: 600px) {
+  .binance-paper-kv { grid-template-columns: 1fr; gap: 2px; }
+  .binance-paper-kv dd { margin-bottom: 6px; }
+}
