@@ -1,60 +1,40 @@
-"""Tests for the REA dashboard asset and local-only summary export."""
+"""Tests for the committed REA dashboard snapshot and visible navigation."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERATOR_PATH = ROOT / "research" / "rea_engines" / "export_dashboard_snapshot.py"
 PANEL_JS = ROOT / "senecio_polymarket" / "frontend" / "rea_research_panel.js"
 SNAPSHOT_JS = ROOT / "senecio_polymarket" / "frontend" / "rea_research_snapshot.js"
 INDEX_HTML = ROOT / "senecio_polymarket" / "frontend" / "index.html"
 STYLES_CSS = ROOT / "senecio_polymarket" / "frontend" / "styles.css"
 
-SPEC = importlib.util.spec_from_file_location("rea_dashboard_snapshot_generator", GENERATOR_PATH)
-if SPEC is None or SPEC.loader is None:
-    raise RuntimeError(f"Cannot import snapshot generator from {GENERATOR_PATH}")
-GENERATOR = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(GENERATOR)
-
 
 class ReaDashboardSnapshotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        # Raw market data, large replay outputs, and the workstation inventory
-        # are deliberately not committed. Run artifact-level assertions on the
-        # research workstation when all recorded inputs are available.
-        required = [
-            ROOT / GENERATOR.REPORT,
-            ROOT / GENERATOR.STATUS,
-            ROOT / GENERATOR.COSTS,
-            ROOT / GENERATOR.ANNUAL,
-            ROOT / "research" / "rea_engines" / "SOURCE_FILE_INVENTORY.csv",
-            ROOT / "research" / "rea_engines" / "data" / "binance" / "ETHUSDT-4h-2020-01_to_2026-09.csv",
-            ROOT / "research" / "rea_engines" / "runs" / "ethusdt-4h-second-asset-evaluation-20261014.json",
-        ]
-        btc_candidates = [
-            ROOT.parent / "trading-bot-rea-20261013" / "INDEPENDENT-PAPER-BOT" / "data" / "binance" / GENERATOR.BTC_NAME,
-            ROOT / "research" / "rea_engines" / "data" / "binance" / GENERATOR.BTC_NAME,
-        ]
-        cls.snapshot = None
-        if all(path.is_file() for path in required) and any(path.is_file() for path in btc_candidates):
-            cls.snapshot = GENERATOR.build_snapshot(ROOT)
+        # CI validates the checked-in, self-contained snapshot. Local dataset,
+        # replay and source-inventory integrity are separate workstation audits;
+        # pytest must neither require those unversioned files nor skip assertions.
+        source = SNAPSHOT_JS.read_text(encoding="utf-8")
+        match = re.search(
+            r"window\.SENEX_REA_RESEARCH_SNAPSHOT\s*=\s*(\{.*\})\s*;\s*$",
+            source,
+            flags=re.DOTALL,
+        )
+        if match is None:
+            raise AssertionError("A valid committed REA snapshot is required")
+        cls.snapshot = json.loads(match.group(1))
+        cls.snapshot_source = "committed-static"
 
-    def _local_snapshot_or_skip(self):
-        if self.snapshot is None:
-            self.skipTest(
-                "Requires workstation-only generated replay reports, market data, and source inventory; "
-                "these artifacts are intentionally excluded from Git. The checked-in static snapshot "
-                "contract and frontend safety checks run in clean CI."
-            )
+    def _snapshot(self):
         return self.snapshot
 
-    def test_source_integrity_is_verified_before_display(self) -> None:
-        snap = self._local_snapshot_or_skip()
+    def test_snapshot_contains_a_complete_integrity_summary(self) -> None:
+        snap = self._snapshot()
         self.assertTrue(snap["integrity"]["overall_ok"])
         self.assertTrue(snap["integrity"]["report_matches_final_status"])
         self.assertTrue(snap["integrity"]["dataset_file_found"])
@@ -68,7 +48,7 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertTrue(snap["integrity"]["eth_dataset_hash_matches_status"])
 
     def test_canonical_report_hash_and_base_results(self) -> None:
-        snap = self._local_snapshot_or_skip()
+        snap = self._snapshot()
         self.assertEqual(snap["report_sha256"], "08cdad21c7dbc0d2c1128aca21d955d274d85f451c0715b50edf6b5113b2d89d")
         results = {row["key"]: row for row in snap["results"]}
         self.assertEqual(len(results), 5)
@@ -80,7 +60,7 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertEqual(results["buy_and_hold_fixed_qty"]["group"], "benchmark")
 
     def test_cost_stress_is_aggregate_only_and_complete(self) -> None:
-        rows = self._local_snapshot_or_skip()["cost_stress"]
+        rows = self._snapshot()["cost_stress"]
         self.assertEqual(len(rows), 15)
         self.assertEqual({row["stress_factor"] for row in rows}, {"1x", "2x", "3x"})
         for row in rows:
@@ -90,13 +70,13 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertFalse(any("equity_curve" in row for row in rows))
 
     def test_annual_anomaly_is_exposed_and_grid_combo_are_withheld(self) -> None:
-        snap = self._local_snapshot_or_skip()
+        snap = self._snapshot()
         self.assertFalse(snap["annual_validation"]["grid_combo_slices_validated"])
         self.assertEqual(len(snap["annual_validation"]["warnings"]), 2)
         self.assertEqual([row["year"] for row in snap["annual_dca"]], ["2022", "2023", "2024", "2025", "2026 YTD"])
 
     def test_safety_and_license_state_are_fail_closed(self) -> None:
-        snap = self._local_snapshot_or_skip()
+        snap = self._snapshot()
         self.assertEqual(snap["edge"], "UNPROVEN")
         self.assertFalse(snap["live"])
         self.assertEqual(snap["live_orders_submitted"], 0)
@@ -108,7 +88,7 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertIn("RIGHTS ARE CLEARED", snap["license"]["notice"])
 
     def test_eth_is_integrity_audit_only_on_this_dashboard(self) -> None:
-        eth = self._local_snapshot_or_skip()["eth_ingestion_audit_only"]
+        eth = self._snapshot()["eth_ingestion_audit_only"]
         self.assertTrue(eth["dataset_hash_matches_status"])
         self.assertTrue(eth["all_official_checksums_match"])
         self.assertTrue(eth["evaluation_report_exists"])
@@ -117,7 +97,7 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertEqual(eth["historical_gap_count"], 1)
 
     def test_complete_suite_blocker_is_not_hidden(self) -> None:
-        tests = self._local_snapshot_or_skip()["tests"]
+        tests = self._snapshot()["tests"]
         self.assertEqual(tests["rea_engine_suite"]["exit_code"], 0)
         self.assertEqual(tests["rea_engine_suite"]["result"], "49 passed, 1 warning")
         self.assertEqual(tests["focused_resilience"]["result"], "19 passed, 1 warning")
@@ -148,8 +128,36 @@ class ReaDashboardSnapshotTests(unittest.TestCase):
         self.assertIn("grid-column: 1 / -1", css)
         self.assertIn("@media (max-width: 600px)", css)
 
+    def test_research_panels_are_directly_reachable_from_modern_sidebar(self) -> None:
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        css = STYLES_CSS.read_text(encoding="utf-8")
+        match = re.search(r'<nav class="sidebar-nav"[^>]*>(.*?)</nav>', html, flags=re.DOTALL)
+        self.assertIsNotNone(match, "Modern dashboard sidebar must remain present")
+        sidebar = match.group(1)
+        for anchor in ("binance-public-panel", "binance-rea-section", "rea-research-panel"):
+            self.assertIn(f'href="#{anchor}"', sidebar, f"Missing sidebar link to {anchor}")
+            self.assertEqual(html.count(f'id="{anchor}"'), 1)
+        self.assertIn("REA Research", sidebar)
+        self.assertIn("Binance Public Data", sidebar)
+        self.assertIn("Paper Diagnostics", sidebar)
+        self.assertIn("grid-column: 1 / -1", css)
+        self.assertIn("@media (max-width:850px)", css)
+        self.assertIn('/static/styles.css?v=senex-rea-20261015-r1', html)
+        for asset in (
+            "rea_research_snapshot.js",
+            "rea_research_panel.js",
+            "binance_public_panel.js",
+            "binance_rea_diagnostic.js",
+        ):
+            self.assertIn(f'/static/{asset}?v=senex-rea-20261015-r1', html)
+
+    def test_snapshot_source_selection_is_explicit(self) -> None:
+        self.assertEqual(self.snapshot_source, "committed-static")
+        self.assertIsInstance(self.snapshot, dict)
+        self.assertEqual(self.snapshot.get("snapshot_kind"), "local-static-summary")
+
     def test_export_contains_no_individual_trade_tape_or_equity_curve(self) -> None:
-        snap = self._local_snapshot_or_skip()
+        snap = self._snapshot()
         self.assertNotIn("equity_curve", snap)
         self.assertNotIn("order_tape", snap)
         self.assertNotIn("fills_tape", snap)

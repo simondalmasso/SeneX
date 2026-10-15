@@ -361,9 +361,77 @@
     $('#decision-context').innerHTML = `<div class="placeholder">${esc(message)}</div>`;
   }
 
+  // Data-derived visual: no synthetic performance curve or calibrated claims.
+  function renderRawHistory(rows) {
+    const host = $('#raw-history-visual');
+    if (!host) return;
+    const samples = (Array.isArray(rows) ? rows : [])
+      .filter((row) => symbolKey(row.symbol) === 'BTCUSDT')
+      .map((row) => ({
+        time: Date.parse(row.ts || row.created_at || ''),
+        value: row.confidence == null ? NaN : Number(row.confidence),
+      }))
+      .filter((point) => Number.isFinite(point.time)
+        && Number.isFinite(point.value) && point.value >= 0 && point.value <= 1)
+      .sort((a, b) => a.time - b.time);
+    const distinct = [...new Map(samples.map((point) => [point.time, point])).values()].slice(-25);
+    host.replaceChildren();
+    if (distinct.length < 2) {
+      host.textContent = distinct.length === 1
+        ? 'One valid BTC snapshot · at least 2 distinct timestamps needed for a chart'
+        : 'No timestamped BTC raw-conviction history in the current API response';
+      host.setAttribute('aria-label', host.textContent);
+      return;
+    }
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const make = (tag, attrs, text) => {
+      const el = document.createElementNS(ns, tag);
+      for (const [name, value] of Object.entries(attrs || {})) {
+        el.setAttribute(name, String(value));
+      }
+      if (text != null) el.textContent = String(text);
+      return el;
+    };
+    const svg = make('svg', {viewBox:'0 0 680 245',role:'img',
+      'aria-label': distinct.length + ' timestamped BTC raw conviction observations; not calibrated'});
+    const defs = make('defs');
+    const gradient = make('linearGradient', {id:'senex-observed-fill',x1:'0',y1:'0',x2:'0',y2:'1'});
+    gradient.append(make('stop',{offset:'0%','stop-color':'#55ead2','stop-opacity':'.34'}),
+      make('stop',{offset:'100%','stop-color':'#55ead2','stop-opacity':'.02'}));
+    defs.append(gradient); svg.append(defs);
+    const minTime = distinct[0].time;
+    const maxTime = distinct[distinct.length - 1].time;
+    const px = (t) => 48 + ((t - minTime) / (maxTime - minTime)) * 608;
+    const py = (v) => 200 - v * 175;
+    for (const value of [0, .25, .5, .75, 1]) {
+      const y = py(value);
+      svg.append(make('line',{x1:48,y1:y,x2:656,y2:y,stroke:'#345167','stroke-opacity':'.53'}));
+      svg.append(make('text',{x:38,y:y+4,'text-anchor':'end',fill:'#9aafc4','font-size':12}, String(value*100) + '%'));
+    }
+    const pts = distinct.map((point) => [px(point.time),py(point.value)]);
+    const points = pts.map(([x,y]) => x.toFixed(2)+','+y.toFixed(2)).join(' ');
+    svg.append(make('polygon',{points:'48,200 '+points+' 656,200',fill:'url(#senex-observed-fill)'}));
+    svg.append(make('polyline',{points,fill:'none',stroke:'#68f0db','stroke-width':3,
+      'stroke-linecap':'round','stroke-linejoin':'round'}));
+    for (const point of distinct) {
+      const dot = make('circle',{cx:px(point.time),cy:py(point.value),r:3.5,
+        fill:'#86fff0',stroke:'#123943','stroke-width':1});
+      dot.append(make('title',{},new Date(point.time).toISOString()+' · '+(point.value*100).toFixed(1)+'% RAW'));
+      svg.append(dot);
+    }
+    const last = distinct[distinct.length-1];
+    svg.append(make('circle',{cx:px(last.time),cy:py(last.value),r:6,fill:'#8efde7',stroke:'#092923','stroke-width':2}));
+    const clock = (n) => new Date(n).toISOString().slice(11,16) + ' UTC';
+    svg.append(make('text',{x:48,y:231,fill:'#93afbb','font-size':11},clock(minTime)));
+    svg.append(make('text',{x:656,y:231,'text-anchor':'end',fill:'#93afbb','font-size':11},clock(maxTime)));
+    host.append(svg);
+  }
+
   function renderPredictions(payload) {
     const rows = Array.isArray(payload.predictions) ? payload.predictions : [];
     state.predictions = rows;
+    renderRawHistory(rows);
     $('#oracle-pred-meta').textContent = `[API_DERIVED] ${payload.total_in_db ?? 'UNKNOWN'} total_in_db · BTCUSDT · bounded cache · showing ${rows.length}`;
     const body = $('#oracle-table tbody');
     body.innerHTML = rows.slice(0, 30).map((row) => {
@@ -488,6 +556,8 @@
       $('#oracle-pred-meta').textContent = `[UNKNOWN/STALE] PREDICTIONS ERROR · ${error.message || error}`;
       $('#ui-last-decision').textContent = 'STALE · LAST SNAPSHOT';
       $('#ui-raw-conviction').textContent = 'STALE';
+      const history = $('#raw-history-visual');
+      if (history) { history.replaceChildren(); history.textContent = 'STALE · prediction API unavailable'; }
     }
   }
 
