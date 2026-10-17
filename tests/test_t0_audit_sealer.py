@@ -213,3 +213,61 @@ def test_uncompactable_required_payload_fails_closed_at_hard_limit():
     oversized["_audit"]["confidence_semantics_v1"]["notes"] = "z" * 9000
     with pytest.raises(PacketSizeError, match="exceeds hard limit"):
         build_sealed_packet(oversized, packet_seq=1)
+
+
+def test_runtime_provenance_manifest_is_compacted_with_a_verifiable_digest():
+    import hashlib
+
+    source = _oversized_source()
+    canonical_inputs = [
+        f"backend/subsystem_{index:03d}/module_{index:03d}_with_descriptive_name.py"
+        for index in range(180)
+    ]
+    build_digest = "sha256:" + "a" * 64
+    source["_audit"]["decision_replay_v1"]["runtime_provenance"] = {
+        "contract": "senex-runtime-provenance-v1",
+        "source_commit": "1" * 40,
+        "source_tree": "2" * 40,
+        "image_digest": "sha256:" + "3" * 64,
+        "build_digest": build_digest,
+        "declared_build_digest": build_digest,
+        "computed_build_digest": build_digest,
+        "checks": {
+            "manifest_exact": True,
+            "commit_exact": True,
+            "tree_exact": True,
+            "canonical_inputs_exact": True,
+            "build_digest_exact": True,
+            "build_digest_matches_runtime_files": True,
+        },
+        "exact": True,
+        "artifact_identity": {
+            "contract": "senex-internal-artifact-identity-v1",
+            "digest_format": "sha256:path-len+path+byte-len+bytes:v1",
+            "source_commit": "1" * 40,
+            "source_tree": "2" * 40,
+            "build_digest": build_digest,
+            "declared_build_digest": build_digest,
+            "computed_build_digest": build_digest,
+            "canonical_inputs": canonical_inputs,
+        },
+    }
+
+    packet = build_sealed_packet(source, packet_seq=1)
+    encoded = json.dumps(
+        packet, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    runtime = packet["_audit"]["provenance_v1"]["runtime_provenance"]
+    identity = runtime["artifact_identity"]
+    manifest = identity["canonical_inputs_manifest_v1"]
+    expected_sha256 = hashlib.sha256(
+        json.dumps(
+            canonical_inputs, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    ).hexdigest()
+
+    assert len(encoded) <= 4096
+    assert runtime["exact"] is True
+    assert runtime["source_commit"] == "1" * 40
+    assert "canonical_inputs" not in identity
+    assert manifest == {"count": len(canonical_inputs), "sha256": expected_sha256}

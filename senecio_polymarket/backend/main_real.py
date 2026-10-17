@@ -361,6 +361,14 @@ def _readiness_payload(snap, refresh: dict[str, Any]) -> dict[str, Any]:
         adapters=adapters,
         paper_control_ready=bool(paper_control.get("ready")),
         paper_control_status=paper_control,
+        seal_healthy=bool(runner.get("seal_healthy")),
+        last_authority_persisted_ts=runner.get("last_authority_persisted_ts"),
+        cycle_interval_s=oracle_runner.CYCLE_INTERVAL_S,
+        seal_status={
+            "last_attempt_at": runner.get("last_seal_attempt_at"),
+            "last_success_at": runner.get("last_seal_success_at"),
+            "last_error": runner.get("last_seal_error"),
+        },
     )
 
 
