@@ -49,6 +49,12 @@ log = logging.getLogger("senecio.oracle_runner")
 PREDICTIONS_PATH = ORACLE_DIR / "senecio_output" / "predictions.jsonl"
 
 # Runtime state (read by /api/health and /api/oracle/*)
+def _seal_error_summary(error: Exception, limit: int = 240) -> str:
+    """Bound diagnostic text exposed on the public read-only oracle status."""
+    max_chars = max(32, int(limit))
+    return f"{type(error).__name__}: {error}"[:max_chars]
+
+
 _state: dict[str, Any] = {
     "started_at": None,
     "last_prediction_ts": None,
@@ -393,7 +399,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             _state["last_seal_error"] = None
         except Exception as seal_err:
             _state["seal_healthy"] = False
-            _state["last_seal_error"] = f"{type(seal_err).__name__}: {seal_err}"
+            _state["last_seal_error"] = _seal_error_summary(seal_err)
             log.error("T0 audit receipt/seal failed closed: %s", seal_err)
             sealed_packet = None
 
