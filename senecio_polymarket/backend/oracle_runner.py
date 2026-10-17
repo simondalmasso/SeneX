@@ -100,6 +100,14 @@ _state: dict[str, Any] = {
     "live_capital_locked": True,      # Hard guard — even if gates pass, do NOT unlock real money
 }
 
+
+def _mark_authority_persisted() -> str:
+    """Record wall-clock time only after authoritative persistence succeeds."""
+    persisted_at = datetime.now(timezone.utc).isoformat()
+    _state["last_authority_persisted_ts"] = persisted_at
+    return persisted_at
+
+
 # Cycle config
 CYCLE_INTERVAL_S = 900  # 15 minutes
 SYMBOLS = ["ETH/USDT", "BTC/USDT"]
@@ -428,7 +436,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
             if authority_persisted:
                 # This timestamp moves only after the sealed T0 is accepted by
                 # the authoritative store; a calculated prediction is not durable authority.
-                _state["last_authority_persisted_ts"] = prediction.get("timestamp")
+                _mark_authority_persisted()
         else:
             log.error(
                 "prediction quarantined: no durable sealed T0 receipt; "
