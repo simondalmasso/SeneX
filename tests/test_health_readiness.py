@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from datetime import datetime, timezone
 
 import httpx
 
@@ -144,6 +145,9 @@ class HealthReadinessTests(unittest.TestCase):
             {"snapshot_stale": False, "last_refresh_error": None},
             oracle_started=True,
             adapters={"polymarket": {"status": "LIVE_REST", "stale": False}},
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:55:00+00:00",
+            now=datetime.fromisoformat("2026-10-17T12:00:00+00:00"),
         )
         self.assertEqual(payload["status"], "ready")
         self.assertIsNone(payload["reason"])
@@ -169,6 +173,9 @@ class HealthReadinessTests(unittest.TestCase):
             oracle_started=True,
             adapters={},
             paper_control_ready=False,
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:55:00+00:00",
+            now=datetime.fromisoformat("2026-10-17T12:00:00+00:00"),
             paper_control_status={
                 "attempted": True,
                 "ready": False,
@@ -194,6 +201,108 @@ class HealthReadinessTests(unittest.TestCase):
         self.assertEqual(
             payload["provider_oci_attestation"]["role"], "EXTERNAL_ATTESTATION_ONLY"
         )
+
+
+    def test_readiness_fails_closed_when_seal_health_is_unavailable(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {"trade_mode": "PAPER", "live_capital_locked": True, "orders_enabled": False},
+            "snapshot_id": "seal-check",
+            "generation": 101,
+            "canonical_sha256": "sha256:" + "4" * 64,
+        }
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=True,
+        )
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertFalse(payload["checks"]["seal_healthy"])
+        self.assertEqual(payload["reason"], "T0_SEAL_NOT_HEALTHY")
+
+    def test_readiness_fails_closed_without_recent_durable_prediction(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {"trade_mode": "PAPER", "live_capital_locked": True, "orders_enabled": False},
+            "snapshot_id": "durable-check",
+            "generation": 102,
+            "canonical_sha256": "sha256:" + "5" * 64,
+        }
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=True,
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:14:59+00:00",
+            now=datetime.fromisoformat("2026-10-17T12:00:00+00:00"),
+            cycle_interval_s=900,
+        )
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertFalse(payload["checks"]["last_persisted_prediction_fresh"])
+        self.assertEqual(payload["reason"], "LAST_PERSISTED_PREDICTION_STALE")
+
+
+    def test_readiness_remains_fresh_at_two_prediction_cycles(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {"trade_mode": "PAPER", "live_capital_locked": True, "orders_enabled": False},
+            "snapshot_id": "threshold-check",
+            "generation": 103,
+            "canonical_sha256": "sha256:" + "6" * 64,
+        }
+        now = datetime.fromisoformat("2026-10-17T12:00:00+00:00")
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=True,
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:30:00+00:00",
+            cycle_interval_s=900,
+            now=now,
+        )
+        self.assertEqual(payload["components"]["durable_prediction"]["age_s"], 1800.0)
+        self.assertEqual(payload["components"]["durable_prediction"]["threshold_s"], 2700)
+        self.assertTrue(payload["checks"]["last_persisted_prediction_fresh"])
+        self.assertEqual(payload["status"], "ready")
+
+
+    def test_readiness_stales_at_exactly_45_minutes(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {"trade_mode": "PAPER", "live_capital_locked": True, "orders_enabled": False},
+            "snapshot_id": "threshold-45m",
+            "generation": 104,
+            "canonical_sha256": "sha256:" + "7" * 64,
+        }
+        now = datetime.fromisoformat("2026-10-17T12:00:00+00:00")
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=True,
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:15:00+00:00",
+            cycle_interval_s=900,
+            now=now,
+        )
+        self.assertEqual(payload["components"]["durable_prediction"]["age_s"], 2700.0)
+        self.assertFalse(payload["checks"]["last_persisted_prediction_fresh"])
+        self.assertEqual(payload["reason"], "LAST_PERSISTED_PREDICTION_STALE")
 
 
 if __name__ == "__main__":

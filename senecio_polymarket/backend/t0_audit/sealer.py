@@ -124,6 +124,33 @@ def _project_decision_time(source: dict[str, Any]) -> dict[str, Any]:
     return _scrub_future_fields(payload)
 
 
+
+def _compact_runtime_provenance(value: dict[str, Any]) -> dict[str, Any]:
+    """Keep exact build identity without repeating its full file manifest per T0.
+
+    The canonical input list can be several kilobytes and is already bound to
+    the runtime's immutable source/tree/build digests. Replace each copy with a
+    count and SHA-256 of the canonical list so a receipt remains verifiable.
+    """
+    compact = copy.deepcopy(value)
+
+    def compact_manifest(owner: dict[str, Any]) -> None:
+        inputs = owner.get("canonical_inputs")
+        if not isinstance(inputs, list):
+            return
+        owner["canonical_inputs_manifest_v1"] = {
+            "count": len(inputs),
+            "sha256": hashlib.sha256(_canonical_bytes(inputs)).hexdigest(),
+        }
+        owner.pop("canonical_inputs", None)
+
+    compact_manifest(compact)
+    identity = compact.get("artifact_identity")
+    if isinstance(identity, dict):
+        compact_manifest(identity)
+    return compact
+
+
 def _extract_provenance(audit: dict[str, Any]) -> dict[str, Any] | None:
     replay = audit.get("decision_replay_v1")
     if not isinstance(replay, dict):
@@ -141,6 +168,9 @@ def _extract_provenance(audit: dict[str, Any]) -> dict[str, Any] | None:
         "config_hash",
     )
     out = {key: copy.deepcopy(replay[key]) for key in keys if key in replay}
+    runtime = out.get("runtime_provenance")
+    if isinstance(runtime, dict):
+        out["runtime_provenance"] = _compact_runtime_provenance(runtime)
     return out or None
 
 

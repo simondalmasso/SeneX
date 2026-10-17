@@ -1,6 +1,7 @@
 """Pure H011 readiness contract for SENEX ORDER076-R8 candidate."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from .paper_lock import safety_projection as _safety_projection
@@ -66,8 +67,40 @@ def build_readiness_contract(
     adapters: dict[str, Any] | None = None,
     paper_control_ready: bool = True,
     paper_control_status: dict[str, Any] | None = None,
+    seal_healthy: bool = False,
+    last_authority_persisted_ts: str | None = None,
+    cycle_interval_s: int = 900,
+    now: datetime | None = None,
+    seal_status: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     refresh = dict(refresh or {})
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    current = current.astimezone(timezone.utc)
+    try:
+        interval = int(cycle_interval_s)
+    except (TypeError, ValueError):
+        interval = 900
+    if interval <= 0:
+        interval = 900
+    last_persisted_age_s = None
+    try:
+        last_persisted = datetime.fromisoformat(
+            str(last_authority_persisted_ts).replace("Z", "+00:00")
+        )
+        if last_persisted.tzinfo is not None:
+            last_persisted_age_s = (
+                current - last_persisted.astimezone(timezone.utc)
+            ).total_seconds()
+            if last_persisted_age_s < 0:
+                last_persisted_age_s = None
+    except (TypeError, ValueError, OverflowError):
+        last_persisted_age_s = None
+    last_persisted_fresh = (
+        last_persisted_age_s is not None
+        and last_persisted_age_s < (3 * interval)
+    )
     d1 = classify_d1_quota_state(refresh)
     market = market_data_freshness(adapters)
 
@@ -113,12 +146,16 @@ def build_readiness_contract(
         "last_refresh_ok": last_refresh_ok,
     }
     checks["paper_control_ready"] = bool(paper_control_ready)
+    checks["seal_healthy"] = bool(seal_healthy)
+    checks["last_persisted_prediction_fresh"] = bool(last_persisted_fresh)
     ready = (
         authority_ready
         and bool(oracle_started)
         and paper_lock
         and orders_disabled
         and bool(paper_control_ready)
+        and bool(seal_healthy)
+        and bool(last_persisted_fresh)
     )
     if d1["status"] == "EXHAUSTED":
         reason = "D1_QUOTA_EXCEEDED"
@@ -126,6 +163,10 @@ def build_readiness_contract(
         reason = refresh.get("last_refresh_error") or "AUTHORITY_NOT_READY"
     elif not oracle_started:
         reason = "ORACLE_NOT_STARTED"
+    elif not seal_healthy:
+        reason = "T0_SEAL_NOT_HEALTHY"
+    elif not last_persisted_fresh:
+        reason = "LAST_PERSISTED_PREDICTION_STALE"
     elif not paper_control_ready:
         reason = "PAPER_CONTROL_NOT_READY"
     elif not paper_lock or not orders_disabled:
@@ -151,6 +192,18 @@ def build_readiness_contract(
                 "status": "READY" if paper_control_ready else "DEGRADED",
                 "ready": bool(paper_control_ready),
                 **dict(paper_control_status or {}),
+            },
+            "t0_seal": {
+                "status": "HEALTHY" if seal_healthy else "DEGRADED",
+                "healthy": bool(seal_healthy),
+                **dict(seal_status or {}),
+            },
+            "durable_prediction": {
+                "status": "FRESH" if last_persisted_fresh else "STALE_OR_UNKNOWN",
+                "fresh": bool(last_persisted_fresh),
+                "last_authority_persisted_ts": last_authority_persisted_ts,
+                "age_s": last_persisted_age_s,
+                "threshold_s": 3 * interval,
             },
             "collector_liveness": {
                 "status": "EXTERNAL_NOT_PROBED_BY_H011",

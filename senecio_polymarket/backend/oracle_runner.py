@@ -58,6 +58,11 @@ _state: dict[str, Any] = {
     "cycles_run": 0,
     "cycles_failed": 0,
     "last_error": None,
+    "seal_healthy": False,
+    "last_seal_attempt_at": None,
+    "last_seal_success_at": None,
+    "last_seal_error": None,
+    "last_authority_persisted_ts": None,
     "last_cycle_at": None,
     "next_cycle_at": None,
     "exchange_used_last": None,
@@ -364,6 +369,7 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
         # seal is safe because PacketSealer.seal() is idempotent by packet_id.
         sealed_packet = None
         receipt_store = None
+        _state["last_seal_attempt_at"] = datetime.now(timezone.utc).isoformat()
         try:
             from .t0_audit.sealer import build_sealed_packet, seal_prediction_t0
             from .prediction_persistence import PredictionPersistenceStore
@@ -382,7 +388,12 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
                 or sealed_packet.get("packet_id") != preview_packet.get("packet_id")
             ):
                 raise RuntimeError("sealed packet identity diverged from receipt outbox")
+            _state["seal_healthy"] = True
+            _state["last_seal_success_at"] = datetime.now(timezone.utc).isoformat()
+            _state["last_seal_error"] = None
         except Exception as seal_err:
+            _state["seal_healthy"] = False
+            _state["last_seal_error"] = f"{type(seal_err).__name__}: {seal_err}"
             log.error("T0 audit receipt/seal failed closed: %s", seal_err)
             sealed_packet = None
 
@@ -408,6 +419,10 @@ async def _run_one_prediction(symbol: str) -> Optional[dict]:
                 sealed_packet,
                 store=receipt_store,
             )
+            if authority_persisted:
+                # This timestamp moves only after the sealed T0 is accepted by
+                # the authoritative store; a calculated prediction is not durable authority.
+                _state["last_authority_persisted_ts"] = prediction.get("timestamp")
         else:
             log.error(
                 "prediction quarantined: no durable sealed T0 receipt; "
