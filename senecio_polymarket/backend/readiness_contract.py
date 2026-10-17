@@ -84,6 +84,9 @@ def build_readiness_contract(
         interval = 900
     if interval <= 0:
         interval = 900
+    # Never let a changed cycle configuration silently widen this incident
+    # watchdog: the durable writer must advance at least every 45 minutes.
+    freshness_threshold_s = min(45 * 60, 3 * interval)
     last_persisted_age_s = None
     try:
         last_persisted = datetime.fromisoformat(
@@ -99,7 +102,7 @@ def build_readiness_contract(
         last_persisted_age_s = None
     last_persisted_fresh = (
         last_persisted_age_s is not None
-        and last_persisted_age_s < (3 * interval)
+        and last_persisted_age_s < freshness_threshold_s
     )
     d1 = classify_d1_quota_state(refresh)
     market = market_data_freshness(adapters)
@@ -203,7 +206,7 @@ def build_readiness_contract(
                 "fresh": bool(last_persisted_fresh),
                 "last_authority_persisted_ts": last_authority_persisted_ts,
                 "age_s": last_persisted_age_s,
-                "threshold_s": 3 * interval,
+                "threshold_s": freshness_threshold_s,
             },
             "collector_liveness": {
                 "status": "EXTERNAL_NOT_PROBED_BY_H011",

@@ -305,5 +305,32 @@ class HealthReadinessTests(unittest.TestCase):
         self.assertEqual(payload["reason"], "LAST_PERSISTED_PREDICTION_STALE")
 
 
+    def test_long_configured_cycle_cannot_relax_45_minute_cap(self) -> None:
+        snapshot = {
+            "authority_history_complete": True,
+            "exact_count_complete": True,
+            "provenance": {"exact": True},
+            "live_gate": {"trade_mode": "PAPER", "live_capital_locked": True, "orders_enabled": False},
+            "snapshot_id": "fixed-cap-check",
+            "generation": 105,
+            "canonical_sha256": "sha256:" + "8" * 64,
+        }
+        now = datetime.fromisoformat("2026-10-17T12:00:00+00:00")
+        payload = readiness_contract.build_readiness_contract(
+            snapshot,
+            {"snapshot_stale": False, "last_refresh_error": None},
+            oracle_started=True,
+            adapters={},
+            paper_control_ready=True,
+            seal_healthy=True,
+            last_authority_persisted_ts="2026-10-17T11:15:00+00:00",
+            cycle_interval_s=3600,
+            now=now,
+        )
+        self.assertEqual(payload["components"]["durable_prediction"]["threshold_s"], 2700)
+        self.assertFalse(payload["checks"]["last_persisted_prediction_fresh"])
+        self.assertEqual(payload["reason"], "LAST_PERSISTED_PREDICTION_STALE")
+
+
 if __name__ == "__main__":
     unittest.main()
