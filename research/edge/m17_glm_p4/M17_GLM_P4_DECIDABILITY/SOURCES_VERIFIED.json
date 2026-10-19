@@ -1,0 +1,178 @@
+{
+  "order": "M17-GLM-P4-SOURCE-DECIDABILITY",
+  "canonical_issue": "https://github.com/simondalmasso/SeneX/issues/208",
+  "generated_utc": "2026-10-09T12:30:00Z",
+  "modo": "DOCUMENTATION_AND_EXISTING_FILES_READ_ONLY",
+  "regla_de_cifras": "Toda cifra empirica de terceros exige fuente original; las cifras usadas son sinteticas (reproducidas byte-exacto de P3) o documentales (con sha256); ninguna cifra historica de SENEX ni de mercado se inventa ni recolecta.",
+  "herramientas": {
+    "llamadas_http_reales": 10,
+    "conexiones_autenticadas": 0,
+    "datos_de_mercado_recolectados": 0,
+    "capturas_prospectivas": 0,
+    "scripts_persistidos": ["netprobe_p4/fetch_p4_docs.py", "netprobe_p4/fetch_p4_refs.py", "netprobe_p4/extract_gh208.py", "netprobe_p4/extract_gh206_205.py"],
+    "re_ejecuciones_no_modificadas": "k4_edge_costes.py (P3) -> byte-exacto",
+    "feynman_cli": "NO_USADO",
+    "nuevas_suscripciones": 0
+  },
+  "acceso_documental": [
+    {
+      "id": "GH-208",
+      "url": "https://github.com/simondalmasso/SeneX/issues/208",
+      "metodo": "GET (HTML publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO INTEGRO (orden canonica P4: Q1-Q3, entregables, guardrails)",
+      "cuerpo": "netprobe_p4/gh208.body",
+      "sha256_cuerpo": "1f0d87d6f8b839e0bd3ff0f5ae717122db3239fa20a1af03098d76b3122425b3",
+      "utc": "2026-10-09T11:51:31Z"
+    },
+    {
+      "id": "GH-206",
+      "url": "https://github.com/simondalmasso/SeneX/issues/206",
+      "metodo": "GET (HTML publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO INTEGRO (orden hostil P3 + 3 comentarios AUD: intake parcial 11:28Z, K6 reproducido con limites 11:35Z, K2/K3/K5 reproducidos 11:43Z)",
+      "cuerpo": "netprobe_p4/gh206.body",
+      "sha256_cuerpo": "4e41e7c19690172f65e17d1324d71bae6a80e46e013e4899ec8e190bcca4e0ad",
+      "utc": "2026-10-09T11:53:28Z"
+    },
+    {
+      "id": "GH-205-FRESH",
+      "url": "https://github.com/simondalmasso/SeneX/issues/205",
+      "metodo": "GET (HTML publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO INTEGRO (version fresca con comentario AUD 6080068438 11:36Z: correcciones RED para ARQ)",
+      "cuerpo": "netprobe_p4/gh205_fresh.body",
+      "sha256_cuerpo": "e98715d56516c0407af03ddcd590c9aacf4539f4dec90c299d9a464f9e290be0",
+      "utc": "2026-10-09T11:53:30Z"
+    },
+    {
+      "id": "POLY-LLMS-INDEX",
+      "url": "https://docs.polymarket.com/llms.txt",
+      "metodo": "GET (publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: indice completo de documentacion (224 paginas API reference); sin pagina de archivo historico TWAP",
+      "cuerpo": "netprobe_p4/poly_llms.txt",
+      "sha256_cuerpo": "b2b924d74702952189ee73daa06c8036b3fcd2bdfe88498298b087beed731dd8",
+      "utc": "2026-10-09T11:51:32Z"
+    },
+    {
+      "id": "POLY-REALTIME",
+      "url": "https://docs.polymarket.com/market-data/realtime-data",
+      "metodo": "GET (HTML publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: 'Reference price subscriptions require authentication'; TWAP ventana fija 60s; snapshot historico por suscripcion; Decimal sin E18; symbol btcusd",
+      "cuerpo": "netprobe_p4/poly_realtime.body",
+      "sha256_cuerpo": "d0743b82fffd2fd62bc777fb6c688daed44836520dcaab549f9556ed67f10ddf",
+      "nota": "byte-identico al polydocs_08.md verificado en P3 (misma URL de contenido chainlink-twap); cierra la brecha de empaquetado P3",
+      "utc": "2026-10-09T11:51:33Z"
+    },
+    {
+      "id": "POLY-TWAP-MD",
+      "url": "https://docs.polymarket.com/market-data/chainlink-twap.md",
+      "metodo": "GET (publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: misma pagina que realtime-data (redirigido); verificado dos veces con sha256 identico",
+      "cuerpo": "netprobe_p4/poly_twap_md.body",
+      "sha256_cuerpo": "d0743b82fffd2fd62bc777fb6c688daed44836520dcaab549f9556ed67f10ddf",
+      "utc": "2026-10-09T11:51:36Z"
+    },
+    {
+      "id": "POLY-TWAP-HTML",
+      "url": "https://docs.polymarket.com/market-data/chainlink-twap",
+      "metodo": "GET (publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: idem anterior (canonico HTML)",
+      "cuerpo": "netprobe_p4/poly_twap_html.body",
+      "sha256_cuerpo": "d0743b82fffd2fd62bc777fb6c688daed44836520dcaab549f9556ed67f10ddf",
+      "utc": "2026-10-09T11:51:37Z"
+    },
+    {
+      "id": "POLY-MIGRATE-RTDS",
+      "url": "https://docs.polymarket.com/migrate/rtds-to-polybolt",
+      "metodo": "GET (HTML publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: mapeo crypto_prices_twap_sixty{btc/usd} -> price.crypto.twap{btcusd,window_seconds:60} '60-second Chainlink TWAP'; E18 legado vs Decimal PolyBolt; auth apiKey/secret/passphrase; RTDS legado suscribible via AsyncPublicClient; sin API historica documentada",
+      "cuerpo": "netprobe_p4/poly_migrate.body",
+      "sha256_cuerpo": "c6bba4c8656e34100034679c3157ffed40865a42459a4f763d1a18a5b0a97c39",
+      "utc": "2026-10-09T11:51:34Z"
+    },
+    {
+      "id": "POLY-DATAAPI-MIGRATE",
+      "url": "https://docs.polymarket.com/migrate/data-api-v1-to-v2.md",
+      "metodo": "GET (markdown publico, sin autenticar)",
+      "http_status": 200,
+      "resultado": "LEIDO: Data API v2 GET /v2/trades, /v2/prices-history, /v2/resolutions publicos; v1 retirado 2026-10-24; paginacion por cursor",
+      "cuerpo": "netprobe_p4/poly_dataapi_migrate.md",
+      "sha256_cuerpo": "96955b89c27fe908979a73fbb77d31b30c50f9f5fdebca211b009c4ffb0d05fd",
+      "utc": "2026-10-09T11:56:11Z"
+    },
+    {
+      "id": "CL-FEED-META",
+      "url": "https://data.chain.link/streams/btc-usd-twap-60s-streams",
+      "metodo": "GET (publico, sin autenticar)",
+      "http_status": 429,
+      "resultado": "RATE_LIMITED (429): pagina de metadata del feed no legible en esta ejecucion; estado UNKNOWN para esa via (no equivale a inexistencia)",
+      "cuerpo": "netprobe_p4/cl_feed_meta.body",
+      "sha256_cuerpo": "6e5ee2e13bd8cdd8bf312ed1fbd61c577759ea80d6048cb42da24ea4efb4768d",
+      "utc": "2026-10-09T11:51:38Z"
+    }
+  ],
+  "verificaciones_locales": [
+    {
+      "id": "P3-PACKAGE-INTEGRITY",
+      "operacion": "sha256sum -c SHA256SUMS sobre download/M17_GLM_HOSTILE_P3",
+      "resultado": "TODOS LOS ARCHIVOS OK (paquete sellado P3 integro tras la re-ejecucion K4 y su restauracion)"
+    },
+    {
+      "id": "K4-SELF-REPRO",
+      "operacion": "python3 k4_edge_costes.py (script original sin modificar, entorno identico a DEPENDENCIAS.txt de P3: python 3.12.14, numpy 2.1.3)",
+      "resultado": "exit=0; CSV regenerado byte-exacto (sha256 c00fce39abef9600efeb4a38742e2a9fd5998a559a6203f45c2d173fdf5687a2); stdout integro en k4_reproduction_log.txt"
+    },
+    {
+      "id": "AUD-HASH-CROSSCHECK",
+      "operacion": "cruce de los sha256 publicados por AUD en #206 (11:35Z y 11:43Z) contra el paquete sellado P3",
+      "resultado": "K2/K3/K5/K6 (scripts y CSVs): 8/8 COINCIDEN con los hashes del paquete local"
+    },
+    {
+      "id": "P3-POLYDOCS08-GAP-CLOSURE",
+      "operacion": "re-acceso de docs.polymarket.com/market-data/realtime-data en P4 y comparacion con el sha256 registrado en P3",
+      "resultado": "byte-identico (d0743b82...); el documento existia solo en scripts/netprobe_p3/ y faltaba en contexto_verificado/ del paquete P3; brecha documentada en 01_HISTORICAL_REPLAY_FEASIBILITY.md §4"
+    }
+  ],
+  "fuentes_verificadas_en_p3_no_reverificadas_en_p4": [
+    {"url": "https://docs.polymarket.com/concepts/resolution.md", "sha256_p3": "2264660d3f55b7d3df875d73b68098d7d62c1489cdd252bd846932e3088cd047", "estado": "VERIFICADO_EN_P3"},
+    {"url": "https://docs.polymarket.com/trading/fees.md", "sha256_p3": "7409b13c646126ff1c3bacc478c0594a7b3db2a2e735fcdf6ddb59b3fdc44035", "estado": "VERIFICADO_EN_P3"},
+    {"url": "https://docs.polymarket.com/concepts/prices-orderbook.md", "sha256_p3": "f3f23f21862272a505f098b3703c8954a52719f0dc45eb9c71bc7231b5ce0380", "estado": "VERIFICADO_EN_P3"},
+    {"url": "https://docs.polymarket.com/trading/place-orders.md", "sha256_p3": "3a35f3b5c6858cb5f063ae522a49f14617bc1c55ecbc8f6484413ccc6afb6bf3", "estado": "VERIFICADO_EN_P3"},
+    {"url": "https://docs.polymarket.com/programs/maker-rebates.md", "sha256_p3": "11eb588b0bd5f19ca860a8794cb318bace1be3b2d0fa4523868dc7ebea74b7b4", "estado": "VERIFICADO_EN_P3"},
+    {"url": "https://github.com/simondalmasso/SeneX/issues/201", "extraccion_sha256_p3": "f304a409db3087548e3822ef8210bf2b1296d5caf34d78cb854c5a1bbffac64d", "estado": "LEIDO_INTEGRO_EN_P3"},
+    {"url": "https://github.com/simondalmasso/SeneX/issues/139", "extraccion_sha256_p3": "953dcd647b01439ceedc135fdf66d3e4dcaaaaea20d5113fc0ca197ce2e01dbc", "estado": "LEIDO_INTEGRO_EN_P3 (refutacion canonica cerrada; no se reabre)"}
+  ],
+  "citas_academicas_offline": [
+    {
+      "id": "WHITE-2000",
+      "referencia": "White, H. (2000). 'A Reality Check for Data Snooping.' Econometrica 68(5), 1097-1126.",
+      "uso": "K6 fase D (familia del estimador aproximado max-t centrado)",
+      "estado": "CITA_OFFLINE_NO_REVERIFICADA"
+    },
+    {
+      "id": "HANSEN-2005",
+      "referencia": "Hansen, P. R. (2005). 'A Test for Superior Predictive Ability.' JBES 23(4), 365-380.",
+      "uso": "K6 correccion de nomenclatura (NO implementado por el script de P3)",
+      "estado": "CITA_OFFLINE_NO_REVERIFICADA"
+    },
+    {
+      "id": "BAILEY-LDP-2014",
+      "referencia": "Bailey, D. H. & Lopez de Prado, M. (2014). 'The Deflated Sharpe Ratio.' JPM 40(5), 94-107.",
+      "uso": "K6 correccion de nomenclatura (el toy gaussiano NO es DSR completo)",
+      "estado": "CITA_OFFLINE_NO_REVERIFICADA"
+    },
+    {
+      "id": "POLITIS-ROMANO-1994",
+      "referencia": "Politis, D. N. & Romano, J. P. (1994). 'The Stationary Bootstrap.' JASA 89(428), 1303-1313.",
+      "uso": "bootstrap estacionario por bloques (dependencia serial)",
+      "estado": "CITA_OFFLINE_NO_REVERIFICADA"
+    }
+  ],
+  "nota_metodologica": "La API REST de GitHub no se uso (bloqueada por cuota en P3); se uso HTML publico. data.chain.link devolvio 429 y se documenta como tal. Ninguna cifra sintetica de P3 se presenta como observacion de mercado o de SENEX; 'no encontrado' no se equipara a 'no existe'; ninguna fuente sustituta se promueve a fuente de settlement."
+}
