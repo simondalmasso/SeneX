@@ -1,0 +1,10 @@
+{
+  "source_status":"SYNTHETIC_DERIVED_EXAMPLE_ONLY",
+  "original_06_csv_available":false,
+  "original_original_10_rows_reconstructed":false,
+  "transformation":"insert explicit UNVERIFIED_SOURCE placeholder into omitted source column",
+  "source_admissible":false,
+  "scientific_confirmation":false,
+  "primary_abc_comparison_unchanged":true,
+  "reference":"https://github.com/simondalmasso/SeneX/issues/205"
+}
