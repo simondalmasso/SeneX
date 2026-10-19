@@ -1,0 +1,45 @@
+{
+  "contract": "senex-candle-economic-v1",
+  "dataset_role": "RESEARCH_ONLY",
+  "timeframe": "15m_to_closed_1h",
+  "bars_15m": 16,
+  "horizon_seconds": 3600,
+  "timezone": "UTC",
+  "required_t0": [
+    "prediction_id",
+    "decision_ts",
+    "venue",
+    "symbol",
+    "market_type",
+    "source_sha256",
+    "ohlcv"
+  ],
+  "geometry": [
+    "body_to_range",
+    "upper_wick_to_range",
+    "lower_wick_to_range",
+    "close_location_value",
+    "rolling_range_compression",
+    "prior_trend_slope"
+  ],
+  "patterns": [
+    "bullish_harami",
+    "bearish_harami",
+    "bullish_hikkake",
+    "bearish_hikkake",
+    "hanging_man"
+  ],
+  "cost_bps": [
+    10,
+    15,
+    20,
+    30
+  ],
+  "hikkake": "setup-only-no-future-confirmation",
+  "missingness": "FAIL_CLOSED_UNKNOWN",
+  "provenance": "SOURCE_SHA_IS_A_DECLARED_HASH_NOT_PROOF_OF_ORIGINAL_CUSTODY",
+  "paper_only": true,
+  "live": false,
+  "real_orders": 0,
+  "capital": 0
+}
