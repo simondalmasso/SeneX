@@ -1,0 +1,37 @@
+{
+  "schema_version": "m17-f0-twap60-v1",
+  "classification": "READ_ONLY_F0_FEASIBILITY_NOT_T0_T1_NO_COHORT",
+  "source": "wss://ws-live-data.polymarket.com",
+  "requested_topic": "crypto_prices_twap_sixty",
+  "requested_symbol": "btc/usd",
+  "requested_event_types": "*",
+  "credentials_used": false,
+  "connected": true,
+  "elapsed_seconds": 27.3,
+  "subscribe_snapshots": 1,
+  "forward_updates": 0,
+  "other_frames": 1,
+  "original_snapshot": {
+    "sha256": "e383c13b8db612a47e8ccd4f6faf06979231137a0498f37d85c4e64560cca804",
+    "byte_length": 6035,
+    "received_at_host_ms": 1791529994923,
+    "payload_keys": [
+      "data",
+      "symbol",
+      "window_s"
+    ],
+    "window_s": 60,
+    "rows_reported": 58,
+    "source_event_timestamp_present": false,
+    "seq_present": false,
+    "is_signed_report": false,
+    "byte_custody": "original bytes retained locally on authorized isolated host, NOT published or remotely anchored",
+    "local_host_path": "C:/GPT-SANDBOX/WORK/SENEX-M17-ISOLATED-20261008/research/edge/oracle_aligned_net_ev/local_f0_probe_20261009/"
+  },
+  "interpretation": "source observed a subscribe snapshot but no actual forward update, event freshness, continuity or independent oracle attestation; absence within 27.3s does not prove stream never emits updates",
+  "label_authority": "UNVERIFIED",
+  "source_admissible": false,
+  "source_status": "SOURCE_BLOCKED_NO_VERIFIED_FORWARD_UPDATE",
+  "real_verified": 0,
+  "prospective_cohort_started": false
+}

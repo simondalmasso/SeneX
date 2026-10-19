@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "M17 distinct terminal oracle label receipt T1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "market_id",
+    "condition_id",
+    "token_id",
+    "rule_version_sha256",
+    "original_market_rules_bytes_sha256",
+    "start_ms",
+    "end_ms",
+    "exact_oracle_source",
+    "source_class",
+    "source_attestation_or_public_resolution_reference",
+    "settled_start_value",
+    "settled_end_value",
+    "tie_handling",
+    "authoritative_event_outcome",
+    "settlement_finality",
+    "label_observed_at_ms",
+    "raw_label_bytes_sha256",
+    "T0_receipt_sha256",
+    "join_provenance_and_uniqueness"
+  ],
+  "properties": {
+    "market_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "condition_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "token_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule_version_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "original_market_rules_bytes_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "start_ms": {
+      "type": "integer"
+    },
+    "end_ms": {
+      "type": "integer"
+    },
+    "exact_oracle_source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_class": {
+      "enum": [
+        "PLATFORM_TERMINAL_RESOLUTION",
+        "PROVIDER_CHAINLINK_RELAY",
+        "CHAINLINK_SIGNED_REPORT"
+      ]
+    },
+    "source_attestation_or_public_resolution_reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "settled_start_value": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "settled_end_value": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "tie_handling": {
+      "type": "string"
+    },
+    "authoritative_event_outcome": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "UP",
+        "DOWN",
+        null
+      ]
+    },
+    "settlement_finality": {
+      "enum": [
+        "final",
+        "pending",
+        "disputed"
+      ]
+    },
+    "label_observed_at_ms": {
+      "type": "integer"
+    },
+    "raw_label_bytes_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "T0_receipt_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "join_provenance_and_uniqueness": {
+      "type": "object"
+    },
+    "independent_signature_verification": {
+      "type": "string",
+      "enum": [
+        "NOT_VERIFIED",
+        "VERIFIED_BY_INDEPENDENT_IMPLEMENTATION"
+      ]
+    }
+  }
+}

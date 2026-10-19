@@ -1,0 +1,177 @@
+{
+  "schema_version": "m17-f0-source-registry-v1",
+  "experiment": "M17_ORACLE_ALIGNED_NET_EDGE",
+  "phase": "F0_INVENTORY",
+  "observed_at_utc": "2026-10-08T21:45:35Z",
+  "prospective_cohort_started": false,
+  "preserve_existing": {
+    "order100": "NO_TOUCH",
+    "order197": "NO_TOUCH",
+    "H011": "NO_TOUCH"
+  },
+  "allowed_public_read_sources": [
+    {
+      "provider": "Polymarket Gamma",
+      "method": "GET",
+      "url_pattern": "https://gamma-api.polymarket.com/events/slug/btc-updown-5m-<window-start-seconds>",
+      "purpose": "active market metadata/rules original bytes",
+      "safety": "GET_only; bounded; no outcome inspection during F0"
+    },
+    {
+      "provider": "Polymarket CLOB",
+      "method": "GET",
+      "url_pattern": "https://clob.polymarket.com/book?token_id=<token_id>",
+      "purpose": "independently timestamped two-token L2 snapshots",
+      "status": "CAPABILITY_PRESENT_IN_EXISTING_ADAPTER_NOT_M17_CUSTODIED"
+    },
+    {
+      "provider": "Polymarket CLOB",
+      "method": "GET",
+      "url_pattern": "https://clob.polymarket.com/fee-rate?token_id=<token_id>",
+      "purpose": "market fee parameters, supplement feeSchedule"
+    },
+    {
+      "provider": "Polymarket RTDS",
+      "method": "WEBSOCKET_SUBSCRIBE",
+      "url": "wss://ws-live-data.polymarket.com",
+      "topic": "crypto_prices_chainlink",
+      "filter": {
+        "symbol": "btc/usd"
+      },
+      "purpose": "forward-only provider relay, not signed Chainlink attestation",
+      "constraints": "one bounded <=30s smoke; no history claim",
+      "status": "GENERIC_CHAINLINK_SPOT_NOT_5M_60S_TWAP",
+      "eligible_for_5m_oracle": false
+    },
+    {
+      "provider": "Chainlink direct streams",
+      "method": "NOT_USED",
+      "purpose": "independent signed oracle report",
+      "status": "CREDENTIALS_REQUIRED_ZERO_SPEND_UNVERIFIED"
+    },
+    {
+      "provider": "Polymarket Legacy RTDS",
+      "method": "WEBSOCKET_SUBSCRIBE",
+      "url": "wss://ws-live-data.polymarket.com",
+      "topic": "crypto_prices_twap_sixty",
+      "filter": {
+        "symbol": "btc/usd"
+      },
+      "purpose": "60-second TWAP candidate, read-only forward-only update",
+      "status": "SUBSCRIBE_SNAPSHOT_RECEIVED_BUT_UPDATE_UNVERIFIED",
+      "scientific_eligibility": false,
+      "requirements": "real update original bytes and event/receive timestamps, gaps, 60-second window and independent oracle attestation"
+    },
+    {
+      "provider": "Polymarket Secure Realtime",
+      "method": "DO_NOT_CONNECT_WITHOUT_AUTHORIZATION",
+      "topic": "prices.crypto.twap",
+      "subscription_channel": "price.crypto.twap",
+      "filter": {
+        "symbol": "btcusd",
+        "window_seconds": 60
+      },
+      "documentation": "https://docs.polymarket.com/market-data/realtime-data",
+      "requires_authentication": true,
+      "public_zero_spend_authorized": false,
+      "scientific_eligibility": false,
+      "status": "AUTH_REQUIRED_NOT_AUTHORIZED_ZERO_SPEND"
+    }
+  ],
+  "f0_smoke_evidence": {
+    "market_slug": "btc-updown-5m-1791495900",
+    "market_id": "5416655",
+    "condition_id": "0xa2c7ab20b13fb54b31fdf1e6a1dc0d495a6aabfe7f6d4128db2381bcb15fa7f4",
+    "gamma_response_sha256": "1dc64ddeb55661983a628a20aa7e32f45fb40e3c3859efc4163e0ce6c358d6a0",
+    "gamma_bytes_observed": 6873,
+    "gamma_original_bytes_durably_custodied": false,
+    "market_fee_metadata_observed": {
+      "feesEnabled": true,
+      "makerBaseFee": 1000,
+      "takerBaseFee": 1000,
+      "feeType": "crypto_fees_v2",
+      "feeSchedule": {
+        "exponent": 1,
+        "rate": 0.07,
+        "takerOnly": true,
+        "rebateRate": 0.2
+      },
+      "cryptoMarketConfig": {
+        "id": "btc-5m-twap-60",
+        "asset": "btc",
+        "duration": "5m",
+        "twapEnabled": true,
+        "twapLookbackSeconds": 60
+      },
+      "orderPriceMinTickSize": 0.01
+    },
+    "clob_fee_rate_http_status": 200,
+    "clob_fee_base_fee": 1000,
+    "fee_rate_raw_response_sha256": "72f0f488905219fa9b2f2c5374dfbf9e83345b1fa38826015b15119ac221a079",
+    "fee_raw_bytes_durably_custodied": false,
+    "rtds_result": "CONNECTED_ONE_UPDATE",
+    "rtds_topic": "crypto_prices_chainlink",
+    "rtds_type": "update",
+    "rtds_payload_keys": [
+      "full_accuracy_value",
+      "symbol",
+      "timestamp",
+      "value"
+    ],
+    "rtds_raw_frame_sha256": "976ec0a238ca1b130b50775968b596480ba54da39ef4bae0045d59864f521ba8",
+    "rtds_raw_frame_bytes": 247,
+    "rtds_original_bytes_durably_custodied": false,
+    "rtds_is_signed_oracle_report": false,
+    "note": "These are isolated feasibility probes, NOT preregistered T0 receipts and NOT original T1 outcomes. Hashes without retained original bytes do not establish custody.",
+    "generic_chainlink_is_60s_twap": false,
+    "legacy_twap_smoke": {
+      "observed_at_ms": 1791527592049,
+      "connection": "PUBLIC_WS_CONNECTED_NO_CREDENTIALS",
+      "requested_topic": "crypto_prices_twap_sixty",
+      "requested_symbol": "btc/usd",
+      "received_topic": "crypto_prices_twap_sixty",
+      "received_type": "subscribe",
+      "window_field_observed": "window_s",
+      "payload_keys_observed": [
+        "data",
+        "symbol",
+        "window_s"
+      ],
+      "raw_frame_size": 5944,
+      "raw_frame_sha256": "b2fc2625b71d9d5216d0dc153b6ff028d80e551c30d355279b527c72eb080795",
+      "original_bytes_durably_retained": false,
+      "prospective_twap_update_observed": false,
+      "actual_update_e18_schema_verified": false,
+      "scientific_eligibility": false,
+      "note": "One bounded uncredentialed snapshot only; no data values used. No original byte custody. Synthetic parsers do not authorize a feed."
+    }
+  },
+  "block_conditions": [
+    "NO_ORIGINAL_T0_BYTES",
+    "NO_ORIGINAL_T1_BYTES",
+    "ORACLE_SIGNATURE_UNVERIFIED",
+    "NO_INDEPENDENT_FILLED_EXECUTIONS",
+    "NO_FROZEN_PROSPECTIVE_COHORT",
+    "NO_5M_SENEX_SIGNAL_CADENCE_PROOF",
+    "NO_VERIFIED_PUBLIC_FORWARD_TWAP60_UPDATE"
+  ],
+  "forbidden": [
+    "POST",
+    "TRADING",
+    "WALLET",
+    "SIGNING",
+    "PROVIDER_PAID",
+    "DEPLOY",
+    "MERGE",
+    "ORDER100_MUTATION",
+    "ORDER197_MUTATION"
+  ],
+  "source_admissible": false,
+  "source_status": "SOURCE_BLOCKED_NO_FORWARD_TWAP60_UPDATE",
+  "f0_current_probe_ref": "TWAP60_F0_ORIGINAL_PROBE_MANIFEST.json",
+  "f0_original_snapshot_bytes_on_owner_host": true,
+  "f0_original_snapshot_source_authoritative": false,
+  "f0_prospective_T0_or_T1_count": 0,
+  "direct_chainlink_signed_attestation": false,
+  "stop_on_missing_source": true
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1",
+  "scope": "Polymarket BTC Up/Down 5 minutes only",
+  "state": "DRAFT_UNVERIFIED_RULE",
+  "market_specific": {
+    "original_event_rule_bytes_sha256": null,
+    "market_id": null,
+    "condition_id": null,
+    "source_claim": "Chainlink BTC/USD TWAP over exact market interval",
+    "source_class": "PROVIDER_DECLARED_CHAINLINK",
+    "boundary_rule_candidate": "UP wins when ending oracle value >= beginning value; verify original exact bytes for each market",
+    "oracle_start_timestamp_ms": null,
+    "oracle_end_timestamp_ms": null,
+    "tie_winner": "UNVERIFIED_PER_MARKET",
+    "yes_token_id": null,
+    "no_token_id": null,
+    "rule_version_sha256": null
+  },
+  "prohibited_substitutes": [
+    "BINANCE_BTCUSDT_OPEN_CLOSE",
+    "MIDPOINT",
+    "UNSIGNED_RELAY_AS_SIGNED_REPORT",
+    "HISTORICAL_BACKFILL"
+  ],
+  "minimum_T1_evidence": [
+    "original T1 bytes",
+    "independent final settlement reference",
+    "same market_id condition_id token_id and boundaries",
+    "rule/version and oracle source match",
+    "verified independent oracle attestation",
+    "T1 only acquired after market end"
+  ],
+  "source_tiers": [
+    "PLATFORM_TERMINAL_RESOLUTION",
+    "PROVIDER_CHAINLINK_RELAY",
+    "CHAINLINK_SIGNED_REPORT"
+  ],
+  "scientific_label_gate": "NO_PROMOTION_WITHOUT_EXTERNAL_VERIFICATION_OF_BYTES_AND_AUTHORITY",
+  "research_f1_binding": {
+    "digest_definition": "rule_version_sha256 = sha256(original market_rule_raw bytes) until a separately custodied versioned rule artifact is defined",
+    "t0_receipt_digest": "SHA256 of externally retained exact T0 receipt UTF-8 bytes, not just its reconstructed dictionary",
+    "linkage": "T1.token_id binds T0.token_id_yes/no; T1.exact_oracle_source binds T0.oracle_source_id; both condition and exact 300000ms window must match",
+    "never_promote": "MATCHED_BYTES_ONLY does not prove original timing, settlement, independent signed oracle, or public source authority",
+    "rule_authenticity": "UNVERIFIED_UNTIL_INDEPENDENTLY_ANCHORED"
+  }
+}

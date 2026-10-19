@@ -101,6 +101,16 @@ jobs:
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
           python -m pytest -q tests
 
+      - name: M17 strict Draft 2020-12 research schema and isolated regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$RUNNER_TEMP/m17-schema-deps:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/senecio_polymarket"
+          python -m pip install --disable-pip-version-check --no-input --target "$RUNNER_TEMP/m17-schema-deps" "jsonschema==4.26.0"
+          python -m research.edge.oracle_aligned_net_ev.strict_schema_gate
+          python -m unittest discover -s tests -p 'test_oracle_net_*.py' -v
+          python -m unittest discover -s tests -p 'test_m17_prospective_readiness.py' -v
+
       - name: Focused PAPER and network safety
         shell: bash
         run: |

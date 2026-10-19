@@ -1,0 +1,23 @@
+{
+  "scope": "read-only source inspection",
+  "repo": "simondalmasso/SeneX",
+  "main_sha": "583e11588cea8594db8625a01dc0305ec826f008",
+  "facts": [
+    {
+      "path": "senecio_polymarket/oracle_runtime/predict_only.py",
+      "finding": "header states canonical SENEX 1h score; Polymarket BTC 5m is an added snapshot/context, not an evidenced native 300s model"
+    },
+    {
+      "path": "senecio_polymarket/backend/authoritative_score.py",
+      "finding": "INDEPENDENT_HORIZON_S=3600 and RAW_CONVICTION; 15m diagnostic-only"
+    },
+    {
+      "path": "senecio_polymarket/backend/scheduler.py",
+      "finding": "8s scanner loop is data polling, not an independently calibrated native 300s directional model"
+    }
+  ],
+  "conclusion": "NATIVE_300S_SENEX_SIGNAL_NOT_VERIFIED",
+  "source_admissible": false,
+  "cohort_authorized": false,
+  "forbidden": "faking 5m signal by relabeling 15m/1h forecasts"
+}
