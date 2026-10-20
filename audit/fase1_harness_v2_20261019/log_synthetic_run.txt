@@ -1,0 +1,29 @@
+[REGENERATED v2 2026-10-19] backend: /home/z/my-project/audit/order087/m17p4_wt/senecio_polymarket
+[0] export detected: fase1_fixture_test.jsonl -> 300 raw rows
+
+[1] proof-qualified: 300/300 rows
+[2] independent 1h cohort: n=300  LONG=162 SHORT=138
+    LONG  89/162  (54.94%)
+    SHORT 60/138  (43.48%)
+[3] global 149W/151L = 49.67%  wilson_lower_95 = 0.440490
+    valid_confidence = 270
+
+[5] split cronologico 67/33 sobre valid_confidence: train=180 holdout=90
+[6] Platt recalibracion (train-only): a=+1.6718 b=-0.7532 (a=1,b=0 seria 'ya calibrado')
+
+[7] holdout metrics:
+    brier_raw=0.3136  brier_recal=0.2597  brier_base=0.2499
+    ece10_raw=0.2375  ece10_recal=0.1063
+    G3 buckets: bottom 15/30 (50.0%) vs top 16/30 (53.3%) -> gap +3.3pts; Wilson95 lo=(0.332,0.668) hi=(0.361,0.698)
+
+[8] COMPUTERTAS:
+    G1 Brier recal < base-rate y <= 0.25 : FAIL (0.2597 vs 0.2499)
+    G2 ECE10 recal <= 0.05               : FAIL (0.1063)
+    G3 bucket discriminacion >= 5pts s/cruce: FAIL (+3.3pts)
+
+[9] VEREDICTO FASE 1 (tecnico): FAIL
+    DISCLAIMER: una corrida sintetica/REGENERATED pasando las compuertas
+    es reproducibilidad tecnica, NO validacion cientifica. La validacion
+    cientifica requiere el seal autentico de Northflank. Hasta entonces:
+    AUTHORITY_SCORE=REJECTED, EDGE=UNPROVEN.
+exit=1
