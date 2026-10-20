@@ -1,4 +1,4 @@
-# SENEX Fase 1 — Paquete de validacion de calibracion (REGENERATED v2)
+# SENEX Fase 1 — Paquete de validacion de calibracion (REGENERATED v2.1)
 
 **PROVENANCE**: REGENERATED 2026-10-19 por GLM, reconstruido desde el protocolo
 de la conversacion tras el incidente de sandbox que destruyo el paquete v1
@@ -28,7 +28,7 @@ LogisticRegression). Un checkout del repo SeneX (cualquier arbol que contenga
 de trabajo verificado, `authority_seal.py`, `authoritative_score.py` y
 `settlement_proof.py` son byte-identicos al runtime H011).
 
-## Comando de verificacion CONGELADO (solo para el seal autentico)
+## Comando de verificacion (solo para el seal autentico; la identidad completa requiere tree y build digest esperados)
 
 ```bash
 python3 fase1_harness.py authority-BTCUSDT.json \
@@ -101,3 +101,18 @@ MANIFEST.sha256` sobre los 7 archivos de payload.
 
 `AUTHORITY_SCORE=REJECTED` · `EDGE=UNPROVEN` · `PROBABILITY_SEMANTICS=UNVALIDATED`
 `PAPER_ONLY=true` · `ZERO_SPEND=HARD` · `LIVE=false` · `REAL_ORDERS=0` · `CAPITAL=0`
+
+
+## v2.1 regression tests
+
+Run: python -m unittest -v test_fase1_harness_v21.py. Tests cover parity mismatch (exit 3 and no verdict), parity match (continues to the predeclared sample gate), missing tree/build expectations (explicit SKIP and identity incomplete), and mismatched expected identity (fail-closed). These tests are synthetic control-flow tests, not evidence from the production seal.
+
+
+## v2.1 acceptance behavior
+
+- Exit 3: live/export parity differs by more than 5% in any declared component; the harness stops before any Fase 1 verdict.
+- Exit 2: evidence blocked or sample/holdout below predeclared minimums.
+- Exit 1: the Fase 1 statistical gates fail.
+- Exit 0: all Fase 1 statistical gates pass; this is not by itself authorization for live trading.
+- Pass --expect-tree and --expect-build-digest with independently verified expected values to verify full producer identity. If either is omitted, its check is explicitly SKIP and output states IDENTITY_COMPLETE=NO. Do not substitute a guessed build digest.
+- The v2.1 unit tests use synthetic in-memory data and do not authenticate the production seal or establish statistical edge.

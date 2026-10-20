@@ -126,8 +126,9 @@ def _import_runtime(backend: str):
 # Seal verification (7 checks) and evidence loading
 # ---------------------------------------------------------------------------
 
-def verify_seal(payload: dict, rt: dict, expect_commit: str | None):
-    """Run the 7 pre-declared seal checks. Returns (all_ok, results)."""
+def verify_seal(payload: dict, rt: dict, expect_commit: str | None,
+                expect_tree: str | None = None, expect_build: str | None = None):
+    """Return whether all applicable checks passed, plus named PASS/FAIL/SKIP results."""
     rows = payload.get("rows")
     checks = []
     ok = payload.get("contract") == rt["SEAL_CONTRACT"]
@@ -148,11 +149,30 @@ def verify_seal(payload: dict, rt: dict, expect_commit: str | None):
     src = str(payload.get("source_commit") or "")
     ok = (src == expect_commit) if expect_commit else bool(src)
     detail = src + ("" if not expect_commit else f" (expect {expect_commit[:8]}...)")
-    checks.append(("C7 source_commit", ok, detail))
-    return all(c[1] for c in checks), checks
+    checks.append(("C7a source_commit", ok, detail))
+
+    tree = str(payload.get("source_tree") or "")
+    if expect_tree:
+        checks.append(("C7b source_tree", tree == expect_tree,
+                       f"{tree[:12]}... (expect {expect_tree[:12]}...)"))
+    else:
+        checks.append(("C7b source_tree", None,
+                       "SKIP unverified — pass --expect-tree"))
+
+    build = str(payload.get("build_digest") or "")
+    if expect_build:
+        checks.append(("C7c build_digest", build == expect_build,
+                       f"{build[:20]}... (expect {expect_build[:20]}...)"))
+    else:
+        checks.append(("C7c build_digest", None,
+                       "SKIP unverified — pass --expect-build-digest"))
+
+    # SKIP is not failure; all_ok means all applicable checks passed.
+    return all(c[1] is not False for c in checks), checks
 
 
-def load_rows(path: str, rt: dict, expect_commit: str | None):
+def load_rows(path: str, rt: dict, expect_commit: str | None,
+              expect_tree: str | None = None, expect_build: str | None = None):
     """Load evidence: seal (.json w/ contract) or export (.jsonl/.csv)."""
     if path.endswith(".json"):
         with open(path, encoding="utf-8") as fh:
@@ -163,9 +183,16 @@ def load_rows(path: str, rt: dict, expect_commit: str | None):
             print(f"    identity: commit={payload.get('source_commit')}")
             print(f"              tree={payload.get('source_tree')}")
             print(f"              build_digest={payload.get('build_digest')}")
-            all_ok, checks = verify_seal(payload, rt, expect_commit)
+            all_ok, checks = verify_seal(payload, rt, expect_commit, expect_tree, expect_build)
             for name, ok, detail in checks:
-                print(f"    {'PASS' if ok else 'FAIL'}  {name}: {detail}")
+                status = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
+                print(f"    {status}  {name}: {detail}")
+            identity_complete = all(
+                next((value for name, value, _ in checks if name == key), None) is True
+                for key in ("C7b source_tree", "C7c build_digest")
+            )
+            print(f"    IDENTITY_COMPLETE={'YES' if identity_complete else 'NO — not fully verified'}")
+            print("    CHECKS_APPLICABLE=" + ("PASS" if all_ok else "FAIL"))
             if not all_ok:
                 print("\nBLOQUEO: seal FAILED one or more crypto checks — evidence rejected.")
                 return None
@@ -243,11 +270,19 @@ def run_pipeline(rows, rt: dict, live_parity: str | None):
 
     if live_parity:
         ln, lwv, llv, lvc = (int(x) for x in live_parity.split(","))
+        parity_failures = []
         for name, live, got in (("n", ln, n), ("wins", lwv, wins),
                                 ("losses", llv, losses), ("valid_conf", lvc, len(valid_conf))):
-            delta = abs(got - live) / max(live, 1)
-            flag = "OK" if delta <= 0.05 else "DESVIACION>5% — revisar export"
+            delta = abs(got - live) / max(abs(live), 1)
+            passed = delta <= 0.05
+            flag = "PASS" if passed else "FAIL — DESVIACION>5%"
             print(f"[4] paridad {name}: vivo={live} export={got} ({flag})")
+            if not passed:
+                parity_failures.append(name)
+        if parity_failures:
+            print("\\nBLOQUEO: PARITY_FAIL — " + ", ".join(parity_failures) +
+                  "; no se emite veredicto de aceptación.")
+            return 3
 
     if n < 100:
         print("\nBLOQUEO: n<100 — insuficiente para Fase 1 (minimo pre-declarado).")
@@ -317,17 +352,19 @@ def run_pipeline(rows, rt: dict, live_parity: str | None):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SENEX Fase 1 calibration harness (REGENERATED v2)")
+    ap = argparse.ArgumentParser(description="SENEX Fase 1 calibration harness (REGENERATED v2.1)")
     ap.add_argument("evidence", help="authority seal .json, or export .jsonl/.csv")
-    ap.add_argument("--expect-commit", default=None, help="required 40-hex source_commit (seal mode)")
+    ap.add_argument("--expect-commit", default=None, help="expected 40-hex source_commit (seal mode)")
+    ap.add_argument("--expect-tree", default=None, help="expected 40-hex source_tree for complete identity verification")
+    ap.add_argument("--expect-build-digest", default=None, help="expected sha256:<64-hex> build_digest for complete identity verification")
     ap.add_argument("--live-parity", default=None, help="n,wins,losses,valid_conf from live freeze")
     ap.add_argument("--backend-dir", default=None, help="senecio_polymarket dir containing backend/")
     args = ap.parse_args()
 
     backend = _resolve_backend(args.backend_dir)
-    print(f"[REGENERATED v2 2026-10-19] backend: {backend}")
+    print(f"[REGENERATED v2.1 2026-10-20] backend: {backend}")
     rt = _import_runtime(backend)
-    rows = load_rows(args.evidence, rt, args.expect_commit)
+    rows = load_rows(args.evidence, rt, args.expect_commit, args.expect_tree, args.expect_build_digest)
     if rows is None:
         return 2
     return run_pipeline(rows, rt, args.live_parity)
