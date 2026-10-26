@@ -1,0 +1,27 @@
+[selftest REGENERATED v2] backend: /home/z/my-project/audit/order087/m17p4_wt/senecio_polymarket
+[setup] runtime save_authority_state -> /tmp/fase1_seal_selftest_1zkg4um6/authority-BTCUSDT.json (60 rows, scope=BTCUSDT)
+
+=== TEST 1: seal valido generado por el runtime ===
+  PASS  C1 contract: senex-authority-durable-seal-v1
+  PASS  C2 canonical (ts,id) order: 60 rows
+  PASS  C3 row_count: declared=60
+  PASS  C4 rows_hash: sha256:6a896e44c39c0a99...
+  PASS  C5 cursor==last row: {"id": "60", "ts": "2026-09-21T11:00:00Z"}
+  PASS  C6 seal_hash: sha256:e5f7c0ab0a830d7e...
+  PASS  C7 source_commit: 933f0619f8c1e5373877e079528ca0d8a1ca000a (expect 933f0619...)
+  pipeline: qualified=60/60 cohort_1h=60 wins=29 wilson=0.361750
+TEST 1: PASS
+
+=== TEST 2: tamper de UNA fila (outcome WIN<->LOSS) ===
+  PASS  C1 contract: senex-authority-durable-seal-v1
+  PASS  C2 canonical (ts,id) order: 60 rows
+  PASS  C3 row_count: declared=60
+  FAIL  C4 rows_hash: sha256:6a896e44c39c0a99...
+  PASS  C5 cursor==last row: {"id": "60", "ts": "2026-09-21T11:00:00Z"}
+  FAIL  C6 seal_hash: sha256:e5f7c0ab0a830d7e...
+  PASS  C7 source_commit: 933f0619f8c1e5373877e079528ca0d8a1ca000a (expect 933f0619...)
+  filas alteradas: 1
+TEST 2: PASS (rechazo doble esperado: rows_hash=True, seal_hash=True)
+
+[selftest] resultado: 2/2 PASS — SELLADO Y DETECCION DE TAMPER VERIFICADOS
+exit=0
