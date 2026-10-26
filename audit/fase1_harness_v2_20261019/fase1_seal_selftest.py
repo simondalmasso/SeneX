@@ -69,7 +69,7 @@ def main() -> int:
     print("\n=== TEST 1: seal valido generado por el runtime ===")
     with open(seal_path, encoding="utf-8") as fh:
         good = json.load(fh)
-    all_ok, checks = verify_seal(good, rt, fg.LIVE_SOURCE_COMMIT)
+    all_ok, checks = verify_seal(good, rt, fg.LIVE_SOURCE_COMMIT, fg.LIVE_SOURCE_TREE, fg.LIVE_BUILD_DIGEST)
     for name, ok, detail in checks:
         print(f"  {'PASS' if ok else 'FAIL'}  {name}: {detail}")
     qualified = rt["filter_proof_qualified"](
@@ -94,7 +94,7 @@ def main() -> int:
             break
     with open(seal_path, "w", encoding="utf-8") as fh:
         json.dump(bad, fh)
-    all_ok2, checks2 = verify_seal(bad, rt, fg.LIVE_SOURCE_COMMIT)
+    all_ok2, checks2 = verify_seal(bad, rt, fg.LIVE_SOURCE_COMMIT, fg.LIVE_SOURCE_TREE, fg.LIVE_BUILD_DIGEST)
     results = {name: ok for name, ok, _ in checks2}
     c4 = results.get("C4 rows_hash")
     c6 = results.get("C6 seal_hash")

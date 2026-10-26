@@ -8,11 +8,11 @@ protocol. It is not presented as the original package and its hashes differ.
 Original bytes are recoverable only from the owner's local downloads, if any.
 
 WHAT IT DOES (frozen protocol, unchanged from v1):
-  1. Loads evidence from EITHER a durable authority seal
+  1. Loads evidence only from a durable authority seal
      (authority-BTCUSDT.json, contract senex-authority-durable-seal-v1,
      the file the owner must copy from the Northflank volume
-     /app/polymarket/results/authority_seals/) OR a plain export
-     (.jsonl rows / .csv with an audit JSON column).
+     /app/polymarket/results/authority_seals/). CSV/JSONL exports do not
+     bind rows to producer identity and cannot produce an accepted verdict.
   2. Seal mode verifies 7 crypto checks with RUNTIME primitives imported
      from the deployed backend (byte-identical at 933f0619):
      contract, canonical (ts,id) row order, row_count, rows_hash,
@@ -30,8 +30,11 @@ WHAT IT DOES (frozen protocol, unchanged from v1):
            differ by >= 5pts AND Wilson 95% intervals do not cross
 
 FROZEN VERIFICATION COMMAND (real seal, from Northflank volume):
+  # Replace all identity placeholders with fresh, independent H011 readback values.
   python3 fase1_harness.py authority-BTCUSDT.json \\
-      --expect-commit 933f0619f8c1e5373877e079528ca0d8a1ca000a \\
+      --expect-commit SOURCE_COMMIT_FROM_FRESH_RUNTIME_READBACK \\
+      --expect-tree SOURCE_TREE_FROM_FRESH_RUNTIME_READBACK \\
+      --expect-build-digest BUILD_DIGEST_FROM_FRESH_RUNTIME_READBACK \\
       --live-parity 861,426,435,504
 
   (parity tuple = 1h-cohort n,wins,losses,valid_confidence observed at the
@@ -45,8 +48,10 @@ it is NOT scientific validation. Scientific validation requires the
 authentic seal; until then AUTHORITY_SCORE=REJECTED, EDGE=UNPROVEN.
 
 Usage:
-  python3 fase1_harness.py <authority-BTCUSDT.json|export.csv|export.jsonl>
-      [--expect-commit <40-hex>] [--live-parity n,w,l,vc] [--backend-dir DIR]
+  python3 fase1_harness.py <authority-BTCUSDT.json>
+      --expect-commit <40-hex> --expect-tree <40-hex>
+      --expect-build-digest sha256:<64-hex>
+      [--live-parity n,w,l,vc] [--backend-dir DIR]
 
 Backend resolution order: --backend-dir, env SENEX_BACKEND_DIR, then
 ./senecio_polymarket, ../senecio_polymarket, and the GLM sandbox worktree.
@@ -59,6 +64,7 @@ import csv
 import json
 import math
 import os
+import re
 import sys
 
 # ---------------------------------------------------------------------------
@@ -128,7 +134,7 @@ def _import_runtime(backend: str):
 
 def verify_seal(payload: dict, rt: dict, expect_commit: str | None,
                 expect_tree: str | None = None, expect_build: str | None = None):
-    """Return whether all applicable checks passed, plus named PASS/FAIL/SKIP results."""
+    """Return True only when every seal and producer-identity check passes."""
     rows = payload.get("rows")
     checks = []
     ok = payload.get("contract") == rt["SEAL_CONTRACT"]
@@ -147,13 +153,18 @@ def verify_seal(payload: dict, rt: dict, expect_commit: str | None,
     ok = payload.get("seal_hash") == rt["_sha"](unsigned)
     checks.append(("C6 seal_hash", ok, str(payload.get("seal_hash"))[:23] + "..."))
     src = str(payload.get("source_commit") or "")
-    ok = (src == expect_commit) if expect_commit else bool(src)
-    detail = src + ("" if not expect_commit else f" (expect {expect_commit[:8]}...)")
-    checks.append(("C7a source_commit", ok, detail))
+    if expect_commit:
+        ok = bool(re.fullmatch(r"[0-9a-f]{40}", src)) and src == expect_commit
+        checks.append(("C7a source_commit", ok,
+                       src + f" (expect {expect_commit[:8]}...)"))
+    else:
+        checks.append(("C7a source_commit", None,
+                       "SKIP unverified — pass --expect-commit"))
 
     tree = str(payload.get("source_tree") or "")
     if expect_tree:
-        checks.append(("C7b source_tree", tree == expect_tree,
+        tree_ok = bool(re.fullmatch(r"[0-9a-f]{40}", tree)) and tree == expect_tree
+        checks.append(("C7b source_tree", tree_ok,
                        f"{tree[:12]}... (expect {expect_tree[:12]}...)"))
     else:
         checks.append(("C7b source_tree", None,
@@ -161,14 +172,15 @@ def verify_seal(payload: dict, rt: dict, expect_commit: str | None,
 
     build = str(payload.get("build_digest") or "")
     if expect_build:
-        checks.append(("C7c build_digest", build == expect_build,
+        build_ok = bool(re.fullmatch(r"sha256:[0-9a-f]{64}", build)) and build == expect_build
+        checks.append(("C7c build_digest", build_ok,
                        f"{build[:20]}... (expect {expect_build[:20]}...)"))
     else:
         checks.append(("C7c build_digest", None,
                        "SKIP unverified — pass --expect-build-digest"))
 
-    # SKIP is not failure; all_ok means all applicable checks passed.
-    return all(c[1] is not False for c in checks), checks
+    # SKIP is visible for diagnosis but never satisfies the acceptance contract.
+    return all(c[1] is True for c in checks), checks
 
 
 def load_rows(path: str, rt: dict, expect_commit: str | None,
@@ -189,41 +201,20 @@ def load_rows(path: str, rt: dict, expect_commit: str | None,
                 print(f"    {status}  {name}: {detail}")
             identity_complete = all(
                 next((value for name, value, _ in checks if name == key), None) is True
-                for key in ("C7b source_tree", "C7c build_digest")
+                for key in ("C7a source_commit", "C7b source_tree", "C7c build_digest")
             )
             print(f"    IDENTITY_COMPLETE={'YES' if identity_complete else 'NO — not fully verified'}")
             print("    CHECKS_APPLICABLE=" + ("PASS" if all_ok else "FAIL"))
             if not all_ok:
-                print("\nBLOQUEO: seal FAILED one or more crypto checks — evidence rejected.")
+                print("\nBLOQUEO: seal o identidad de productor incompletos/incorrectos — evidencia rechazada.")
                 return None
             rows = [rt["_authority_row_from_projection"](r) for r in payload["rows"]]
             print(f"    -> {len(rows)} rows via runtime _authority_row_from_projection")
             return rows
         print("ERROR: .json without seal contract/rows — unsupported.")
         return None
-    rows = []
-    if path.endswith(".jsonl"):
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line:
-                    rows.append(json.loads(line))
-    elif path.endswith(".csv"):
-        with open(path, encoding="utf-8", newline="") as fh:
-            for rec in csv.DictReader(fh):
-                rec["id"] = int(rec["id"]) if rec.get("id", "").isdigit() else rec.get("id")
-                for key in ("confidence", "ev", "price_now"):
-                    if rec.get(key) not in (None, ""):
-                        rec[key] = float(rec[key])
-                if rec.get("audit"):
-                    rec["audit"] = json.loads(rec["audit"])
-                rows.append(rec)
-    else:
-        print("ERROR: unsupported extension (need .json seal, .jsonl or .csv).")
-        return None
-    print(f"[0] export detected: {path} -> {len(rows)} raw rows")
-    return [rt["_authority_row_from_projection"](r) for r in rows]
-
+    print("BLOQUEO: solo un authority seal .json con identidad completa puede producir veredicto; CSV/JSONL no atan filas a source_tree/build_digest.")
+    return None
 
 # ---------------------------------------------------------------------------
 # Pipeline + gates (frozen protocol)
@@ -352,14 +343,27 @@ def run_pipeline(rows, rt: dict, live_parity: str | None):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SENEX Fase 1 calibration harness (REGENERATED v2.1)")
-    ap.add_argument("evidence", help="authority seal .json, or export .jsonl/.csv")
-    ap.add_argument("--expect-commit", default=None, help="expected 40-hex source_commit (seal mode)")
-    ap.add_argument("--expect-tree", default=None, help="expected 40-hex source_tree for complete identity verification")
-    ap.add_argument("--expect-build-digest", default=None, help="expected sha256:<64-hex> build_digest for complete identity verification")
+    ap = argparse.ArgumentParser(description="SENEX Fase 1 calibration harness; exact seal identity is mandatory")
+    ap.add_argument("evidence", help="authentic authority seal .json; unsealed CSV/JSONL cannot yield a verdict")
+    ap.add_argument("--expect-commit", required=True, help="40-hex source_commit from fresh independent runtime readback")
+    ap.add_argument("--expect-tree", required=True, help="40-hex source_tree from fresh independent runtime readback")
+    ap.add_argument("--expect-build-digest", required=True, help="sha256:<64-hex> build_digest from fresh independent runtime readback")
     ap.add_argument("--live-parity", default=None, help="n,wins,losses,valid_conf from live freeze")
     ap.add_argument("--backend-dir", default=None, help="senecio_polymarket dir containing backend/")
     args = ap.parse_args()
+
+    if not args.evidence.endswith(".json"):
+        print("BLOQUEO: un CSV/JSONL no autentica la identidad del productor; no se emite veredicto.")
+        return 2
+    if not re.fullmatch(r"[0-9a-f]{40}", args.expect_commit):
+        print("BLOQUEO: --expect-commit debe ser un SHA de 40 hex obtenido por readback independiente.")
+        return 2
+    if not re.fullmatch(r"[0-9a-f]{40}", args.expect_tree):
+        print("BLOQUEO: --expect-tree debe ser un SHA de árbol de 40 hex obtenido por readback independiente.")
+        return 2
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", args.expect_build_digest):
+        print("BLOQUEO: --expect-build-digest debe tener formato sha256:<64 hex> y proceder de readback independiente.")
+        return 2
 
     backend = _resolve_backend(args.backend_dir)
     print(f"[REGENERATED v2.1 2026-10-20] backend: {backend}")
