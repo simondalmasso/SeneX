@@ -11,14 +11,14 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import main as legacy
+from .paper_live_gate import paper_locked_live_gate_from_score
 from .binance_public_router import router as binance_public_router
 from . import oracle_runner
 from .authority_snapshot import STORE as authority_store, normalize_symbol
@@ -62,51 +62,20 @@ def quarantine_legacy_outcome_backfill() -> None:
 
 @asynccontextmanager
 async def real_lifespan(public_app: FastAPI):
-    public_app.state.audit = legacy._audit
-    public_app.state.bus = legacy._bus
-    public_app.state.retriever = legacy._retriever
-    public_app.state.scanner_a = legacy._scanner_a
-    public_app.state.scanner_b = legacy._scanner_b
-    public_app.state.wallet_tracker = legacy._wallet_tracker
-    public_app.state.engine = legacy._engine
-    public_app.state.executor = legacy._executor
-    public_app.state.scheduler = legacy._scheduler
-
-    demo = synthetic_demo_enabled()
-    if demo:
-        log.warning("SENEX synthetic demo scheduler EXPLICITLY ENABLED")
-        legacy._scheduler.start()
-    else:
-        log.info("SENEX production mode: synthetic scheduler disabled")
-
+    # Passive public monitor: no legacy dashboard import, oracle writer,
+    # portfolio restore, authority snapshot bootstrap, or seal mutation.
+    if synthetic_demo_enabled():
+        raise RuntimeError(
+            "SENEX_ENABLE_SYNTHETIC_DEMO is incompatible with passive public runtime"
+        )
     await asyncio.gather(_poly.start(), _boros.start(), _kalshi.start())
     quarantine_legacy_outcome_backfill()
     authority_store.clear()
-    oracle_runner.start()
-    oracle_runner.initialize_portfolio_control()
-
-    # R4: establish and continuously revalidate authority during controlled
-    # runtime lifecycle. Public readiness remains observational and never
-    # triggers a refresh itself. Failed refreshes retain the immutable last-good
-    # generation and are surfaced through refresh status.
-    try:
-        await _snapshot("BTCUSDT", force=True)
-    except Exception as exc:
-        log.warning("initial authority snapshot unavailable: %s", exc)
-    authority_refresh_task = asyncio.create_task(_authority_refresh_loop("BTCUSDT"))
-
-    log.info("SENEX public read-only runtime up")
+    log.info("SENEX passive public read-only monitor up; authority bootstrap disabled")
     try:
         yield
     finally:
-        authority_refresh_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await authority_refresh_task
-        await oracle_runner.stop()
         await asyncio.gather(_kalshi.stop(), _boros.stop(), _poly.stop())
-        if demo:
-            await legacy._scheduler.stop()
-        await legacy._bus.close()
 
 
 def _build_public_app() -> FastAPI:
@@ -165,10 +134,10 @@ def _locked_gate_without_coordinator(score: dict[str, Any]) -> dict[str, Any]:
 
 
 def _live_gate_from_score(score: dict[str, Any]) -> dict[str, Any]:
-    coord = legacy._get_coordinator()
+    coord = oracle_runner.get_existing_portfolio_coordinator()
     if coord is None:
         return _locked_gate_without_coordinator(score)
-    state = legacy._paper_locked_live_gate_from_score(coord, score)
+    state = paper_locked_live_gate_from_score(coord, score)
     state["orders_enabled"] = False
     return state
 
@@ -384,11 +353,14 @@ async def readyz(symbol: str = Query(default="BTCUSDT")):
             status_code=503,
         )
     if snap is None:
+        runner_state = oracle_runner.get_state()
+        seal_healthy = bool(runner_state.get("seal_healthy"))
         return JSONResponse(
             {
                 "status": "not_ready", "probe": "readiness",
-                "reason": "NO_VALID_AUTHORITY_GENERATION",
+                "reason": "NO_VALID_AUTHORITY_GENERATION" if seal_healthy else "T0_SEAL_NOT_HEALTHY",
                 "authority_snapshot_id": None, "generation": None, "canonical_sha256": None,
+                "checks": {"authority_generation": False, "seal_healthy": seal_healthy},
                 "safety": safety_projection(),
                 **refresh,
             },
