@@ -62,8 +62,10 @@ def quarantine_legacy_outcome_backfill() -> None:
 
 @asynccontextmanager
 async def real_lifespan(public_app: FastAPI):
-    # Passive public monitor: no legacy dashboard import, oracle writer,
-    # portfolio restore, authority snapshot bootstrap, or seal mutation.
+    # Public runtime remains observational: no oracle writer, portfolio restore,
+    # reconciliation process, or authority-seal mutation. A bounded authority
+    # snapshot is read from the existing Supabase source so GET surfaces remain
+    # useful; the snapshot store's hash is computed incrementally.
     if synthetic_demo_enabled():
         raise RuntimeError(
             "SENEX_ENABLE_SYNTHETIC_DEMO is incompatible with passive public runtime"
@@ -71,10 +73,24 @@ async def real_lifespan(public_app: FastAPI):
     await asyncio.gather(_poly.start(), _boros.start(), _kalshi.start())
     quarantine_legacy_outcome_backfill()
     authority_store.clear()
-    log.info("SENEX passive public read-only monitor up; authority bootstrap disabled")
+    try:
+        await _snapshot(PUBLIC_AUTHORITY_SYMBOL, force=True)
+    except Exception as exc:
+        # Stay live and fail closed until a complete authority snapshot can be
+        # captured; the refresh loop retries without turning GETs into writers.
+        log.warning("initial authority snapshot unavailable: %s", exc)
+    authority_refresh_task = asyncio.create_task(
+        _authority_refresh_loop(PUBLIC_AUTHORITY_SYMBOL)
+    )
+    log.info("SENEX passive public read-only monitor up; authority refresh enabled")
     try:
         yield
     finally:
+        authority_refresh_task.cancel()
+        try:
+            await authority_refresh_task
+        except asyncio.CancelledError:
+            pass
         await asyncio.gather(_kalshi.stop(), _boros.stop(), _poly.stop())
 
 
