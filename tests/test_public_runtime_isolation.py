@@ -49,9 +49,9 @@ def test_public_lifespan_refreshes_read_only_authority_without_starting_writer()
         "public monitor startup must not run the oracle writer or initialize PAPER control"
     )
     called_functions = {
-        node.func.id
+        node.func.id if isinstance(node.func, ast.Name) else node.func.attr
         for node in ast.walk(lifespan)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        if isinstance(node, ast.Call) and isinstance(node.func, (ast.Name, ast.Attribute))
     }
     assert {"_snapshot", "create_task"} <= called_functions, (
         "public monitor must bootstrap a read-only authority snapshot and schedule refresh"
