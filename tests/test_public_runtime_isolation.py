@@ -131,7 +131,7 @@ def test_public_lifespan_does_not_start_writers_or_create_authority_seal(
 
             asyncio.run(exercise_lifespan())
             snapshot.assert_awaited_once_with("BTCUSDT", force=True)
-            refresh_loop.assert_awaited_once_with("BTCUSDT")
+            refresh_loop.assert_called_once_with("BTCUSDT")
 
     assert list(tmp_path.iterdir()) == [], (
         "passive public startup created or changed something in authority_seals/"
