@@ -52,6 +52,23 @@ def build_supabase_headers(
 
 _client: Optional[httpx.AsyncClient] = None
 
+# Normal oracle workers may persist authority. The public H011 monitor switches
+# this policy off for its whole lifespan before the first snapshot/refresh.
+_PERSISTENT_WRITES_ALLOWED = True
+
+
+def set_persistent_writes_allowed(allowed: bool) -> bool:
+    """Set the persistent/Supabase write policy and return its previous value."""
+    global _PERSISTENT_WRITES_ALLOWED
+    previous = _PERSISTENT_WRITES_ALLOWED
+    _PERSISTENT_WRITES_ALLOWED = bool(allowed)
+    return previous
+
+
+def persistent_writes_allowed() -> bool:
+    """Whether this process may mutate Supabase rows or durable runtime state."""
+    return bool(_PERSISTENT_WRITES_ALLOWED)
+
 
 def _get_client() -> httpx.AsyncClient:
     global _client
@@ -114,6 +131,8 @@ def _quota_payload_hash(payload: dict[str, Any]) -> str:
 
 
 def _persist_quota_breaker_state() -> None:
+    if not persistent_writes_allowed():
+        return
     path = _quota_breaker_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -155,6 +174,8 @@ def _load_quota_breaker_state() -> None:
 
 
 def _clear_quota_breaker_state() -> None:
+    if not persistent_writes_allowed():
+        return
     path = _quota_breaker_file()
     try:
         path.unlink()
@@ -334,6 +355,9 @@ async def _lookup_exact_prediction_t0(prediction: dict[str, Any]) -> Optional[di
 
 async def ensure_prediction_persisted(prediction: dict[str, Any]) -> Optional[dict]:
     """Idempotently bind one generated T0 to exactly one D1 authority row."""
+    if not persistent_writes_allowed():
+        log.warning("prediction persistence denied by read-only runtime policy")
+        return None
     existing = await _lookup_exact_prediction_t0(prediction)
     if existing is not None:
         return existing
@@ -348,6 +372,9 @@ async def ensure_prediction_persisted(prediction: dict[str, Any]) -> Optional[di
 
 
 async def insert_prediction(prediction: dict) -> Optional[dict]:
+    if not persistent_writes_allowed():
+        log.warning("prediction insert denied by read-only runtime policy")
+        return None
     row = {
         "ts": prediction.get("timestamp"),
         "symbol": prediction.get("symbol"),
@@ -597,6 +624,8 @@ def get_local_authority_rows(
 
 def persist_authority_row_local(row: dict[str, Any]) -> bool:
     """Write-through an exact inserted/settled row into the non-D1 authority seal."""
+    if not persistent_writes_allowed():
+        return False
     identity = _runtime_identity()
     scope = _state_key(row.get("symbol"))
     state = _authority_symbol_state.get(scope)
@@ -936,6 +965,10 @@ async def fetch_authority_history(
             _authority_symbol_state[scope] = state
             _r7b_diagnostics["durable_authority_loads"] += 1
         except durable_seal.AuthoritySealMissingError:
+            if not persistent_writes_allowed():
+                raise AuthorityHistoryIncompleteError(
+                    "AUTHORITY_DURABLE_SEAL_MISSING_READ_ONLY"
+                )
             try:
                 durable_seal.assert_bootstrap_permitted(scope)
                 durable_seal.record_bootstrap_attempt(scope)
@@ -1008,6 +1041,12 @@ async def fetch_authority_history(
         state["seal"] = _seal_state(scope, state["rows"], state.get("cursor"))
     _validate_state_metadata(scope, state)
     ordered = sorted(state["rows"].values(), key=lambda row: _cursor_order_key(_row_cursor(row)))
+    if not persistent_writes_allowed():
+        # Keep bounded live deltas in memory only; never rewrite the input seal
+        # from the public monitoring process.
+        state["last_live_verification_at"] = _now_utc().isoformat()
+        _authority_symbol_state[scope] = state
+        return json.loads(json.dumps(ordered))
     try:
         persisted = durable_seal.save_authority_state(
             scope,
@@ -1221,6 +1260,10 @@ async def count_predictions_exact() -> int:
             })
             _r7b_diagnostics["durable_count_loads"] += 1
         except durable_seal.AuthoritySealMissingError:
+            if not persistent_writes_allowed():
+                raise ExactCountUnavailableError(
+                    "AUTHORITY_DURABLE_COUNT_MISSING_READ_ONLY"
+                )
             try:
                 durable_seal.assert_bootstrap_permitted("GLOBAL_EXACT_COUNT")
                 durable_seal.record_bootstrap_attempt("GLOBAL_EXACT_COUNT")
@@ -1251,6 +1294,9 @@ async def count_predictions_exact() -> int:
     if delta:
         _exact_count_state["count"] = int(_exact_count_state["count"]) + len(delta)
         _exact_count_state["cursor"] = delta[-1]
+    if not persistent_writes_allowed():
+        # Advance only in memory; the persistent count sidecar is read-only.
+        return int(_exact_count_state["count"])
     try:
         persisted = durable_seal.save_count_state(
             int(_exact_count_state["count"]),
@@ -1461,6 +1507,9 @@ async def update_outcome_dual(
     price_evidence_1h: dict[str, Any] | None = None,
 ) -> bool:
     """Baseline CAS settlement writer preserved byte-semantically by overlay."""
+    if not persistent_writes_allowed():
+        log.warning("outcome settlement denied by read-only runtime policy")
+        return False
     try:
         import math
         from datetime import timedelta

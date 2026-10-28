@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .paper_live_gate import paper_locked_live_gate_from_score
 from .binance_public_router import router as binance_public_router
-from . import oracle_runner
+from . import oracle_runner, supabase_client
 from .authority_snapshot import STORE as authority_store, normalize_symbol
 from .authoritative_score import build_authoritative_score
 from .boros_market_adapter import get_boros_adapter
@@ -62,6 +62,19 @@ def quarantine_legacy_outcome_backfill() -> None:
 
 @asynccontextmanager
 async def real_lifespan(public_app: FastAPI):
+    # Enforce the no-write boundary before adapters or snapshot refresh start.
+    # Save and restore the prior value so the policy cannot leak into another
+    # app/test context sharing this imported module.
+    previous_write_policy = supabase_client.set_persistent_writes_allowed(False)
+    try:
+        async with _real_lifespan_read_only(public_app):
+            yield
+    finally:
+        supabase_client.set_persistent_writes_allowed(previous_write_policy)
+
+
+@asynccontextmanager
+async def _real_lifespan_read_only(public_app: FastAPI):
     # Public runtime remains observational: no oracle writer, portfolio restore,
     # reconciliation process, or authority-seal mutation. A bounded authority
     # snapshot is read from the existing Supabase source so GET surfaces remain
