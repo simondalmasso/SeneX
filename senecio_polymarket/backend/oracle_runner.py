@@ -926,6 +926,11 @@ def get_portfolio_control_status() -> dict[str, Any]:
     return dict(_portfolio_control_status)
 
 
+def get_existing_portfolio_coordinator() -> Any | None:
+    """Return only an already-started coordinator; never bootstrap it on a GET."""
+    return _portfolio_coordinator
+
+
 def initialize_portfolio_control() -> bool:
     """Eagerly initialize/restore native PAPER control for readiness."""
     return _get_portfolio_coordinator() is not None

@@ -28,6 +28,15 @@ def _canonical_json(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
 
 
+def _canonical_sha256(value: Any) -> str:
+    """Hash canonical JSON incrementally to avoid a full serialized-bytes copy."""
+    encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256()
+    for chunk in encoder.iterencode(value):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
+
+
 def _canonical_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # fetch_authority_history enforces a unique (ts,id) cursor. Deep-copy once;
     # canonical JSON sorting is deferred to the single content-hash pass.
@@ -351,7 +360,7 @@ class AuthoritySnapshotStore:
             "live_gate": live_gate,
             "provenance": provenance,
         }
-        canonical_hex = hashlib.sha256(_canonical_json(canonical_authority)).hexdigest()
+        canonical_hex = _canonical_sha256(canonical_authority)
         canonical_sha256 = "sha256:" + canonical_hex
         return _CapturedAuthority(
             captured_at=captured_at,

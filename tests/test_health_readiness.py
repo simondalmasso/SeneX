@@ -54,7 +54,9 @@ class HealthReadinessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         payload = response.json()
         self.assertEqual(payload["status"], "not_ready")
-        self.assertEqual(payload["reason"], "NO_VALID_AUTHORITY_GENERATION")
+        self.assertEqual(payload["reason"], "T0_SEAL_NOT_HEALTHY")
+        self.assertFalse(payload["checks"]["authority_generation"])
+        self.assertFalse(payload["checks"]["seal_healthy"])
         # safety invariants still exposed on the failure path
         self.assertEqual(payload["safety"]["trade_mode"], "PAPER")
         self.assertTrue(payload["safety"]["hard_paper_lock"])
