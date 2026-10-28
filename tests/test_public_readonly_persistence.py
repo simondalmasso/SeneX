@@ -142,5 +142,36 @@ class PublicReadOnlyPersistenceTests(unittest.TestCase):
         client.assert_not_called()
 
 
+    def test_public_lifespan_disables_and_restores_persistent_writes(self) -> None:
+        from senecio_polymarket.backend import main_real
+
+        async def assert_policy_during_snapshot(*args, **kwargs):
+            self.assertFalse(sc.persistent_writes_allowed())
+            return None
+
+        async def idle_refresh(_symbol: str) -> None:
+            await asyncio.Event().wait()
+
+        sc.set_persistent_writes_allowed(True)
+        with mock.patch.dict(os.environ, {"SENEX_ENABLE_SYNTHETIC_DEMO": ""}, clear=False), (
+            mock.patch.object(main_real._poly, "start", new=mock.AsyncMock()),
+            mock.patch.object(main_real._poly, "stop", new=mock.AsyncMock()),
+            mock.patch.object(main_real._boros, "start", new=mock.AsyncMock()),
+            mock.patch.object(main_real._boros, "stop", new=mock.AsyncMock()),
+            mock.patch.object(main_real._kalshi, "start", new=mock.AsyncMock()),
+            mock.patch.object(main_real._kalshi, "stop", new=mock.AsyncMock()),
+            mock.patch.object(main_real, "_snapshot", new=mock.AsyncMock(side_effect=assert_policy_during_snapshot)) as snapshot,
+            mock.patch.object(main_real, "_authority_refresh_loop", new=idle_refresh),
+        ):
+            async def exercise_lifespan() -> None:
+                async with main_real.real_lifespan(main_real.app):
+                    self.assertFalse(sc.persistent_writes_allowed())
+
+            asyncio.run(exercise_lifespan())
+            snapshot.assert_awaited_once_with("BTCUSDT", force=True)
+
+        self.assertTrue(sc.persistent_writes_allowed())
+
+
 if __name__ == "__main__":
     unittest.main()
