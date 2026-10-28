@@ -153,7 +153,8 @@ class PublicReadOnlyPersistenceTests(unittest.TestCase):
             await asyncio.Event().wait()
 
         sc.set_persistent_writes_allowed(True)
-        with mock.patch.dict(os.environ, {"SENEX_ENABLE_SYNTHETIC_DEMO": ""}, clear=False), (
+        with (
+            mock.patch.dict(os.environ, {"SENEX_ENABLE_SYNTHETIC_DEMO": ""}, clear=False),
             mock.patch.object(main_real._poly, "start", new=mock.AsyncMock()),
             mock.patch.object(main_real._poly, "stop", new=mock.AsyncMock()),
             mock.patch.object(main_real._boros, "start", new=mock.AsyncMock()),
