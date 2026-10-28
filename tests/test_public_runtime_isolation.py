@@ -31,26 +31,30 @@ def test_public_runtime_does_not_eagerly_import_legacy_main() -> None:
     )
 
 
-def test_public_lifespan_does_not_start_oracle_or_boot_portfolio_control() -> None:
+def test_public_lifespan_refreshes_read_only_authority_without_starting_writer() -> None:
     tree = _main_real_tree()
     lifespan = next(
         node for node in tree.body
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "real_lifespan"
     )
-    forbidden = []
-    for node in ast.walk(lifespan):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-            continue
-        base = node.func.value
-        if isinstance(base, ast.Name) and base.id == "oracle_runner":
-            if node.func.attr in {"start", "initialize_portfolio_control"}:
-                forbidden.append(f"{node.func.attr}@{node.lineno}")
-        if isinstance(node.func, ast.Name) and node.func.id in {"_snapshot", "_authority_refresh_loop"}:
-            forbidden.append(f"{node.func.id}@{node.lineno}")
-    assert forbidden == [], (
-        "public monitor startup must not run the authority writer, initialize "
-        "the PAPER coordinator, or fetch/bootstrap a fresh authority snapshot: "
-        f"{forbidden}"
+    calls = [
+        node.func.attr
+        for node in ast.walk(lifespan)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "oracle_runner"
+    ]
+    assert not ({"start", "initialize_portfolio_control"} & set(calls)), (
+        "public monitor startup must not run the oracle writer or initialize PAPER control"
+    )
+    called_functions = {
+        node.func.id
+        for node in ast.walk(lifespan)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert {"_snapshot", "create_task"} <= called_functions, (
+        "public monitor must bootstrap a read-only authority snapshot and schedule refresh"
     )
 
 
@@ -108,16 +112,8 @@ def test_public_lifespan_does_not_start_writers_or_create_authority_seal(
             patch.object(main_real._boros, "stop", new=AsyncMock()),
             patch.object(main_real._kalshi, "start", new=AsyncMock()),
             patch.object(main_real._kalshi, "stop", new=AsyncMock()),
-            patch.object(
-                main_real,
-                "_snapshot",
-                side_effect=AssertionError("startup must not bootstrap authority"),
-            ),
-            patch.object(
-                main_real,
-                "_authority_refresh_loop",
-                side_effect=AssertionError("startup must not refresh authority"),
-            ),
+            patch.object(main_real, "_snapshot", new=AsyncMock(return_value=None)) as snapshot,
+            patch.object(main_real, "_authority_refresh_loop", new=AsyncMock()) as refresh_loop,
             patch.object(
                 oracle_runner,
                 "start",
@@ -134,6 +130,8 @@ def test_public_lifespan_does_not_start_writers_or_create_authority_seal(
                     assert oracle_runner.get_existing_portfolio_coordinator() is coordinator_before
 
             asyncio.run(exercise_lifespan())
+            snapshot.assert_awaited_once_with("BTCUSDT", force=True)
+            refresh_loop.assert_awaited_once_with("BTCUSDT")
 
     assert list(tmp_path.iterdir()) == [], (
         "passive public startup created or changed something in authority_seals/"
