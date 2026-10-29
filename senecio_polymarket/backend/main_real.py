@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .paper_live_gate import paper_locked_live_gate_from_score
 from .binance_public_router import router as binance_public_router
-from . import oracle_runner
+from . import oracle_runner, supabase_client
 from .authority_snapshot import STORE as authority_store, normalize_symbol
 from .authoritative_score import build_authoritative_score
 from .boros_market_adapter import get_boros_adapter
@@ -62,36 +62,47 @@ def quarantine_legacy_outcome_backfill() -> None:
 
 @asynccontextmanager
 async def real_lifespan(public_app: FastAPI):
-    # Public runtime remains observational: no oracle writer, portfolio restore,
-    # reconciliation process, or authority-seal mutation. A bounded authority
-    # snapshot is read from the existing Supabase source so GET surfaces remain
-    # useful; the snapshot store's hash is computed incrementally.
-    if synthetic_demo_enabled():
-        raise RuntimeError(
-            "SENEX_ENABLE_SYNTHETIC_DEMO is incompatible with passive public runtime"
-        )
-    await asyncio.gather(_poly.start(), _boros.start(), _kalshi.start())
-    quarantine_legacy_outcome_backfill()
-    authority_store.clear()
+    # Enforce the no-write boundary before adapters or snapshot refresh start.
+    # The normal writer process retains the default enabled policy; this passive
+    # app restores the old value even if startup or shutdown raises.
+    previous_write_policy = supabase_client.set_persistent_writes_allowed(False)
+    authority_refresh_task: asyncio.Task | None = None
+    adapters_started = False
     try:
-        await _snapshot(PUBLIC_AUTHORITY_SYMBOL, force=True)
-    except Exception as exc:
-        # Stay live and fail closed until a complete authority snapshot can be
-        # captured; the refresh loop retries without turning GETs into writers.
-        log.warning("initial authority snapshot unavailable: %s", exc)
-    authority_refresh_task = asyncio.create_task(
-        _authority_refresh_loop(PUBLIC_AUTHORITY_SYMBOL)
-    )
-    log.info("SENEX passive public read-only monitor up; authority refresh enabled")
-    try:
-        yield
-    finally:
-        authority_refresh_task.cancel()
+        # Public runtime remains observational: no oracle writer, portfolio
+        # restore, reconciler, or authority-seal mutation.
+        if synthetic_demo_enabled():
+            raise RuntimeError(
+                "SENEX_ENABLE_SYNTHETIC_DEMO is incompatible with passive public runtime"
+            )
+        adapters_started = True
+        await asyncio.gather(_poly.start(), _boros.start(), _kalshi.start())
+        quarantine_legacy_outcome_backfill()
+        authority_store.clear()
         try:
-            await authority_refresh_task
-        except asyncio.CancelledError:
-            pass
-        await asyncio.gather(_kalshi.stop(), _boros.stop(), _poly.stop())
+            await _snapshot(PUBLIC_AUTHORITY_SYMBOL, force=True)
+        except Exception as exc:
+            # Stay live and fail closed until a complete snapshot can be captured.
+            log.warning("initial authority snapshot unavailable: %s", exc)
+        authority_refresh_task = asyncio.create_task(
+            _authority_refresh_loop(PUBLIC_AUTHORITY_SYMBOL)
+        )
+        log.info("SENEX passive public read-only monitor up; authority refresh enabled")
+        try:
+            yield
+        finally:
+            if authority_refresh_task is not None:
+                authority_refresh_task.cancel()
+                try:
+                    await authority_refresh_task
+                except asyncio.CancelledError:
+                    pass
+    finally:
+        try:
+            if adapters_started:
+                await asyncio.gather(_kalshi.stop(), _boros.stop(), _poly.stop())
+        finally:
+            supabase_client.set_persistent_writes_allowed(previous_write_policy)
 
 
 def _build_public_app() -> FastAPI:
