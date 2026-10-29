@@ -34,6 +34,25 @@ class AuthoritySealCorruptError(AuthoritySealError):
     pass
 
 
+class AuthoritySealWritesDisabledError(AuthoritySealError):
+    """Raised when a read-only runtime attempts to persist durable seal state."""
+
+
+_PERSISTENT_WRITES_ALLOWED = True
+
+
+def set_persistent_writes_allowed(allowed: bool) -> bool:
+    """Set the low-level durable-store write gate and return the previous value."""
+    global _PERSISTENT_WRITES_ALLOWED
+    previous = _PERSISTENT_WRITES_ALLOWED
+    _PERSISTENT_WRITES_ALLOWED = bool(allowed)
+    return previous
+
+
+def persistent_writes_allowed() -> bool:
+    return bool(_PERSISTENT_WRITES_ALLOWED)
+
+
 class AuthoritySealStaleError(AuthoritySealError):
     pass
 
@@ -150,6 +169,8 @@ def _validate_identity_fields(identity: dict[str, Any], *, prefix: str) -> dict[
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
+    if not persistent_writes_allowed():
+        raise AuthoritySealWritesDisabledError("AUTHORITY_SEAL_WRITE_DISABLED")
     path.parent.mkdir(parents=True, exist_ok=True)
     data = _canonical_json(payload) + b"\n"
     fd, temp_name = tempfile.mkstemp(prefix=path.name + ".tmp.", dir=str(path.parent))

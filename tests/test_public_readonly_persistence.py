@@ -58,6 +58,21 @@ class PublicReadOnlyPersistenceTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), before)
             self.assertEqual(path.stat().st_mtime_ns, before_mtime)
 
+
+    def test_low_level_authority_seal_writer_rejects_read_only_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            os.environ, {"SENEX_AUTHORITY_SEAL_DIR": tmp}, clear=False
+        ):
+            sc.set_persistent_writes_allowed(False)
+            with self.assertRaisesRegex(
+                seal.AuthoritySealWritesDisabledError, "AUTHORITY_SEAL_WRITE_DISABLED"
+            ):
+                seal.save_authority_state(
+                    "BTCUSDT", [ROW], CURSOR,
+                    identity=IDENTITY, writer_contract=sc.AUTHORITY_MUTATION_CONTRACT,
+                )
+            self.assertFalse(seal.authority_path("BTCUSDT").exists())
+
     def test_missing_authority_seal_fails_closed_without_bootstrap_writes(self) -> None:
         sc.set_persistent_writes_allowed(False)
         with (

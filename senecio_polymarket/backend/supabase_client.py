@@ -62,6 +62,7 @@ def set_persistent_writes_allowed(allowed: bool) -> bool:
     global _PERSISTENT_WRITES_ALLOWED
     previous = _PERSISTENT_WRITES_ALLOWED
     _PERSISTENT_WRITES_ALLOWED = bool(allowed)
+    durable_seal.set_persistent_writes_allowed(_PERSISTENT_WRITES_ALLOWED)
     return previous
 
 
